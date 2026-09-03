@@ -1,0 +1,828 @@
+# Defenix Exposure Rating - Deterministic scoring model
+# ---------------------------------------------------------------
+# Questo file e' l'UNICA fonte di verita' per il calcolo del rating.
+# L'AI NON puo' modificare punteggi: interpreta soltanto il risultato.
+# Ogni modifica richiede un bump di `version` e un test di regressione.
+version: "1.0.0"
+model_name: "Defenix Exposure Rating"
+
+# Ogni categoria parte da 100 e subisce detrazioni.
+categories:
+  attack_surface:
+    label_it: "Attack surface e servizi esposti"
+    label_en: "Attack surface and exposed services"
+    weight: 0.20
+  technical_vulnerabilities:
+    label_it: "Vulnerabilita' tecniche"
+    label_en: "Technical vulnerabilities"
+    weight: 0.25
+  web_security:
+    label_it: "Sicurezza dei siti web"
+    label_en: "Web security"
+    weight: 0.20
+  email_dns_security:
+    label_it: "Sicurezza e-mail e DNS"
+    label_en: "Email and DNS security"
+    weight: 0.20
+  darkweb_breach:
+    label_it: "Dark web, breach e impersonificazione"
+    label_en: "Dark web, breach and impersonation"
+    weight: 0.15
+
+# Moltiplicatori applicati alla detrazione in funzione della classe di evidenza.
+confidence_multipliers:
+  confirmed: 1.0
+  probable: 0.5
+  inferred: 0.0
+  informational: 0.0
+  false_positive: 0.0
+  accepted_risk: 0.0
+  resolved: 0.0
+
+# Ownership: solo asset verificati pesano al 100%.
+ownership_multipliers:
+  verified_owned: 1.0
+  likely_owned: 0.5
+  unverified: 0.0
+  third_party: 0.0
+  excluded: 0.0
+
+# Decadimento temporale: le detrazioni invecchiano (half_life in giorni).
+# `none` = nessun decadimento.
+temporal_decay:
+  default:
+    mode: none
+  breach_old:
+    mode: half_life
+    half_life_days: 540
+    floor: 0.10
+  breach_recent:
+    mode: half_life
+    half_life_days: 365
+    floor: 0.25
+  stealer_log:
+    mode: half_life
+    half_life_days: 180
+    floor: 0.40
+  ransomware_post:
+    mode: half_life
+    half_life_days: 730
+    floor: 0.50
+
+classes:
+  - {code: "A", min: 85, max: 100, label_it: "Esposizione contenuta",      label_en: "Contained exposure"}
+  - {code: "B", min: 70, max: 84,  label_it: "Miglioramenti necessari",    label_en: "Improvements required"}
+  - {code: "C", min: 55, max: 69,  label_it: "Esposizione significativa",  label_en: "Significant exposure"}
+  - {code: "D", min: 40, max: 54,  label_it: "Rischio elevato",            label_en: "High risk"}
+  - {code: "E", min: 0,  max: 39,  label_it: "Esposizione critica",        label_en: "Critical exposure"}
+
+# Soglia sotto la quale non si pubblica un rating definitivo.
+minimum_confidence_for_rating: 50
+
+# ---------------------------------------------------------------
+# REGOLE DI DETRAZIONE
+# ---------------------------------------------------------------
+# campi:
+#   id                : identificativo stabile (usato dai test e dall'audit)
+#   category          : una delle categorie sopra
+#   match             : criterio di matching sulle evidenze normalizzate
+#   severity          : critical|high|medium|low|info
+#   deduction         : punti sottratti alla categoria per occorrenza
+#   max_deduction     : tetto massimo cumulativo per questa regola
+#   min_confidence    : classe minima di evidenza che attiva la detrazione
+#   required_ownership: ownership minima richiesta
+#   dedup_key         : campi che definiscono l'unicita' dell'occorrenza
+#   exclusive_group   : all'interno del gruppo, per uno stesso finding si applica
+#                       SOLO la regola con la detrazione piu' alta (evita che una
+#                       stessa CVE venga penalizzata da piu' regole sovrapposte)
+#   root_cause_group  : le regole dello stesso gruppo condividono un tetto
+#   decay             : profilo di decadimento temporale
+#   remediation       : id nel remediation_catalog
+rules:
+  # ---------------- EMAIL / DNS ----------------
+  - id: EML-SPF-MISSING
+    category: email_dns_security
+    match: {finding_type: "spf_missing"}
+    severity: high
+    deduction: 22
+    max_deduction: 22
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_spf
+    remediation: REM-EMAIL-SPF
+
+  - id: EML-SPF-INVALID
+    category: email_dns_security
+    match: {finding_type: "spf_invalid"}
+    severity: medium
+    deduction: 12
+    max_deduction: 12
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_spf
+    remediation: REM-EMAIL-SPF
+
+  - id: EML-SPF-MULTIPLE
+    category: email_dns_security
+    match: {finding_type: "spf_multiple_records"}
+    severity: medium
+    deduction: 10
+    max_deduction: 10
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_spf
+    remediation: REM-EMAIL-SPF
+
+  - id: EML-SPF-LOOKUPS
+    category: email_dns_security
+    match: {finding_type: "spf_too_many_lookups"}
+    severity: medium
+    deduction: 8
+    max_deduction: 8
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_spf
+    remediation: REM-EMAIL-SPF
+
+  - id: EML-DMARC-MISSING
+    category: email_dns_security
+    match: {finding_type: "dmarc_missing"}
+    severity: high
+    deduction: 25
+    max_deduction: 25
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_dmarc
+    remediation: REM-EMAIL-DMARC
+
+  - id: EML-DMARC-WEAK
+    category: email_dns_security
+    match: {finding_type: "dmarc_policy_none"}
+    severity: medium
+    deduction: 15
+    max_deduction: 15
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_dmarc
+    remediation: REM-EMAIL-DMARC
+
+  - id: EML-DMARC-SYNTAX
+    category: email_dns_security
+    match: {finding_type: "dmarc_syntax_error"}
+    severity: medium
+    deduction: 10
+    max_deduction: 10
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_dmarc
+    remediation: REM-EMAIL-DMARC
+
+  - id: EML-DMARC-NO-RUA
+    category: email_dns_security
+    match: {finding_type: "dmarc_no_reporting"}
+    severity: low
+    deduction: 4
+    max_deduction: 4
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_dmarc
+    remediation: REM-EMAIL-DMARC
+
+  - id: EML-DMARC-SP-WEAK
+    category: email_dns_security
+    match: {finding_type: "dmarc_subdomain_policy_weak"}
+    severity: medium
+    deduction: 8
+    max_deduction: 8
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_dmarc
+    remediation: REM-EMAIL-DMARC
+
+  - id: EML-DKIM-MISSING
+    category: email_dns_security
+    match: {finding_type: "dkim_no_selector_found"}
+    severity: medium
+    deduction: 8
+    max_deduction: 8
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_dkim
+    remediation: REM-EMAIL-DKIM
+
+  - id: DNS-DNSSEC-MISSING
+    category: email_dns_security
+    match: {finding_type: "dnssec_missing"}
+    severity: low
+    deduction: 6
+    max_deduction: 6
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: dns_hardening
+    remediation: REM-DNS-DNSSEC
+
+  - id: EML-MTASTS-MISSING
+    category: email_dns_security
+    match: {finding_type: "mta_sts_missing"}
+    severity: low
+    deduction: 6
+    max_deduction: 6
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_transport
+    remediation: REM-EMAIL-MTASTS
+
+  - id: EML-TLSRPT-MISSING
+    category: email_dns_security
+    match: {finding_type: "tls_rpt_missing"}
+    severity: info
+    deduction: 3
+    max_deduction: 3
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_transport
+    remediation: REM-EMAIL-MTASTS
+
+  - id: DNS-CAA-MISSING
+    category: email_dns_security
+    match: {finding_type: "caa_missing"}
+    severity: low
+    deduction: 4
+    max_deduction: 4
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: dns_hardening
+    remediation: REM-DNS-CAA
+
+  - id: DNS-EXPIRY-NEAR
+    category: email_dns_security
+    match: {finding_type: "domain_expiry_near"}
+    severity: medium
+    deduction: 10
+    max_deduction: 10
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: dns_lifecycle
+    remediation: REM-DNS-EXPIRY
+
+  - id: EML-STARTTLS-MISSING
+    category: email_dns_security
+    match: {finding_type: "starttls_unsupported"}
+    severity: medium
+    deduction: 10
+    max_deduction: 20
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_transport
+    remediation: REM-EMAIL-STARTTLS
+
+  - id: EML-SPOOF-POSSIBLE
+    category: email_dns_security
+    match: {finding_type: "spoofing_possible"}
+    severity: high
+    deduction: 15
+    max_deduction: 15
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: email_dmarc
+    remediation: REM-EMAIL-DMARC
+
+  # ---------------- WEB SECURITY ----------------
+  - id: WEB-NO-HTTPS
+    category: web_security
+    match: {finding_type: "https_not_available"}
+    severity: high
+    deduction: 20
+    max_deduction: 40
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_transport
+    remediation: REM-WEB-HTTPS
+
+  - id: WEB-CERT-EXPIRED
+    category: web_security
+    match: {finding_type: "tls_certificate_expired"}
+    severity: critical
+    deduction: 25
+    max_deduction: 50
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_transport
+    remediation: REM-TLS-CERT
+
+  - id: WEB-CERT-EXPIRING
+    category: web_security
+    match: {finding_type: "tls_certificate_expiring"}
+    severity: medium
+    deduction: 8
+    max_deduction: 16
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_transport
+    remediation: REM-TLS-CERT
+
+  - id: WEB-CERT-HOSTNAME
+    category: web_security
+    match: {finding_type: "tls_certificate_hostname_mismatch"}
+    severity: high
+    deduction: 15
+    max_deduction: 30
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_transport
+    remediation: REM-TLS-CERT
+
+  - id: WEB-TLS-LEGACY
+    category: web_security
+    match: {finding_type: "tls_legacy_protocol"}
+    severity: high
+    deduction: 12
+    max_deduction: 24
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: web_tls_config
+    remediation: REM-TLS-HARDENING
+
+  - id: WEB-TLS-WEAK-CIPHER
+    category: web_security
+    match: {finding_type: "tls_weak_cipher"}
+    severity: medium
+    deduction: 8
+    max_deduction: 16
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: web_tls_config
+    remediation: REM-TLS-HARDENING
+
+  - id: WEB-HSTS-MISSING
+    category: web_security
+    match: {finding_type: "hsts_missing"}
+    severity: medium
+    deduction: 7
+    max_deduction: 21
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_headers
+    remediation: REM-WEB-HEADERS
+
+  - id: WEB-CSP-MISSING
+    category: web_security
+    match: {finding_type: "csp_missing"}
+    severity: medium
+    deduction: 7
+    max_deduction: 21
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_headers
+    remediation: REM-WEB-HEADERS
+
+  - id: WEB-XFO-MISSING
+    category: web_security
+    match: {finding_type: "clickjacking_protection_missing"}
+    severity: low
+    deduction: 5
+    max_deduction: 15
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_headers
+    remediation: REM-WEB-HEADERS
+
+  - id: WEB-XCTO-MISSING
+    category: web_security
+    match: {finding_type: "x_content_type_options_missing"}
+    severity: low
+    deduction: 3
+    max_deduction: 9
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_headers
+    remediation: REM-WEB-HEADERS
+
+  - id: WEB-REFPOL-MISSING
+    category: web_security
+    match: {finding_type: "referrer_policy_missing"}
+    severity: info
+    deduction: 2
+    max_deduction: 6
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_headers
+    remediation: REM-WEB-HEADERS
+
+  - id: WEB-PERMPOL-MISSING
+    category: web_security
+    match: {finding_type: "permissions_policy_missing"}
+    severity: info
+    deduction: 2
+    max_deduction: 6
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_headers
+    remediation: REM-WEB-HEADERS
+
+  - id: WEB-COOKIE-INSECURE
+    category: web_security
+    match: {finding_type: "cookie_insecure"}
+    severity: medium
+    deduction: 6
+    max_deduction: 18
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: web_cookies
+    remediation: REM-WEB-COOKIES
+
+  - id: WEB-VERSION-DISCLOSURE
+    category: web_security
+    match: {finding_type: "version_disclosure"}
+    severity: low
+    deduction: 4
+    max_deduction: 12
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_info_leak
+    remediation: REM-WEB-INFOLEAK
+
+  - id: WEB-DIR-LISTING
+    category: web_security
+    match: {finding_type: "directory_listing"}
+    severity: medium
+    deduction: 10
+    max_deduction: 20
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_info_leak
+    remediation: REM-WEB-INFOLEAK
+
+  - id: WEB-ADMIN-PANEL
+    category: web_security
+    match: {finding_type: "admin_panel_exposed"}
+    severity: high
+    deduction: 15
+    max_deduction: 30
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: web_exposed_admin
+    remediation: REM-WEB-ADMIN
+
+  - id: WEB-TEST-ENV
+    category: web_security
+    match: {finding_type: "non_production_environment_exposed"}
+    severity: medium
+    deduction: 10
+    max_deduction: 20
+    min_confidence: probable
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_exposed_admin
+    remediation: REM-WEB-ADMIN
+
+  - id: WEB-MIXED-CONTENT
+    category: web_security
+    match: {finding_type: "mixed_content"}
+    severity: low
+    deduction: 4
+    max_deduction: 12
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_transport
+    remediation: REM-WEB-HTTPS
+
+  - id: WEB-CORS-PERMISSIVE
+    category: web_security
+    match: {finding_type: "cors_permissive"}
+    severity: medium
+    deduction: 8
+    max_deduction: 16
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_headers
+    remediation: REM-WEB-CORS
+
+  - id: WEB-SECURITYTXT-MISSING
+    category: web_security
+    match: {finding_type: "security_txt_missing"}
+    severity: info
+    deduction: 1
+    max_deduction: 3
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: web_process
+    remediation: REM-WEB-SECURITYTXT
+
+  # ---------------- ATTACK SURFACE ----------------
+  - id: AS-SENSITIVE-PORT
+    category: attack_surface
+    match: {finding_type: "sensitive_service_exposed"}
+    severity: high
+    deduction: 12
+    max_deduction: 48
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: exposed_services
+    remediation: REM-AS-REMOVE-SERVICE
+
+  - id: AS-REMOTE-ADMIN-PORT
+    category: attack_surface
+    match: {finding_type: "remote_admin_service_exposed"}
+    severity: critical
+    deduction: 20
+    max_deduction: 40
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: exposed_services
+    remediation: REM-AS-REMOVE-SERVICE
+
+  - id: AS-DANGLING-DNS
+    category: attack_surface
+    match: {finding_type: "dangling_dns_record"}
+    severity: high
+    deduction: 15
+    max_deduction: 45
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: dangling_assets
+    remediation: REM-AS-SUBDOMAIN
+
+  - id: AS-ABANDONED-SUBDOMAIN
+    category: attack_surface
+    match: {finding_type: "abandoned_subdomain"}
+    severity: medium
+    deduction: 6
+    max_deduction: 24
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: dangling_assets
+    remediation: REM-AS-SUBDOMAIN
+
+  - id: AS-LARGE-FOOTPRINT
+    category: attack_surface
+    match: {finding_type: "large_exposed_footprint"}
+    severity: low
+    deduction: 5
+    max_deduction: 10
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: surface_size
+    remediation: REM-AS-INVENTORY
+
+  - id: AS-LEGACY-VPN
+    category: attack_surface
+    match: {finding_type: "legacy_vpn_or_firewall_exposed"}
+    severity: high
+    deduction: 15
+    max_deduction: 30
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: exposed_services
+    remediation: REM-AS-VPN
+
+  # ---------------- TECHNICAL VULNERABILITIES ----------------
+  - id: VUL-KEV-CONFIRMED
+    category: technical_vulnerabilities
+    match: {finding_type: "vulnerability", cisa_kev: true}
+    severity: critical
+    deduction: 40
+    max_deduction: 80
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, cve]
+    root_cause_group: kev_exposure
+    exclusive_group: vulnerability_severity
+    remediation: REM-VULN-PATCH
+
+  - id: VUL-CRITICAL
+    category: technical_vulnerabilities
+    match: {finding_type: "vulnerability", cvss_min: 9.0}
+    severity: critical
+    deduction: 25
+    max_deduction: 60
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, cve]
+    root_cause_group: vuln_critical
+    exclusive_group: vulnerability_severity
+    remediation: REM-VULN-PATCH
+
+  - id: VUL-HIGH
+    category: technical_vulnerabilities
+    match: {finding_type: "vulnerability", cvss_min: 7.0, cvss_max: 8.9}
+    severity: high
+    deduction: 15
+    max_deduction: 45
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, cve]
+    root_cause_group: vuln_high
+    exclusive_group: vulnerability_severity
+    remediation: REM-VULN-PATCH
+
+  - id: VUL-MEDIUM
+    category: technical_vulnerabilities
+    match: {finding_type: "vulnerability", cvss_min: 4.0, cvss_max: 6.9}
+    severity: medium
+    deduction: 6
+    max_deduction: 24
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, cve]
+    root_cause_group: vuln_medium
+    exclusive_group: vulnerability_severity
+    remediation: REM-VULN-PATCH
+
+  - id: VUL-HIGH-EPSS
+    category: technical_vulnerabilities
+    match: {finding_type: "vulnerability", epss_min: 0.30}
+    severity: high
+    deduction: 10
+    max_deduction: 30
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, cve]
+    root_cause_group: vuln_exploitability
+    exclusive_group: vulnerability_severity
+    remediation: REM-VULN-PATCH
+
+  - id: VUL-OUTDATED-SOFTWARE
+    category: technical_vulnerabilities
+    match: {finding_type: "outdated_software"}
+    severity: medium
+    deduction: 8
+    max_deduction: 32
+    min_confidence: probable
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: software_lifecycle
+    remediation: REM-VULN-UPGRADE
+
+  - id: VUL-EOL-SOFTWARE
+    category: technical_vulnerabilities
+    match: {finding_type: "end_of_life_software"}
+    severity: high
+    deduction: 15
+    max_deduction: 30
+    min_confidence: probable
+    required_ownership: verified_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: software_lifecycle
+    remediation: REM-VULN-UPGRADE
+
+  # ---------------- DARK WEB / BREACH / IMPERSONATION ----------------
+  - id: DW-RANSOMWARE-POST
+    category: darkweb_breach
+    match: {finding_type: "ransomware_leak_publication"}
+    severity: critical
+    deduction: 60
+    max_deduction: 60
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, detail]
+    root_cause_group: ransomware
+    decay: ransomware_post
+    remediation: REM-IR-RANSOMWARE
+
+  - id: DW-STEALER-LOG
+    category: darkweb_breach
+    match: {finding_type: "stealer_log_credentials"}
+    severity: critical
+    deduction: 35
+    max_deduction: 55
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, detail]
+    root_cause_group: credential_exposure
+    decay: stealer_log
+    remediation: REM-CRED-ROTATION
+
+  - id: DW-BREACH-RECENT
+    category: darkweb_breach
+    match: {finding_type: "breach_credentials_recent"}
+    severity: high
+    deduction: 18
+    max_deduction: 36
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, detail]
+    root_cause_group: credential_exposure
+    decay: breach_recent
+    remediation: REM-CRED-ROTATION
+
+  - id: DW-BREACH-OLD
+    category: darkweb_breach
+    match: {finding_type: "breach_credentials_old"}
+    severity: medium
+    deduction: 8
+    max_deduction: 16
+    min_confidence: confirmed
+    required_ownership: verified_owned
+    dedup_key: [asset_key, detail]
+    root_cause_group: credential_exposure
+    decay: breach_old
+    remediation: REM-CRED-ROTATION
+
+  - id: DW-LOOKALIKE-DOMAIN
+    category: darkweb_breach
+    match: {finding_type: "lookalike_domain_registered"}
+    severity: medium
+    deduction: 7
+    max_deduction: 28
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, detail]
+    root_cause_group: impersonation
+    remediation: REM-BRAND-TAKEDOWN
+
+  - id: DW-LOOKALIKE-MX
+    category: darkweb_breach
+    match: {finding_type: "lookalike_domain_with_mx"}
+    severity: high
+    deduction: 12
+    max_deduction: 36
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, detail]
+    root_cause_group: impersonation
+    remediation: REM-BRAND-TAKEDOWN
+
+  - id: DW-DARKWEB-MENTION
+    category: darkweb_breach
+    match: {finding_type: "darkweb_mention"}
+    severity: medium
+    deduction: 6
+    max_deduction: 18
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, detail]
+    root_cause_group: darkweb_exposure
+    remediation: REM-MON-SOC
+
+# Tetto massimo di detrazione cumulativa per gruppo di root cause,
+# per evitare che una singola causa radice azzeri una categoria.
+root_cause_caps:
+  email_spf: 25
+  email_dmarc: 30
+  email_dkim: 10
+  email_transport: 20
+  dns_hardening: 10
+  dns_lifecycle: 10
+  web_headers: 30
+  web_transport: 50
+  web_tls_config: 30
+  web_cookies: 18
+  web_info_leak: 25
+  web_exposed_admin: 35
+  web_process: 3
+  exposed_services: 60
+  dangling_assets: 50
+  surface_size: 10
+  kev_exposure: 80
+  vuln_critical: 60
+  vuln_high: 45
+  vuln_medium: 24
+  vuln_exploitability: 30
+  software_lifecycle: 40
+  ransomware: 60
+  credential_exposure: 60
+  impersonation: 40
+  darkweb_exposure: 18

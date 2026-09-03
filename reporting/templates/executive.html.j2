@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head><meta charset="utf-8"><title>{{ brand.name }} Exposure Rating - {{ company_name }}</title>
+<style>{{ stylesheet }}</style></head>
+<body>
+
+{# ------------------------------ 1. Copertina ------------------------------ #}
+<section class="cover">
+  <div>
+    <h1>{{ brand.name }}<br>Exposure Rating</h1>
+    <p class="subtitle">Valutazione dell'esposizione cyber osservabile dall'esterno</p>
+  </div>
+  <div>
+    <p class="company company-name">{{ company_name }}</p>
+    {% if company_vat %}<p class="meta">P.IVA / VAT: {{ company_vat }}</p>{% endif %}
+    <p class="meta">Data della valutazione: {{ generated_at.strftime('%d/%m/%Y') }}</p>
+    <p class="meta">Profilo di scansione: {{ profile_label }}</p>
+
+    <div class="rating-block">
+      {% if is_provisional %}
+        <p class="score">--</p>
+        <p class="class">Valutazione provvisoria</p>
+        <p class="confidence">{{ provisional_notice }}</p>
+      {% else %}
+        <p class="score">{{ '%.0f'|format(overall_score) }}<span style="font-size:18pt">/100</span></p>
+        <p class="class">Classe {{ rating_class }} &mdash; {{ rating_label }}</p>
+      {% endif %}
+      <p class="confidence">Affidabilita' della rilevazione: {{ '%.0f'|format(confidence_value) }}%
+        ({{ confidence_label }})</p>
+    </div>
+  </div>
+  <p class="footer-note">{{ disclaimer }}<br><br>
+    Documento riservato prodotto da {{ brand.owner }}. Distribuzione limitata al destinatario.</p>
+</section>
+
+{# --------------------------- 2. Sintesi esecutiva -------------------------- #}
+<h2>Sintesi per la direzione</h2>
+{% if is_provisional %}
+<div class="callout warning">
+  <strong>{{ provisional_notice }}</strong><br>
+  L'affidabilita' della rilevazione ({{ '%.0f'|format(confidence_value) }}%) e' inferiore alla
+  soglia minima richiesta per pubblicare un rating definitivo. I rilievi elencati restano validi,
+  ma il punteggio complessivo non e' rappresentativo dell'intera esposizione.
+</div>
+{% else %}
+<p>La valutazione assegna a <strong>{{ company_name }}</strong> un punteggio complessivo di
+  <strong>{{ '%.0f'|format(overall_score) }}/100</strong>, corrispondente alla
+  <strong class="class-{{ rating_class }}">classe {{ rating_class }}</strong>
+  ({{ rating_label|lower }}), con un'affidabilita' della rilevazione del
+  <strong>{{ '%.0f'|format(confidence_value) }}%</strong>.</p>
+{% endif %}
+
+{% if applied_caps %}
+<div class="callout danger">
+  <strong>Limitazione del punteggio applicata.</strong> Sono state riscontrate condizioni che
+  impongono un tetto massimo al rating complessivo, a prescindere dal punteggio delle singole aree:
+  <ul>{% for cap in applied_caps %}
+    <li>{{ cap.reason_it }} &mdash; punteggio massimo consentito: {{ cap.max_score|int }}/100</li>
+  {% endfor %}</ul>
+</div>
+{% endif %}
+
+{# ------------------------- 3. Perimetro verificato ------------------------- #}
+<h2>Perimetro della valutazione</h2>
+<table>
+  <tr><th style="width:45mm">Profilo di scansione</th><td>{{ profile_label }}</td></tr>
+  <tr><th>Domini analizzati</th><td>{{ (scope.domains or [])|join(', ') or 'nessuno' }}</td></tr>
+  <tr><th>Domini verificati</th>
+      <td>{{ (scope.verified_domains or [])|join(', ') or 'nessun dominio verificato' }}</td></tr>
+  {% if scope.ip_addresses %}
+  <tr><th>Indirizzi IP autorizzati</th><td>{{ scope.ip_addresses|join(', ') }}</td></tr>{% endif %}
+  {% if scope.network_ranges %}
+  <tr><th>Reti autorizzate</th><td>{{ scope.network_ranges|join(', ') }}</td></tr>{% endif %}
+  {% if scope.excluded %}
+  <tr><th>Esclusioni</th><td>{{ scope.excluded|join(', ') }}</td></tr>{% endif %}
+</table>
+
+{# --------------------------- 4. Rating tematici ---------------------------- #}
+<h2>Rating per area tematica</h2>
+<table>
+  <thead><tr><th style="width:62mm">Area</th><th style="width:16mm">Peso</th>
+    <th style="width:18mm">Punteggio</th><th>Andamento</th>
+    <th style="width:20mm">Rilievi</th></tr></thead>
+  <tbody>
+  {% for category in categories %}
+    <tr>
+      <td>{{ category.label_it }}</td>
+      <td>{{ (category.weight * 100)|int }}%</td>
+      <td><strong>{{ '%.0f'|format(category.score) }}/100</strong></td>
+      <td><div class="bar"><span style="width:{{ category.score|int }}%"></span></div></td>
+      <td>{{ category.finding_count }}
+        {%- if category.critical_count %} <span class="badge sev-critical">{{ category.critical_count }} crit.</span>{% endif %}
+        {%- if category.high_count %} <span class="badge sev-high">{{ category.high_count }} alti</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{# ------------------------ 5. Principali cinque rischi ---------------------- #}
+<h2>Principali rischi rilevati</h2>
+{% if top_risks %}
+<table>
+  <thead><tr><th style="width:16mm">Rif.</th><th style="width:18mm">Severita'</th>
+    <th>Rilievo</th><th style="width:24mm">Attendibilita'</th></tr></thead>
+  <tbody>
+  {% for risk in top_risks %}
+    <tr>
+      <td>{{ risk.reference_code }}</td>
+      <td><span class="badge sev-{{ risk.severity }}">{{ severity_label[risk.severity] }}</span></td>
+      <td><strong>{{ risk.title }}</strong>
+        {% if risk.cve_id %}<br><span class="small muted">{{ risk.cve_id }}
+          {%- if risk.cvss_score %} &middot; CVSS {{ risk.cvss_score }}{% endif %}
+          {%- if risk.cisa_kev %} &middot; presente in CISA KEV{% endif %}</span>{% endif %}
+      </td>
+      <td>{{ confidence_label_map[risk.confidence_class] }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Nessun rilievo significativo emerso nel perimetro analizzato. L'assenza di
+  rilievi non costituisce prova di sicurezza.</p>
+{% endif %}
+
+{# ------------------------- 6. Esposizione osservata ------------------------ #}
+<h2>Esposizione osservata</h2>
+<table>
+  <tr><th style="width:60mm">Asset individuati</th><td>{{ exposure_summary.total_assets }}
+    (di cui {{ exposure_summary.verified_assets }} di proprieta' verificata)</td></tr>
+  <tr><th>Domini e sottodomini</th><td>{{ exposure_summary.domains }}</td></tr>
+  <tr><th>Servizi web attivi</th><td>{{ exposure_summary.web_services }}</td></tr>
+  <tr><th>Indirizzi IP</th><td>{{ exposure_summary.ip_addresses }}</td></tr>
+  {% if exposure_summary.open_ports is defined %}
+  <tr><th>Servizi di rete esposti</th><td>{{ exposure_summary.open_ports }}</td></tr>{% endif %}
+  <tr><th>Rilievi totali</th><td>{{ exposure_summary.findings_total }}
+    ({{ exposure_summary.critical }} critici, {{ exposure_summary.high }} alti)</td></tr>
+  <tr><th>Asset di terzi esclusi dal rating</th><td>{{ exposure_summary.third_party }}</td></tr>
+</table>
+
+{# --------------------------- 7. Priorita' e quick win --------------------- #}
+<h2>Priorita' di intervento</h2>
+{% if remediation_plan %}
+<table>
+  <thead><tr><th style="width:10mm">#</th><th>Intervento</th><th style="width:22mm">Priorita'</th>
+    <th style="width:22mm">Impegno</th><th style="width:20mm">Rilievi</th></tr></thead>
+  <tbody>
+  {% for item in remediation_plan[:10] %}
+    <tr><td>{{ loop.index }}</td>
+      <td><strong>{{ item.title_it }}</strong><br>
+        <span class="small muted">{{ item.risk_mitigated_it }}</span></td>
+      <td>{{ priority_label[item.priority] }}</td>
+      <td>{{ effort_label[item.effort] }}</td>
+      <td>{{ item.finding_codes|length }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="muted">Nessun intervento prioritario identificato.</p>{% endif %}
+
+{% if quick_wins %}
+<h3>Interventi rapidi ad alto beneficio</h3>
+<ul>
+{% for item in quick_wins %}
+  <li><strong>{{ item.title_it }}</strong> &mdash; {{ item.immediate_action_it }}
+    <span class="small muted">(impegno: {{ effort_label[item.effort]|lower }})</span></li>
+{% endfor %}
+</ul>
+{% endif %}
+
+{# ----------------------- 8. Confronto con la precedente -------------------- #}
+<h2>Confronto con la scansione precedente</h2>
+{% if comparison and comparison.previous_score is not none %}
+<p>{{ comparison.summary_it }}</p>
+<table>
+  <tr><th style="width:60mm">Punteggio precedente</th>
+      <td>{{ '%.1f'|format(comparison.previous_score) }}/100
+        (classe {{ comparison.previous_class }})</td></tr>
+  <tr><th>Punteggio attuale</th>
+      <td>{{ '%.1f'|format(comparison.current_score) }}/100
+        (classe {{ comparison.current_class }})</td></tr>
+  <tr><th>Variazione</th><td>{{ '%+.1f'|format(comparison.score_delta) }} punti</td></tr>
+  <tr><th>Nuovi rilievi</th><td>{{ comparison.new_findings|length }}</td></tr>
+  <tr><th>Rilievi risolti</th><td>{{ comparison.resolved_findings|length }}</td></tr>
+  <tr><th>In attesa di conferma della chiusura</th>
+      <td>{{ comparison.pending_closure|length }}</td></tr>
+  <tr><th>Nuovi asset osservati</th><td>{{ comparison.new_assets|length }}</td></tr>
+</table>
+{% else %}
+<p class="muted">Prima valutazione per questa organizzazione: non e' disponibile un confronto
+  con scansioni precedenti.</p>
+{% endif %}
+
+{# ------------------- 9. Limiti della valutazione e disclaimer -------------- #}
+<h2>Limiti della valutazione</h2>
+<ul>{% for limit in limits %}<li>{{ limit }}</li>{% endfor %}</ul>
+
+<h3>Copertura degli strumenti impiegati</h3>
+<table>
+  <thead><tr><th style="width:45mm">Strumento</th><th style="width:24mm">Esito</th>
+    <th>Note</th></tr></thead>
+  <tbody>
+  {% for entry in coverage_matrix %}
+    <tr><td>{{ entry.tool }}</td><td>{{ entry.status }}</td>
+      <td class="small">{{ entry.note_it }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>Disclaimer.</strong> {{ disclaimer }}
+</div>
+
+</body>
+</html>

@@ -1,0 +1,162 @@
+# Allowlist dei template Nuclei ammessi nel Verified Extended Check.
+# Un template NON presente in questa lista non viene mai eseguito.
+# Ogni voce deve essere approvata esplicitamente (approved_by / approved_at).
+version: "1.0.0"
+
+# Vincoli globali applicati a qualunque template eseguito.
+global_constraints:
+  allowed_request_types: [http, ssl, dns]
+  forbidden_request_types: [network-raw, headless, code, javascript, file, websocket]
+  forbidden_tags: [dos, fuzz, brute-force, intrusive, rce, sqli, xss-active,
+                   file-upload, auth-bypass-active, default-login, exploit,
+                   deserialization, ssrf-active]
+  max_severity_allowed: critical
+  max_requests_per_template: 10
+  template_timeout_seconds: 20
+  require_non_destructive: true
+
+templates:
+  - id: "ssl-issuer"
+    version: "1.0.0"
+    description_it: "Emittente del certificato TLS"
+    severity: info
+    request_type: ssl
+    classification: passive-inspection
+    timeout_seconds: 10
+    max_requests: 1
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "expired-ssl"
+    version: "1.0.0"
+    description_it: "Certificato TLS scaduto"
+    severity: high
+    request_type: ssl
+    classification: passive-inspection
+    timeout_seconds: 10
+    max_requests: 1
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "mismatched-ssl-certificate"
+    version: "1.0.0"
+    description_it: "Hostname non corrispondente al certificato"
+    severity: medium
+    request_type: ssl
+    classification: passive-inspection
+    timeout_seconds: 10
+    max_requests: 1
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "http-missing-security-headers"
+    version: "1.0.0"
+    description_it: "Header di sicurezza HTTP mancanti"
+    severity: info
+    request_type: http
+    classification: configuration
+    timeout_seconds: 10
+    max_requests: 1
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "directory-listing"
+    version: "1.0.0"
+    description_it: "Directory listing abilitato"
+    severity: medium
+    request_type: http
+    classification: information-disclosure
+    timeout_seconds: 10
+    max_requests: 2
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "git-config"
+    version: "1.0.0"
+    description_it: "File .git/config esposto"
+    severity: high
+    request_type: http
+    classification: information-disclosure
+    timeout_seconds: 10
+    max_requests: 1
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "env-file-exposure"
+    version: "1.0.0"
+    description_it: "File .env esposto (sola rilevazione, nessuna lettura di segreti nel report)"
+    severity: critical
+    request_type: http
+    classification: information-disclosure
+    timeout_seconds: 10
+    max_requests: 1
+    redact_response: true
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "phpinfo-files"
+    version: "1.0.0"
+    description_it: "phpinfo() esposto"
+    severity: medium
+    request_type: http
+    classification: information-disclosure
+    timeout_seconds: 10
+    max_requests: 1
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "apache-server-status"
+    version: "1.0.0"
+    description_it: "Pagina server-status di Apache esposta"
+    severity: medium
+    request_type: http
+    classification: information-disclosure
+    timeout_seconds: 10
+    max_requests: 1
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "security-txt"
+    version: "1.0.0"
+    description_it: "Presenza di security.txt"
+    severity: info
+    request_type: http
+    classification: configuration
+    timeout_seconds: 10
+    max_requests: 1
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "tech-detect"
+    version: "1.0.0"
+    description_it: "Fingerprinting passivo delle tecnologie"
+    severity: info
+    request_type: http
+    classification: fingerprint
+    timeout_seconds: 10
+    max_requests: 2
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"
+
+  - id: "wordpress-detect"
+    version: "1.0.0"
+    description_it: "Rilevamento WordPress e versione"
+    severity: info
+    request_type: http
+    classification: fingerprint
+    timeout_seconds: 10
+    max_requests: 2
+    approved: true
+    approved_by: "defenix-security-board"
+    approved_at: "2026-01-15"

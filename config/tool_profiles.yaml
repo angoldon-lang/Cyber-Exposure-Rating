@@ -1,0 +1,411 @@
+# Matrice tool x profilo di scansione.
+# Un tool non elencato in un profilo NON puo' essere eseguito in quel profilo.
+# Il gate e' applicato dal ScopeGuard prima di ogni ToolRun.
+version: "1.0.0"
+
+profiles:
+  public_passive:
+    label_it: "Public Passive Check"
+    label_en: "Public Passive Check"
+    requires_verification: false
+    requires_authorization: false
+    description_it: >-
+      Analisi esclusivamente passiva su fonti pubbliche. Nessun contatto
+      intrusivo con l'infrastruttura del target.
+    forbidden_actions:
+      - port_scanning
+      - vulnerability_scanning
+      - brute_force
+      - aggressive_crawling
+      - authentication_attempts
+      - exploitation
+      - fuzzing
+      - intrusive_checks
+    tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
+            ransomware_live, hibp, dnstwist_passive, kev, epss]
+
+  verified_standard:
+    label_it: "Verified Standard Check"
+    label_en: "Verified Standard Check"
+    requires_verification: true
+    requires_authorization: true
+    description_it: >-
+      Aggiunge richieste HTTP/HTTPS normali, analisi header, fingerprinting,
+      verifica TLS e ZAP Baseline. Nessun exploit, nessuna modifica di dati.
+    forbidden_actions:
+      - port_scanning
+      - exploitation
+      - brute_force
+      - data_modification
+      - fuzzing
+    tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
+            ransomware_live, hibp, dnstwist, kev, epss,
+            httpx, testssl, zap_baseline, amass_passive, email_header]
+
+  verified_extended:
+    label_it: "Verified Extended Check"
+    label_en: "Verified Extended Check"
+    requires_verification: true
+    requires_authorization: true
+    requires_explicit_scope_whitelist: true
+    description_it: >-
+      Aggiunge port scanning controllato, service discovery e Nuclei con
+      template approvati. Solo su IP/domini/URL esplicitamente in whitelist.
+    forbidden_actions:
+      - credential_stuffing
+      - password_spraying
+      - brute_force
+      - login_attempts
+      - active_sql_injection
+      - denial_of_service
+      - file_upload
+      - payload_execution
+      - data_modification
+      - destructive_exploits
+      - third_party_scanning
+    tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
+            ransomware_live, hibp, dnstwist, kev, epss,
+            httpx, testssl, zap_baseline, amass, email_header,
+            naabu, nmap, nuclei]
+
+# ------------------------------------------------------------------
+# Definizione dei singoli tool
+# ------------------------------------------------------------------
+tools:
+  dns:
+    label: "DNS resolver"
+    kind: builtin
+    passive: true
+    phase: 1
+    timeout_seconds: 60
+    coverage_areas: [email_dns_security, attack_surface]
+    coverage_weight: 1.0
+
+  rdap:
+    label: "RDAP / whois pubblico"
+    kind: builtin
+    passive: true
+    phase: 1
+    timeout_seconds: 45
+    coverage_areas: [email_dns_security]
+    coverage_weight: 0.6
+
+  certificate_transparency:
+    label: "Certificate Transparency (crt.sh)"
+    kind: builtin
+    passive: true
+    phase: 1
+    timeout_seconds: 90
+    coverage_areas: [attack_surface]
+    coverage_weight: 0.9
+
+  subfinder:
+    label: "Subfinder"
+    kind: external_binary
+    binary: subfinder
+    passive: true
+    phase: 1
+    timeout_seconds: 180
+    max_targets: 25
+    repository: "https://github.com/projectdiscovery/subfinder"
+    license: "MIT"
+    coverage_areas: [attack_surface]
+    coverage_weight: 1.0
+    args_template: ["-silent", "-json", "-all", "-d", "{domain}"]
+
+  spiderfoot:
+    label: "SpiderFoot"
+    kind: http_api
+    passive: true
+    phase: 1
+    timeout_seconds: 900
+    repository: "https://github.com/smicallef/spiderfoot"
+    license: "MIT"
+    coverage_areas: [attack_surface, darkweb_breach]
+    coverage_weight: 1.0
+    # Moduli ammessi per profilo: nessun modulo attivo nel profilo passivo.
+    modules:
+      public_passive:
+        - sfp_dnsresolve
+        - sfp_crt
+        - sfp_hackertarget
+        - sfp_threatcrowd
+        - sfp_whois
+        - sfp_email
+        - sfp_ahmia
+        - sfp_similar
+        - sfp_pastebin
+      verified_standard:
+        - sfp_dnsresolve
+        - sfp_crt
+        - sfp_hackertarget
+        - sfp_whois
+        - sfp_email
+        - sfp_ahmia
+        - sfp_similar
+        - sfp_pastebin
+        - sfp_webframework
+        - sfp_httpheaders
+      verified_extended:
+        - sfp_dnsresolve
+        - sfp_crt
+        - sfp_whois
+        - sfp_email
+        - sfp_ahmia
+        - sfp_similar
+        - sfp_webframework
+        - sfp_httpheaders
+        - sfp_portscan_tcp
+    forbidden_modules:
+      - sfp_bruteforce
+      - sfp_dnsbrute
+      - sfp_tool_nmap
+      - sfp_tool_nuclei
+    notes: >-
+      Alcune fonti usate da SpiderFoot richiedono API key a pagamento.
+      Le key sono gestite dal Connector registry, non hardcoded.
+
+  checkdmarc:
+    label: "checkdmarc"
+    kind: python_library
+    passive: true
+    phase: 1
+    timeout_seconds: 120
+    repository: "https://github.com/domainaware/checkdmarc"
+    license: "Apache-2.0"
+    coverage_areas: [email_dns_security]
+    coverage_weight: 1.0
+    options:
+      check_starttls_in_profiles: [verified_standard, verified_extended]
+      dkim_selectors_default: [default, selector1, selector2, google, k1, mail, dkim, s1, s2]
+      dkim_max_lookups: 12
+
+  httpx:
+    label: "HTTPX"
+    kind: external_binary
+    binary: httpx
+    passive: false
+    phase: 1
+    timeout_seconds: 300
+    max_targets: 500
+    rate_limit_per_second: 20
+    repository: "https://github.com/projectdiscovery/httpx"
+    license: "MIT"
+    coverage_areas: [web_security, attack_surface]
+    coverage_weight: 1.0
+    args_template: ["-json", "-silent", "-no-color", "-status-code", "-title",
+                    "-tech-detect", "-web-server", "-cdn", "-tls-grab",
+                    "-follow-redirects", "-max-redirects", "3", "-timeout", "10",
+                    "-rate-limit", "20"]
+    screenshot_profiles: [verified_standard, verified_extended]
+
+  testssl:
+    label: "testssl.sh"
+    kind: external_binary
+    binary: testssl.sh
+    passive: false
+    phase: 1
+    timeout_seconds: 600
+    max_targets: 25
+    repository: "https://github.com/testssl/testssl.sh"
+    license: "GPL-2.0"
+    license_risk: >-
+      GPL-2.0: usato come strumento esterno invocato via subprocess,
+      NON linkato. Nessuna redistribuzione modificata.
+    coverage_areas: [web_security]
+    coverage_weight: 1.0
+    args_template: ["--jsonfile-pretty", "{outfile}", "--quiet", "--color", "0",
+                    "--severity", "LOW", "--sneaky", "{target}"]
+
+  ransomware_live:
+    label: "Ransomware.live"
+    kind: http_api
+    passive: true
+    phase: 1
+    timeout_seconds: 60
+    repository: "https://github.com/JMousqueton/ransomware.live"
+    license: "AGPL-3.0 (progetto) / API pubblica"
+    coverage_areas: [darkweb_breach]
+    coverage_weight: 1.0
+    base_url: "https://api.ransomware.live"
+
+  hibp:
+    label: "Have I Been Pwned"
+    kind: http_api
+    passive: true
+    optional: true
+    requires_api_key: true
+    commercial: true
+    phase: 1
+    timeout_seconds: 90
+    coverage_areas: [darkweb_breach]
+    coverage_weight: 0.8
+    base_url: "https://haveibeenpwned.com/api/v3"
+    notes: "Sorgente NON open source. Richiede subscription a pagamento."
+
+  kev:
+    label: "CISA Known Exploited Vulnerabilities"
+    kind: http_feed
+    passive: true
+    phase: 1
+    timeout_seconds: 120
+    coverage_areas: [technical_vulnerabilities]
+    coverage_weight: 0.7
+    url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+    cache_ttl_hours: 24
+
+  epss:
+    label: "FIRST EPSS"
+    kind: http_api
+    passive: true
+    phase: 1
+    timeout_seconds: 120
+    coverage_areas: [technical_vulnerabilities]
+    coverage_weight: 0.6
+    base_url: "https://api.first.org/data/v1/epss"
+    cache_ttl_hours: 24
+
+  amass_passive:
+    label: "OWASP Amass (passive)"
+    kind: external_binary
+    binary: amass
+    passive: true
+    phase: 2
+    timeout_seconds: 900
+    repository: "https://github.com/owasp-amass/amass"
+    license: "Apache-2.0"
+    coverage_areas: [attack_surface]
+    coverage_weight: 1.0
+    args_template: ["enum", "-passive", "-nocolor", "-json", "{outfile}", "-d", "{domain}"]
+
+  amass:
+    label: "OWASP Amass"
+    kind: external_binary
+    binary: amass
+    passive: false
+    phase: 2
+    timeout_seconds: 1800
+    repository: "https://github.com/owasp-amass/amass"
+    license: "Apache-2.0"
+    coverage_areas: [attack_surface]
+    coverage_weight: 1.0
+
+  zap_baseline:
+    label: "OWASP ZAP Baseline"
+    kind: docker
+    passive: false
+    phase: 2
+    timeout_seconds: 900
+    max_targets: 10
+    image: "ghcr.io/zaproxy/zaproxy:stable"
+    license: "Apache-2.0"
+    coverage_areas: [web_security]
+    coverage_weight: 1.0
+    args_template: ["zap-baseline.py", "-t", "{url}", "-J", "{outfile}", "-I", "-m", "3"]
+    forbidden_modes: [full_scan, active_scan, api_scan_active]
+
+  nuclei:
+    label: "Nuclei"
+    kind: external_binary
+    binary: nuclei
+    passive: false
+    phase: 2
+    timeout_seconds: 1200
+    max_targets: 100
+    rate_limit_per_second: 20
+    repository: "https://github.com/projectdiscovery/nuclei"
+    license: "MIT (engine) / template license separata"
+    coverage_areas: [technical_vulnerabilities, web_security]
+    coverage_weight: 1.0
+    template_allowlist_file: "config/nuclei_allowlist.yaml"
+    excluded_tags: [dos, fuzz, brute-force, intrusive, rce, sqli, file-upload,
+                    auth-bypass-active, headless, network-dos, exploit]
+
+  naabu:
+    label: "Naabu"
+    kind: external_binary
+    binary: naabu
+    passive: false
+    phase: 2
+    timeout_seconds: 900
+    rate_limit_per_second: 100
+    repository: "https://github.com/projectdiscovery/naabu"
+    license: "MIT"
+    coverage_areas: [attack_surface]
+    coverage_weight: 1.0
+    default_ports: [21,22,23,25,53,80,110,135,139,143,443,445,465,587,993,995,
+                    1433,1723,3306,3389,4443,5432,5900,5985,6379,8000,8080,8443,
+                    8888,9200,9300,10000,27017]
+
+  nmap:
+    label: "Nmap"
+    kind: external_binary
+    binary: nmap
+    passive: false
+    phase: 2
+    timeout_seconds: 1800
+    license: "NPSL (Nmap Public Source License) - verificare uso commerciale"
+    license_risk: >-
+      Nmap non e' GPL puro: la NPSL limita la redistribuzione in prodotti
+      commerciali. Preferire Naabu nel prodotto distribuito.
+    coverage_areas: [attack_surface]
+    coverage_weight: 0.9
+    args_template: ["-sT", "-Pn", "-n", "--open", "-T2", "--max-retries", "1",
+                    "-oX", "{outfile}"]
+
+  dnstwist_passive:
+    label: "DNSTwist (solo registrati)"
+    kind: python_library
+    passive: true
+    phase: 2
+    timeout_seconds: 600
+    repository: "https://github.com/elceef/dnstwist"
+    license: "Apache-2.0"
+    coverage_areas: [darkweb_breach]
+    coverage_weight: 0.8
+
+  dnstwist:
+    label: "DNSTwist"
+    kind: python_library
+    passive: true
+    phase: 2
+    timeout_seconds: 900
+    repository: "https://github.com/elceef/dnstwist"
+    license: "Apache-2.0"
+    coverage_areas: [darkweb_breach]
+    coverage_weight: 1.0
+
+  email_header:
+    label: "Email header analyzer"
+    kind: builtin
+    passive: true
+    phase: 2
+    timeout_seconds: 30
+    coverage_areas: [email_dns_security]
+    coverage_weight: 0.7
+
+  ail:
+    label: "AIL Framework"
+    kind: http_api
+    passive: true
+    phase: 3
+    optional: true
+    timeout_seconds: 600
+    repository: "https://github.com/ail-project/ail-framework"
+    license: "AGPL-3.0"
+    license_risk: >-
+      AGPL-3.0: usato come servizio esterno separato via API di rete.
+      Nessun linking nel codice Defenix.
+    coverage_areas: [darkweb_breach]
+    coverage_weight: 1.0
+    requires_tor_network: true
+
+# Limiti globali di sicurezza applicati dal worker a QUALSIASI tool.
+global_limits:
+  max_targets_per_run: 500
+  max_output_bytes: 52428800        # 50 MB
+  max_wall_clock_seconds: 3600
+  max_concurrent_tool_runs: 4
+  process_memory_limit_mb: 2048
+  process_cpu_seconds: 3000
+  temp_dir_quota_mb: 512

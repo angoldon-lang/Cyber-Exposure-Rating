@@ -1,0 +1,47 @@
+# Rating cap: il punteggio complessivo non puo' superare il valore indicato
+# quando la condizione e' verificata.
+# I cap si applicano ESCLUSIVAMENTE a:
+#   - evidenze con confidence_class = confirmed
+#   - asset con ownership = verified_owned
+#   - finding validati dall'analista (analyst_validation in {validated, approved})
+#     quando `require_analyst_validation: true`
+version: "1.0.0"
+
+global_requirements:
+  min_confidence_class: confirmed
+  min_ownership: verified_owned
+
+caps:
+  - id: CAP-RANSOMWARE-ACTIVE
+    description_it: "Pubblicazione ransomware attiva e confermata sull'organizzazione"
+    description_en: "Confirmed active ransomware leak-site publication"
+    match: {finding_type: "ransomware_leak_publication"}
+    max_age_days: 730
+    max_overall_score: 39
+    require_analyst_validation: true
+    severity: critical
+
+  - id: CAP-KEV-INTERNET-FACING
+    description_it: "Servizio Internet-facing con vulnerabilita' presente in CISA KEV"
+    description_en: "Internet-facing service with a CISA KEV vulnerability"
+    match: {finding_type: "vulnerability", cisa_kev: true, internet_facing: true}
+    max_overall_score: 49
+    require_analyst_validation: true
+    severity: critical
+
+  - id: CAP-STEALER-LOG-RECENT
+    description_it: "Credenziali aziendali recenti in stealer log da fonte attendibile"
+    description_en: "Recent corporate credentials in stealer logs from a trusted source"
+    match: {finding_type: "stealer_log_credentials"}
+    max_age_days: 180
+    max_overall_score: 59
+    require_analyst_validation: true
+    severity: critical
+
+  - id: CAP-CRITICAL-EXPLOITABLE
+    description_it: "Vulnerabilita' critica confermata e sfruttabile da Internet"
+    description_en: "Confirmed critical vulnerability exploitable from the Internet"
+    match: {finding_type: "vulnerability", cvss_min: 9.0, internet_facing: true}
+    max_overall_score: 54
+    require_analyst_validation: true
+    severity: critical

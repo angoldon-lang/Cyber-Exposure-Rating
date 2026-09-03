@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head><meta charset="utf-8"><title>Allegato tecnico - {{ company_name }}</title>
+<style>{{ stylesheet }}</style></head>
+<body>
+
+<h2 style="margin-top:0">Allegato tecnico</h2>
+<p class="company-name" style="font-size:12pt;font-weight:700;margin-bottom:1mm">{{ company_name }}</p>
+<p class="muted small">Profilo: {{ profile_label }} &middot;
+  Data: {{ generated_at.strftime('%d/%m/%Y %H:%M') }} UTC &middot;
+  Rilievi documentati: {{ findings|length }}</p>
+
+<div class="callout">
+  Il presente allegato riporta le evidenze sanitizzate raccolte durante la valutazione.
+  Non contiene credenziali, token, cookie, contenuti integrali di leak, istruzioni di
+  sfruttamento ne' payload offensivi. Le evidenze non confermate sono indicate come tali
+  e non incidono sul punteggio.
+</div>
+
+{# ------------------------ Riepilogo per severita' ------------------------- #}
+<h3>Riepilogo dei rilievi</h3>
+<table>
+  <thead><tr><th>Severita'</th><th style="width:22mm">Numero</th>
+    <th>Aree interessate</th></tr></thead>
+  <tbody>
+  {% for level in ['critical','high','medium','low','info'] %}
+    {% set subset = findings|selectattr('severity','equalto',level)|list %}
+    {% if subset %}
+    <tr><td><span class="badge sev-{{ level }}">{{ severity_label[level] }}</span></td>
+      <td>{{ subset|length }}</td>
+      <td class="small">{{ subset|map(attribute='category')|unique|join(', ') }}</td></tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+
+{# ------------------------------ Dettaglio -------------------------------- #}
+{% for level in ['critical','high','medium','low','info'] %}
+  {% set subset = findings|selectattr('severity','equalto',level)|list %}
+  {% if subset %}
+  <h3 class="page-break">Rilievi di severita' {{ severity_label[level]|lower }}
+    ({{ subset|length }})</h3>
+  {% for finding in subset %}
+  <div class="finding">
+    <h4><span class="code">{{ finding.reference_code }}</span> &mdash; {{ finding.title }}
+      <span class="badge sev-{{ finding.severity }}">{{ severity_label[finding.severity] }}</span></h4>
+    <dl>
+      <dt>Area</dt><dd>{{ finding.category }}</dd>
+      <dt>Stato</dt><dd>{{ finding.workflow_state }}
+        {%- if finding.analyst_validation != 'not_reviewed' %}
+          &middot; revisione: {{ finding.analyst_validation }}{% endif %}</dd>
+      <dt>Attendibilita'</dt><dd>{{ confidence_label_map[finding.confidence_class] }}</dd>
+      <dt>Asset interessato</dt><dd>{{ finding.asset_display or finding.detail or 'n/d' }}
+        ({{ ownership_label.get(finding.ownership_status, finding.ownership_status) }})</dd>
+      <dt>Descrizione</dt><dd>{{ finding.description }}</dd>
+      {% if finding.evidence_summary %}
+      <dt>Evidenza</dt><dd class="small">{{ finding.evidence_summary }}</dd>{% endif %}
+      <dt>Prima rilevazione</dt><dd>{{ finding.first_seen_at }}</dd>
+      <dt>Ultima rilevazione</dt><dd>{{ finding.last_seen_at }}</dd>
+      <dt>Impatto potenziale</dt><dd>{{ finding.impact_it or 'Vedi descrizione del rilievo.' }}</dd>
+      <dt>Probabilita' di sfruttamento</dt>
+        <dd>{% if finding.epss_score is not none %}
+              EPSS {{ '%.1f'|format(finding.epss_score * 100) }}% (probabilita' di sfruttamento
+              nei prossimi 30 giorni)
+            {% else %}non quantificata{% endif %}</dd>
+      {% if finding.cve_id %}
+      <dt>CVE</dt><dd>{{ finding.cve_id }}</dd>
+      <dt>CVSS</dt><dd>{{ finding.cvss_score if finding.cvss_score is not none else 'n/d' }}</dd>
+      <dt>CISA KEV</dt>
+        <dd>{% if finding.cisa_kev %}<strong>Si'</strong> &mdash; esistono evidenze pubbliche
+          di sfruttamento reale{% else %}No{% endif %}</dd>
+      {% endif %}
+      {% if finding.remediation %}
+      <dt>Remediation</dt><dd><strong>{{ finding.remediation.title_it }}</strong><br>
+        <em>Azione immediata:</em> {{ finding.remediation.immediate_action_it }}<br>
+        <em>Soluzione strutturale:</em> {{ finding.remediation.structural_solution_it }}</dd>
+      <dt>Priorita'</dt><dd>{{ priority_label[finding.remediation.priority] }}</dd>
+      <dt>Impegno stimato</dt><dd>{{ effort_label[finding.remediation.effort] }}
+        {%- if finding.remediation.skills %} &middot; competenze:
+          {{ finding.remediation.skills|join(', ') }}{% endif %}</dd>
+      <dt>Verifica della risoluzione</dt><dd>{{ finding.remediation.verification_it }}</dd>
+      {% if finding.remediation.references %}
+      <dt>Riferimenti</dt><dd class="small">{{ finding.remediation.references|join(' &middot; ') }}</dd>
+      {% endif %}
+      {% endif %}
+    </dl>
+  </div>
+  {% endfor %}
+  {% endif %}
+{% endfor %}
+
+{# --------------------- Piano di remediation completo ---------------------- #}
+<h3 class="page-break">Piano di remediation</h3>
+<table>
+  <thead><tr><th style="width:8mm">#</th><th>Intervento</th><th style="width:20mm">Priorita'</th>
+    <th style="width:20mm">Impegno</th><th style="width:30mm">Rilievi collegati</th></tr></thead>
+  <tbody>
+  {% for item in remediation_plan %}
+    <tr><td>{{ loop.index }}</td>
+      <td><strong>{{ item.title_it }}</strong><br>
+        <span class="small muted">Verifica: {{ item.verification_it }}</span></td>
+      <td>{{ priority_label[item.priority] }}</td>
+      <td>{{ effort_label[item.effort] }}</td>
+      <td class="small">{{ item.finding_codes|join(', ') }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% set services = remediation_plan|selectattr('commercial_services')|list %}
+{% if services %}
+<h3>Servizi professionali collegabili</h3>
+<p class="small muted">La sezione seguente e' una proposta commerciale, distinta dalle
+  raccomandazioni tecniche sopra riportate.</p>
+<ul>
+{% for item in services %}
+  <li>{{ item.title_it }}: {{ item.commercial_services|join(', ') }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+<div class="callout"><strong>Disclaimer.</strong> {{ disclaimer }}</div>
+</body>
+</html>

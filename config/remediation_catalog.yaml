@@ -1,0 +1,426 @@
+# Catalogo standard delle remediation.
+# `commercial_services` e' SEPARATO dalla raccomandazione tecnica: nel report
+# viene reso in una sezione distinta, mai mescolato al finding tecnico.
+version: "1.0.0"
+
+effort_scale: [xs, s, m, l, xl]
+priority_scale: [p1, p2, p3, p4]
+
+remediations:
+  - id: REM-EMAIL-DMARC
+    title_it: "Implementare e irrigidire DMARC"
+    title_en: "Implement and enforce DMARC"
+    area: email_dns_security
+    priority: p1
+    effort: s
+    skills: ["Sistemista DNS", "Amministratore posta"]
+    risk_mitigated_it: >-
+      Spoofing del dominio aziendale, phishing verso clienti e dipendenti,
+      Business Email Compromise.
+    immediate_action_it: >-
+      Pubblicare un record TXT `_dmarc.<dominio>` con `p=none` e destinatari
+      `rua=` per iniziare la raccolta dei report aggregati.
+    structural_solution_it: >-
+      Analizzare i report per 4-8 settimane, allineare tutte le sorgenti di
+      invio legittime (SPF+DKIM), quindi passare a `p=quarantine` e infine
+      `p=reject` con `sp=reject` e `pct=100`.
+    verification_it: >-
+      Il record `_dmarc.<dominio>` risolve, la policy e' `reject` o
+      `quarantine`, i report aggregati non mostrano piu' sorgenti non allineate.
+    references:
+      - "RFC 7489"
+      - "NIST SP 800-177 Rev.1"
+      - "AgID - Linee guida sicurezza posta elettronica"
+    commercial_services: ["Defenix Email Security Assessment", "AD Consulting DMARC onboarding"]
+
+  - id: REM-EMAIL-SPF
+    title_it: "Correggere il record SPF"
+    title_en: "Fix the SPF record"
+    area: email_dns_security
+    priority: p1
+    effort: xs
+    skills: ["Sistemista DNS"]
+    risk_mitigated_it: "Invio di e-mail fraudolente a nome del dominio."
+    immediate_action_it: >-
+      Mantenere un unico record SPF valido, terminato con `-all` o `~all`.
+    structural_solution_it: >-
+      Censire tutte le sorgenti di invio legittime, rimuovere gli include
+      obsoleti, mantenere il numero di lookup DNS entro 10 usando appiattimento
+      controllato o sottodomini dedicati.
+    verification_it: "Un solo record SPF, sintassi valida, lookup <= 10, meccanismo finale restrittivo."
+    references: ["RFC 7208"]
+    commercial_services: ["Defenix Email Security Assessment"]
+
+  - id: REM-EMAIL-DKIM
+    title_it: "Attivare la firma DKIM"
+    title_en: "Enable DKIM signing"
+    area: email_dns_security
+    priority: p2
+    effort: s
+    skills: ["Amministratore posta"]
+    risk_mitigated_it: "Manomissione dei messaggi e impossibilita' di allineamento DMARC."
+    immediate_action_it: "Attivare la firma DKIM sul provider di posta e pubblicare la chiave pubblica."
+    structural_solution_it: >-
+      Chiavi RSA >= 2048 bit o Ed25519, rotazione periodica documentata,
+      selettori distinti per ciascun sistema di invio.
+    verification_it: "Il selettore risolve e i messaggi in uscita passano la verifica DKIM con allineamento."
+    references: ["RFC 6376"]
+    commercial_services: []
+
+  - id: REM-EMAIL-MTASTS
+    title_it: "Configurare MTA-STS e TLS-RPT"
+    title_en: "Configure MTA-STS and TLS-RPT"
+    area: email_dns_security
+    priority: p3
+    effort: s
+    skills: ["Sistemista DNS", "Amministratore posta"]
+    risk_mitigated_it: "Downgrade attack sulla consegna SMTP e intercettazione della posta."
+    immediate_action_it: "Pubblicare `_mta-sts` e il policy file in modalita' `testing`."
+    structural_solution_it: "Passare la policy a `enforce` dopo la validazione dei report TLS-RPT."
+    verification_it: "Policy MTA-STS raggiungibile in HTTPS, modalita' enforce, report TLS-RPT ricevuti."
+    references: ["RFC 8461", "RFC 8460"]
+    commercial_services: []
+
+  - id: REM-EMAIL-STARTTLS
+    title_it: "Abilitare STARTTLS sui server di posta"
+    title_en: "Enable STARTTLS on mail servers"
+    area: email_dns_security
+    priority: p2
+    effort: s
+    skills: ["Amministratore posta"]
+    risk_mitigated_it: "Trasmissione della posta in chiaro tra MTA."
+    immediate_action_it: "Abilitare STARTTLS con certificato valido su tutti gli MX."
+    structural_solution_it: "TLS 1.2+ con cipher moderni, certificati rinnovati automaticamente, DANE/TLSA se DNSSEC attivo."
+    verification_it: "Tutti gli MX negoziano STARTTLS con certificato valido e protocollo >= TLS 1.2."
+    references: ["RFC 3207"]
+    commercial_services: []
+
+  - id: REM-DNS-DNSSEC
+    title_it: "Abilitare DNSSEC"
+    title_en: "Enable DNSSEC"
+    area: email_dns_security
+    priority: p3
+    effort: m
+    skills: ["Sistemista DNS"]
+    risk_mitigated_it: "Cache poisoning e dirottamento della risoluzione DNS."
+    immediate_action_it: "Verificare il supporto DNSSEC del registrar e del provider DNS."
+    structural_solution_it: "Firmare la zona, pubblicare i record DS presso il registrar, monitorare la rotazione delle chiavi."
+    verification_it: "La catena di fiducia DNSSEC valida correttamente dalla root alla zona."
+    references: ["RFC 4033"]
+    commercial_services: []
+
+  - id: REM-DNS-CAA
+    title_it: "Pubblicare record CAA"
+    title_en: "Publish CAA records"
+    area: email_dns_security
+    priority: p4
+    effort: xs
+    skills: ["Sistemista DNS"]
+    risk_mitigated_it: "Emissione non autorizzata di certificati per il dominio."
+    immediate_action_it: "Pubblicare un record CAA che elenchi solo le CA autorizzate."
+    structural_solution_it: "Aggiungere `iodef` per la notifica dei tentativi di emissione non conformi."
+    verification_it: "Il record CAA risolve e contiene esclusivamente le CA in uso."
+    references: ["RFC 8659"]
+    commercial_services: []
+
+  - id: REM-DNS-EXPIRY
+    title_it: "Rinnovare il dominio e proteggerne il ciclo di vita"
+    title_en: "Renew the domain and protect its lifecycle"
+    area: email_dns_security
+    priority: p1
+    effort: xs
+    skills: ["Referente amministrativo", "Sistemista DNS"]
+    risk_mitigated_it: "Perdita del dominio, dirottamento della posta e del sito."
+    immediate_action_it: "Rinnovare immediatamente il dominio in scadenza."
+    structural_solution_it: "Attivare auto-renew, registrar lock e alert su scadenza a 90/60/30 giorni."
+    verification_it: "Data di scadenza spostata, registrar lock attivo, auto-renew abilitato."
+    references: []
+    commercial_services: []
+
+  - id: REM-WEB-HTTPS
+    title_it: "Forzare HTTPS su tutti i servizi web"
+    title_en: "Enforce HTTPS on all web services"
+    area: web_security
+    priority: p1
+    effort: s
+    skills: ["Sistemista web"]
+    risk_mitigated_it: "Intercettazione delle credenziali e manipolazione dei contenuti."
+    immediate_action_it: "Attivare il certificato TLS e il redirect 301 da HTTP a HTTPS."
+    structural_solution_it: "HSTS con max-age >= 31536000, eliminazione del mixed content, rinnovo automatico dei certificati."
+    verification_it: "HTTP reindirizza a HTTPS, HSTS presente, nessuna risorsa in chiaro nella pagina."
+    references: ["OWASP Transport Layer Security Cheat Sheet"]
+    commercial_services: []
+
+  - id: REM-TLS-CERT
+    title_it: "Gestire correttamente i certificati TLS"
+    title_en: "Manage TLS certificates properly"
+    area: web_security
+    priority: p1
+    effort: s
+    skills: ["Sistemista web"]
+    risk_mitigated_it: "Errori di fiducia nel browser, interruzione di servizio, phishing agevolato."
+    immediate_action_it: "Sostituire i certificati scaduti o con hostname non corrispondente."
+    structural_solution_it: "Automatizzare l'emissione (ACME), monitorare le scadenze, allineare SAN e hostname pubblicati."
+    verification_it: "Certificato valido, catena completa, scadenza > 30 giorni, hostname incluso nelle SAN."
+    references: []
+    commercial_services: ["Defenix Certificate Monitoring"]
+
+  - id: REM-TLS-HARDENING
+    title_it: "Hardening della configurazione TLS"
+    title_en: "TLS configuration hardening"
+    area: web_security
+    priority: p2
+    effort: s
+    skills: ["Sistemista web"]
+    risk_mitigated_it: "Downgrade, attacchi su cipher deboli, decrittazione del traffico."
+    immediate_action_it: "Disabilitare SSLv3, TLS 1.0 e TLS 1.1 e i cipher suite deboli."
+    structural_solution_it: "Adottare un profilo TLS 1.2/1.3 moderno, forward secrecy, OCSP stapling, revisione periodica."
+    verification_it: "Solo TLS 1.2/1.3 negoziabili, nessun cipher NULL/RC4/3DES/EXPORT."
+    references: ["Mozilla TLS Configuration - Intermediate"]
+    commercial_services: []
+
+  - id: REM-WEB-HEADERS
+    title_it: "Implementare gli header di sicurezza HTTP"
+    title_en: "Implement HTTP security headers"
+    area: web_security
+    priority: p2
+    effort: s
+    skills: ["Sviluppatore web", "Sistemista web"]
+    risk_mitigated_it: "Cross-site scripting, clickjacking, MIME sniffing, leakage del referrer."
+    immediate_action_it: >-
+      Aggiungere `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`,
+      `Referrer-Policy` e una protezione clickjacking.
+    structural_solution_it: >-
+      Definire una Content Security Policy in report-only, analizzarne le
+      violazioni e passarla in enforcement; centralizzare gli header su reverse
+      proxy o WAF.
+    verification_it: "Gli header sono presenti su tutte le risposte e la CSP e' in enforcement senza violazioni legittime."
+    references: ["OWASP Secure Headers Project"]
+    commercial_services: []
+
+  - id: REM-WEB-COOKIES
+    title_it: "Proteggere i cookie di sessione"
+    title_en: "Harden session cookies"
+    area: web_security
+    priority: p2
+    effort: xs
+    skills: ["Sviluppatore web"]
+    risk_mitigated_it: "Furto di sessione e attacchi CSRF."
+    immediate_action_it: "Impostare `Secure`, `HttpOnly` e `SameSite` sui cookie di sessione."
+    structural_solution_it: "Rivedere durata, scope e rotazione dei cookie; separare cookie funzionali e di sessione."
+    verification_it: "Tutti i cookie di sessione riportano Secure, HttpOnly e SameSite=Lax o Strict."
+    references: ["OWASP Session Management Cheat Sheet"]
+    commercial_services: []
+
+  - id: REM-WEB-CORS
+    title_it: "Restringere la configurazione CORS"
+    title_en: "Restrict CORS configuration"
+    area: web_security
+    priority: p2
+    effort: s
+    skills: ["Sviluppatore web"]
+    risk_mitigated_it: "Accesso cross-origin non autorizzato ai dati applicativi."
+    immediate_action_it: "Rimuovere `Access-Control-Allow-Origin: *` dagli endpoint autenticati."
+    structural_solution_it: "Allowlist esplicita di origin, nessun wildcard con credenziali, revisione per endpoint."
+    verification_it: "Nessun endpoint autenticato risponde con origin wildcard."
+    references: []
+    commercial_services: []
+
+  - id: REM-WEB-INFOLEAK
+    title_it: "Eliminare la divulgazione di informazioni"
+    title_en: "Remove information disclosure"
+    area: web_security
+    priority: p3
+    effort: s
+    skills: ["Sistemista web"]
+    risk_mitigated_it: "Agevolazione del reconnaissance e del targeting delle vulnerabilita' note."
+    immediate_action_it: "Disattivare directory listing, banner di versione e pagine di errore verbose."
+    structural_solution_it: "Pagine di errore generiche, header server minimali, rimozione dei file di build e backup dal document root."
+    verification_it: "Nessun listing di directory, nessuna versione nei banner, errori generici."
+    references: []
+    commercial_services: []
+
+  - id: REM-WEB-ADMIN
+    title_it: "Proteggere pannelli amministrativi e ambienti non produttivi"
+    title_en: "Protect admin panels and non-production environments"
+    area: web_security
+    priority: p1
+    effort: m
+    skills: ["Sistemista", "Network security"]
+    risk_mitigated_it: "Accesso non autorizzato ai sistemi di gestione, esposizione di dati di test."
+    immediate_action_it: "Limitare l'accesso per IP o VPN e imporre MFA."
+    structural_solution_it: >-
+      Spostare le interfacce di gestione dietro accesso privilegiato (ZTNA/VPN),
+      rimuovere dal perimetro pubblico gli ambienti di staging e test.
+    verification_it: "I pannelli non sono raggiungibili da Internet senza autenticazione forte."
+    references: []
+    commercial_services: ["Defenix Secure Remote Access"]
+
+  - id: REM-WEB-SECURITYTXT
+    title_it: "Pubblicare security.txt"
+    title_en: "Publish security.txt"
+    area: web_security
+    priority: p4
+    effort: xs
+    skills: ["Sistemista web"]
+    risk_mitigated_it: "Segnalazioni di sicurezza che non raggiungono il referente corretto."
+    immediate_action_it: "Pubblicare `/.well-known/security.txt` con contatto e policy."
+    structural_solution_it: "Processo documentato di gestione delle segnalazioni con SLA di risposta."
+    verification_it: "Il file e' raggiungibile in HTTPS e contiene contatto ed `Expires` valido."
+    references: ["RFC 9116"]
+    commercial_services: []
+
+  - id: REM-AS-REMOVE-SERVICE
+    title_it: "Rimuovere o proteggere il servizio esposto"
+    title_en: "Remove or protect the exposed service"
+    area: attack_surface
+    priority: p1
+    effort: m
+    skills: ["Sistemista", "Network security"]
+    risk_mitigated_it: "Accesso diretto a servizi non destinati alla pubblicazione su Internet."
+    immediate_action_it: "Chiudere la porta sul firewall perimetrale o limitarla a sorgenti autorizzate."
+    structural_solution_it: "Revisione delle regole firewall, principio del minimo privilegio, inventario dei servizi pubblicati."
+    verification_it: "La porta non risulta piu' raggiungibile da Internet in una verifica successiva."
+    references: []
+    commercial_services: ["Defenix Firewall Review"]
+
+  - id: REM-AS-VPN
+    title_it: "Aggiornare e mettere in sicurezza VPN e firewall"
+    title_en: "Update and harden VPN and firewall"
+    area: attack_surface
+    priority: p1
+    effort: m
+    skills: ["Network security"]
+    risk_mitigated_it: "Compromissione del perimetro tramite vulnerabilita' note sugli apparati di accesso remoto."
+    immediate_action_it: "Applicare le patch del vendor e verificare gli advisory pubblicati."
+    structural_solution_it: "MFA obbligatoria, gestione fuori banda, monitoraggio dei log di accesso, ciclo di patching definito."
+    verification_it: "Versione firmware aggiornata, MFA attiva, nessun advisory aperto applicabile."
+    references: ["CISA Known Exploited Vulnerabilities Catalog"]
+    commercial_services: ["Defenix Perimeter Hardening"]
+
+  - id: REM-AS-SUBDOMAIN
+    title_it: "Bonificare sottodomini abbandonati e record DNS pendenti"
+    title_en: "Clean up abandoned subdomains and dangling DNS records"
+    area: attack_surface
+    priority: p1
+    effort: s
+    skills: ["Sistemista DNS"]
+    risk_mitigated_it: "Subdomain takeover e utilizzo del brand per campagne malevole."
+    immediate_action_it: "Rimuovere i record CNAME/A che puntano a risorse non piu' controllate."
+    structural_solution_it: "Processo di dismissione che prevede la rimozione del DNS, inventario dei sottodomini, monitoraggio continuo."
+    verification_it: "I record pendenti non risolvono piu' verso risorse di terzi non controllate."
+    references: []
+    commercial_services: ["Defenix Attack Surface Monitoring"]
+
+  - id: REM-AS-INVENTORY
+    title_it: "Consolidare l'inventario della superficie esposta"
+    title_en: "Consolidate the external asset inventory"
+    area: attack_surface
+    priority: p3
+    effort: m
+    skills: ["IT Manager", "Security Analyst"]
+    risk_mitigated_it: "Asset non censiti e quindi non gestiti ne' aggiornati."
+    immediate_action_it: "Consolidare l'elenco di domini, sottodomini e IP pubblici in un unico registro."
+    structural_solution_it: "Owner assegnato per ogni asset, revisione periodica, discovery continuativa."
+    verification_it: "Ogni asset pubblico ha un responsabile e uno stato documentato."
+    references: []
+    commercial_services: ["Defenix Attack Surface Monitoring"]
+
+  - id: REM-VULN-PATCH
+    title_it: "Applicare le patch di sicurezza"
+    title_en: "Apply security patches"
+    area: technical_vulnerabilities
+    priority: p1
+    effort: m
+    skills: ["Sistemista", "Application owner"]
+    risk_mitigated_it: "Sfruttamento di vulnerabilita' note su servizi raggiungibili da Internet."
+    immediate_action_it: "Applicare l'aggiornamento indicato dall'advisory del vendor, dando priorita' alle CVE in CISA KEV."
+    structural_solution_it: >-
+      Processo di vulnerability management con SLA per severita', inventario
+      delle versioni, finestre di manutenzione pianificate.
+    verification_it: "La versione esposta non e' piu' quella vulnerabile e il finding non si ripresenta al retest."
+    references: ["CISA KEV", "FIRST EPSS"]
+    commercial_services: ["Defenix Vulnerability Management", "AD Consulting Patch Management"]
+
+  - id: REM-VULN-UPGRADE
+    title_it: "Aggiornare o sostituire il software obsoleto"
+    title_en: "Upgrade or replace outdated software"
+    area: technical_vulnerabilities
+    priority: p2
+    effort: l
+    skills: ["Application owner", "Sistemista"]
+    risk_mitigated_it: "Esposizione a vulnerabilita' non piu' corrette dal produttore."
+    immediate_action_it: "Verificare lo stato di supporto del componente e pianificare l'aggiornamento."
+    structural_solution_it: "Ciclo di vita del software documentato, migrazione dei componenti end-of-life, test di regressione."
+    verification_it: "Il componente e' in una versione supportata dal produttore."
+    references: []
+    commercial_services: []
+
+  - id: REM-IR-RANSOMWARE
+    title_it: "Attivare la gestione dell'incidente ransomware"
+    title_en: "Activate ransomware incident response"
+    area: darkweb_breach
+    priority: p1
+    effort: xl
+    skills: ["Incident Response", "Legale", "Data Protection Officer"]
+    risk_mitigated_it: "Prosecuzione della compromissione, ulteriore esfiltrazione, sanzioni per mancata notifica."
+    immediate_action_it: >-
+      Attivare il piano di risposta agli incidenti, isolare i sistemi coinvolti,
+      valutare gli obblighi di notifica (GDPR art. 33/34, NIS2 dove applicabile).
+    structural_solution_it: >-
+      Analisi forense della compromissione, ricostruzione del vettore iniziale,
+      rotazione completa delle credenziali, revisione dei backup e del piano di continuita'.
+    verification_it: "Incidente chiuso con relazione forense, vettore iniziale rimediato, monitoraggio rafforzato attivo."
+    references: ["GDPR art. 33-34", "NIS2", "NIST SP 800-61"]
+    commercial_services: ["Defenix Incident Response", "AD Consulting DFIR retainer"]
+
+  - id: REM-CRED-ROTATION
+    title_it: "Rotazione credenziali e analisi degli account compromessi"
+    title_en: "Credential rotation and compromised account analysis"
+    area: darkweb_breach
+    priority: p1
+    effort: m
+    skills: ["Identity Administrator", "Security Analyst"]
+    risk_mitigated_it: "Riutilizzo di credenziali esposte per accessi non autorizzati e BEC."
+    immediate_action_it: >-
+      Forzare il reset delle password degli account coinvolti, invalidare le
+      sessioni attive e i token, verificare le regole di inoltro della posta.
+    structural_solution_it: >-
+      MFA obbligatoria su tutti gli accessi esterni, password policy conforme a
+      NIST SP 800-63B, monitoraggio continuo delle credenziali esposte, EDR sugli
+      endpoint per contrastare gli infostealer.
+    verification_it: "Password ruotate, MFA attiva, nessun accesso anomalo nei log, nessuna regola di inoltro sospetta."
+    references: ["NIST SP 800-63B"]
+    commercial_services: ["Defenix Credential Monitoring", "AD Consulting Identity Security"]
+
+  - id: REM-BRAND-TAKEDOWN
+    title_it: "Gestire i domini di impersonificazione"
+    title_en: "Handle impersonation domains"
+    area: darkweb_breach
+    priority: p2
+    effort: m
+    skills: ["Brand Protection", "Legale"]
+    risk_mitigated_it: "Phishing verso clienti e dipendenti tramite domini simili al brand aziendale."
+    immediate_action_it: >-
+      Verificare il contenuto e i record MX dei domini simili; segnalare quelli
+      effettivamente malevoli al registrar e ai provider di reputazione.
+    structural_solution_it: >-
+      Registrazione difensiva delle varianti principali, monitoraggio continuo,
+      procedura di takedown con fornitore dedicato, DMARC in reject.
+    verification_it: "I domini malevoli sono sospesi o non piu' raggiungibili; il monitoraggio e' attivo."
+    references: []
+    commercial_services: ["Defenix Brand Protection", "AD Consulting Takedown Service"]
+
+  - id: REM-MON-SOC
+    title_it: "Attivare il monitoraggio continuativo SOC"
+    title_en: "Enable continuous SOC monitoring"
+    area: darkweb_breach
+    priority: p3
+    effort: l
+    skills: ["Security Operations"]
+    risk_mitigated_it: "Rilevazione tardiva di compromissioni e di esposizioni sul dark web."
+    immediate_action_it: "Definire i casi d'uso prioritari e le sorgenti di log necessarie."
+    structural_solution_it: "SOC 24/7 con detection engineering, threat intelligence e playbook di risposta."
+    verification_it: "Alerting attivo sui casi d'uso definiti e tempi di risposta misurati."
+    references: []
+    commercial_services: ["Defenix SOC", "AD Consulting Managed Detection & Response"]

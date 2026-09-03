@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# Ambiente e segreti
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Credenziali demo generate dal seed: mai versionate
+.demo-credentials.json
+
+# Dati runtime
+/data/
+/var/
+evidence/
+reports/
+*.sqlite3
+*.db
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

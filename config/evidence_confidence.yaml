@@ -1,0 +1,73 @@
+# Modello di calcolo del Confidence Score (0-100).
+# Il confidence NON modifica il rating: ne dichiara l'affidabilita'.
+version: "1.0.0"
+
+# Il punteggio parte da `base` e ogni fattore aggiunge/sottrae il proprio
+# contributo, pesato. Il risultato viene clampato tra 0 e 100.
+base: 40
+
+factors:
+  domain_verified:
+    weight: 12
+    description_it: "Dominio principale verificato tramite DNS TXT, file o e-mail"
+  ip_authorized:
+    weight: 6
+    description_it: "IP/CIDR con autorizzazione esplicita registrata"
+  scope_completeness:
+    weight: 10
+    description_it: "Percentuale di asset con ownership determinata"
+  source_diversity:
+    weight: 10
+    description_it: "Numero di fonti indipendenti effettivamente interrogate"
+  tool_success_rate:
+    weight: 16
+    description_it: "Rapporto tra tool completati e tool pianificati"
+  profile_depth:
+    weight: 10
+    description_it: "Profondita' del profilo (passive < standard < extended)"
+  fingerprint_precision:
+    weight: 8
+    description_it: "Quota di tecnologie identificate con versione"
+  human_validation:
+    weight: 10
+    description_it: "Quota di finding critici/alti validati da un analista"
+  darkweb_coverage:
+    weight: 6
+    description_it: "Disponibilita' effettiva delle fonti dark web"
+  optional_apis:
+    weight: 5
+    description_it: "Disponibilita' delle API opzionali configurate (HIBP, ecc.)"
+  data_freshness:
+    weight: 7
+    description_it: "Anzianita' media delle evidenze"
+
+profile_depth_values:
+  public_passive: 0.45
+  verified_standard: 0.80
+  verified_extended: 1.00
+
+# Anzianita' evidenze -> fattore [0,1]
+data_freshness_thresholds:
+  - {max_age_days: 7,   value: 1.00}
+  - {max_age_days: 30,  value: 0.85}
+  - {max_age_days: 90,  value: 0.60}
+  - {max_age_days: 180, value: 0.40}
+  - {max_age_days: 3650, value: 0.20}
+
+# Numero di fonti oltre il quale source_diversity vale 1.0
+source_diversity_target: 8
+
+# Penalita' esplicite (sottratte dopo il calcolo)
+penalties:
+  no_domain_verified: 15
+  all_tools_failed: 40
+  scan_partial: 5
+
+# Sotto questa soglia il rating e' "provvisorio"
+minimum_publishable: 50
+
+labels:
+  - {min: 85, label_it: "Alta affidabilita'",   label_en: "High reliability"}
+  - {min: 70, label_it: "Buona affidabilita'",  label_en: "Good reliability"}
+  - {min: 50, label_it: "Affidabilita' sufficiente", label_en: "Sufficient reliability"}
+  - {min: 0,  label_it: "Affidabilita' insufficiente", label_en: "Insufficient reliability"}

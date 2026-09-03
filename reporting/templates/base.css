@@ -1,0 +1,117 @@
+/* Foglio di stile dei report Defenix (PDF via WeasyPrint) */
+@page {
+  size: A4;
+  margin: 20mm 16mm 18mm 16mm;
+  @top-center {
+    content: "Defenix Exposure Rating";
+    font-family: "DejaVu Sans", Helvetica, sans-serif;
+    font-size: 8pt; color: #8a8f98;
+  }
+  @bottom-left {
+    content: "Documento riservato - " string(company-name);
+    font-family: "DejaVu Sans", Helvetica, sans-serif;
+    font-size: 7.5pt; color: #8a8f98;
+  }
+  @bottom-right {
+    content: "Pagina " counter(page) " di " counter(pages);
+    font-family: "DejaVu Sans", Helvetica, sans-serif;
+    font-size: 7.5pt; color: #8a8f98;
+  }
+}
+@page :first { margin: 0; }
+
+:root {
+  --ink: #12161c;
+  --muted: #5c6470;
+  --line: #dfe3e8;
+  --brand: #0f3d5c;
+  --accent: #1c6ea4;
+  --critical: #9b1c1c;
+  --high: #c2410c;
+  --medium: #b45309;
+  --low: #1d6a3a;
+  --info: #4b5563;
+}
+
+* { box-sizing: border-box; }
+body {
+  font-family: "DejaVu Sans", Helvetica, Arial, sans-serif;
+  font-size: 9.5pt; line-height: 1.5; color: var(--ink); margin: 0;
+}
+
+/* ---------- copertina ---------- */
+.cover {
+  page-break-after: always;
+  height: 297mm; padding: 32mm 22mm;
+  background: linear-gradient(160deg, #0f3d5c 0%, #123a52 55%, #0b2436 100%);
+  color: #fff; display: flex; flex-direction: column; justify-content: space-between;
+}
+.cover h1 { font-size: 30pt; margin: 0 0 4mm; letter-spacing: -0.4pt; }
+.cover .subtitle { font-size: 12pt; color: #b9d4e6; margin: 0 0 16mm; }
+.cover .company { font-size: 19pt; font-weight: 700; margin: 0 0 2mm; }
+.cover .meta { font-size: 10pt; color: #c8dcea; }
+.cover .rating-block {
+  margin-top: 14mm; padding: 8mm; border: 1.5pt solid rgba(255,255,255,.28);
+  border-radius: 3mm; background: rgba(255,255,255,.07);
+}
+.cover .score { font-size: 46pt; font-weight: 700; line-height: 1; }
+.cover .class { font-size: 16pt; margin-top: 2mm; }
+.cover .confidence { font-size: 10pt; color: #c8dcea; margin-top: 4mm; }
+.cover .footer-note { font-size: 8pt; color: #9fbdd2; line-height: 1.45; }
+
+/* ---------- struttura ---------- */
+h2 {
+  font-size: 14pt; color: var(--brand); margin: 9mm 0 3mm;
+  padding-bottom: 1.5mm; border-bottom: 1pt solid var(--line);
+  page-break-after: avoid;
+}
+h3 { font-size: 11pt; margin: 6mm 0 2mm; page-break-after: avoid; }
+p { margin: 0 0 3mm; }
+.company-name { string-set: company-name content(); }
+
+table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; font-size: 8.5pt; }
+th, td { padding: 2mm 2.5mm; border-bottom: 0.5pt solid var(--line); text-align: left;
+         vertical-align: top; }
+th { background: #f2f5f8; color: var(--brand); font-weight: 700;
+     border-bottom: 1pt solid var(--line); }
+tr { page-break-inside: avoid; }
+
+.badge {
+  display: inline-block; padding: 0.4mm 2mm; border-radius: 1.2mm;
+  font-size: 7.5pt; font-weight: 700; color: #fff; white-space: nowrap;
+}
+.sev-critical { background: var(--critical); }
+.sev-high { background: var(--high); }
+.sev-medium { background: var(--medium); }
+.sev-low { background: var(--low); }
+.sev-info { background: var(--info); }
+
+.class-A { color: #1d6a3a; } .class-B { color: #3f7d20; }
+.class-C { color: #b45309; } .class-D { color: #c2410c; } .class-E { color: #9b1c1c; }
+
+.bar { height: 3.5mm; background: #eef1f4; border-radius: 1.8mm; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+
+.callout {
+  border-left: 2.5pt solid var(--accent); background: #f4f8fb;
+  padding: 3mm 4mm; margin: 4mm 0; page-break-inside: avoid;
+}
+.callout.warning { border-left-color: var(--high); background: #fdf5f0; }
+.callout.danger { border-left-color: var(--critical); background: #fdf2f2; }
+
+.finding {
+  border: 0.5pt solid var(--line); border-radius: 1.5mm;
+  padding: 3mm 4mm; margin: 0 0 4mm; page-break-inside: avoid;
+}
+.finding h4 { margin: 0 0 2mm; font-size: 10pt; }
+.finding .code { color: var(--muted); font-weight: 400; font-size: 8.5pt; }
+.finding dl { margin: 0; display: grid; grid-template-columns: 34mm 1fr; gap: 1mm 3mm; }
+.finding dt { color: var(--muted); font-size: 8pt; }
+.finding dd { margin: 0; font-size: 8.5pt; }
+
+.muted { color: var(--muted); }
+.small { font-size: 8pt; }
+ul { margin: 0 0 3mm; padding-left: 5mm; }
+li { margin-bottom: 1mm; }
+.page-break { page-break-before: always; }
+.no-break { page-break-inside: avoid; }
