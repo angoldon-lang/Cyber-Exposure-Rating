@@ -43,8 +43,15 @@ class RansomwareLiveAdapter(BaseAdapter):
                    .get("base_url", "https://api.ransomware.live")).rstrip("/")
 
     def check_available(self) -> tuple[bool, str]:
+        """Sonda di raggiungibilita'.
+
+        Anche questa deve seguire i redirect: l'API risponde 302 e una
+        chiamata diretta li tratterebbe come errore, dichiarando la fonte
+        irraggiungibile prima ancora di interrogarla.
+        """
         try:
-            httpx.get(f"{self.base_url}/recentvictims", timeout=10.0).raise_for_status()
+            with httpx.Client(timeout=10.0, follow_redirects=False) as client:
+                get_seguendo_redirect(client, f"{self.base_url}/recentvictims").raise_for_status()
         except Exception as exc:  # noqa: BLE001
             return False, f"API non raggiungibile: {type(exc).__name__}"
         return True, "disponibile"

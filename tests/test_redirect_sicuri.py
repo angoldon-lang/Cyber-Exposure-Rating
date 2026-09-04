@@ -170,3 +170,46 @@ def test_il_messaggio_indica_come_rimediare():
     assert "raw_evidence_not_stored" in sorgente
     assert "fix-evidence-perms" in sorgente
     assert "I rilievi restano validi" in sorgente
+
+
+# --------------------------------------------------------------------------
+# Nessuna scorciatoia
+# --------------------------------------------------------------------------
+def test_nessun_adapter_usa_chiamate_http_dirette():
+    """`httpx.get(...)` non segue i redirect e non li valida.
+
+    Era il motivo per cui `ransomware_live` risultava irraggiungibile: la sonda
+    di disponibilita' usava una chiamata diretta, il 302 legittimo dell'API
+    veniva trattato come errore e l'adapter era saltato prima ancora di
+    interrogare la fonte. Il difetto stava in un punto diverso da quello gia'
+    corretto, quindi la regola vale per tutti gli adapter.
+    """
+    import re
+    from pathlib import Path
+
+    cartella = Path(__file__).resolve().parents[1] / "adapters"
+    colpevoli = []
+    for file in cartella.glob("*.py"):
+        if file.name == "http_sicuro.py":
+            continue
+        for numero, riga in enumerate(file.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"\bhttpx\.(get|post|put|request)\s*\(", riga):
+                colpevoli.append(f"{file.name}:{numero}")
+    assert not colpevoli, (
+        "chiamate HTTP diverse da `get_seguendo_redirect`: " + ", ".join(colpevoli))
+
+
+def test_i_client_degli_adapter_non_delegano_i_redirect_a_httpx():
+    """`follow_redirects=True` seguirebbe i salti senza validare la
+    destinazione: il controllo dev'essere il nostro."""
+    import re
+    from pathlib import Path
+
+    cartella = Path(__file__).resolve().parents[1] / "adapters"
+    colpevoli = [
+        f"{file.name}:{numero}"
+        for file in cartella.glob("*.py")
+        for numero, riga in enumerate(file.read_text(encoding="utf-8").splitlines(), 1)
+        if re.search(r"follow_redirects\s*=\s*True", riga)
+    ]
+    assert not colpevoli, "redirect delegati a httpx senza validazione: " + ", ".join(colpevoli)

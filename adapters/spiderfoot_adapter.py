@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from adapters.http_sicuro import get_seguendo_redirect
 from adapters.base import AdapterResult, AdapterStatus, BaseAdapter, DiscoveredAsset, NormalizedEvidence
 from adapters.synthetic import build_posture
 from app.core.redaction import mask_email
@@ -44,7 +45,10 @@ class SpiderFootAdapter(BaseAdapter):
         if not self.base_url:
             return False, "istanza SpiderFoot non configurata (SPIDERFOOT_URL)"
         try:
-            response = httpx.get(f"{self.base_url.rstrip('/')}/ping", timeout=10.0)
+            # Come per le altre sonde: i redirect si seguono con validazione.
+            with httpx.Client(timeout=10.0, follow_redirects=False) as client:
+                response = get_seguendo_redirect(
+                    client, f"{self.base_url.rstrip('/')}/ping")
             response.raise_for_status()
         except Exception as exc:  # noqa: BLE001
             return False, f"istanza SpiderFoot non raggiungibile: {type(exc).__name__}"

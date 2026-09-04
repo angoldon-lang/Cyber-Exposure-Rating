@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import CompanyDep, CurrentUserDep, DbDep
 from app.api.routers.health import DISCLAIMER_IT
 from app.models.organization import Company
-from app.models.scanning import Finding, Scan
+from app.models.scanning import Finding, Scan, ToolRun
 from app.models.scope import Asset, EmailDomain
 from app.models.scoring import Score
 from app.schemas.scanning import DashboardCompanyCard, DashboardOverview, PortfolioView
@@ -112,6 +112,7 @@ def company_dashboard(company: CompanyDep, db: DbDep) -> DashboardOverview:
                     for c in (score.categories if score else [])],
         severity_counts=severity_counts, trend=trend, assets=asset_counts,
         email_posture=email_posture, darkweb=darkweb,
+        coverage_gaps=_coverage_gaps(db, scan) if scan else [],
         review_progress={k: v for k, v in progress.items() if k != "computed_at"},
         last_scan={"id": str(scan.id), "profile": scan.profile_key, "status": scan.status,
                    "started_at": scan.started_at.isoformat() if scan.started_at else None,
@@ -224,3 +225,46 @@ def get_score(scan_id: uuid.UUID, db: DbDep, current: CurrentUserDep) -> dict:
         } if score.confidence else None,
         "calculation_trace": score.calculation_trace_json,
     }
+
+
+# Etichette delle aree, per dire in che cosa consiste la lacuna.
+AREE_IT = {
+    "attack_surface": "Superficie esposta",
+    "technical_vulnerabilities": "Vulnerabilita' tecniche",
+    "web_security": "Sicurezza dei siti web",
+    "email_dns_security": "Sicurezza e-mail e DNS",
+    "darkweb_breach": "Dark web, breach e impersonificazione",
+}
+
+
+def _coverage_gaps(db: Session, scan) -> list[dict]:  # noqa: ANN001
+    """Strumenti non eseguiti nell'ultima scansione, con motivo e aree toccate.
+
+    Serve a distinguere «controllato e pulito» da «non controllato». Sono due
+    situazioni che producono lo stesso punteggio alto e significati opposti:
+    senza questo elenco, un'area dark web vuota sembra un buon risultato anche
+    quando nessuna fonte e' stata interrogata.
+    """
+    from adapters.registry import ADAPTER_CLASSES
+
+    righe = db.execute(
+        select(ToolRun).where(ToolRun.scan_id == scan.id,
+                              ToolRun.status.in_(["skipped", "failed"]))
+        .order_by(ToolRun.tool_key)).scalars().all()
+
+    lacune = []
+    for riga in righe:
+        classe = ADAPTER_CLASSES.get(riga.tool_key)
+        aree = list(getattr(classe, "coverage_areas", ()) or [])
+        lacune.append({
+            "tool_key": riga.tool_key,
+            "tool_label": getattr(classe, "display_name", riga.tool_key),
+            "status": riga.status,
+            "reason": riga.error_message or "motivo non registrato",
+            "areas": aree,
+            "areas_it": [AREE_IT.get(a, a) for a in aree],
+            # Quanto pesa sulla confidenza: rende esplicito che il rating
+            # tiene gia' conto della lacuna.
+            "coverage_impact": float(riga.coverage_impact or 0.0),
+        })
+    return lacune

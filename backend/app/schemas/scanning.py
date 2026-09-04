@@ -264,6 +264,10 @@ class DashboardOverview(BaseModel):
     assets: dict[str, int]
     email_posture: dict[str, Any]
     darkweb: dict[str, Any]
+    # Strumenti non eseguiti, con il motivo. Senza questo elenco un'area vuota
+    # e' indistinguibile da un'area controllata e risultata pulita: il rating
+    # e' alto in entrambi i casi, ma significano cose opposte.
+    coverage_gaps: list[dict[str, Any]] = []
     review_progress: dict[str, Any]
     last_scan: dict[str, Any] | None
     open_remediations: int

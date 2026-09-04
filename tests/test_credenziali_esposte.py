@@ -12,6 +12,7 @@ import pytest
 
 from adapters.base import AdapterStatus
 from adapters.credential_exposure_adapter import CredentialExposureAdapter
+from tests.test_company_crud import admin, client, tenant_unico  # noqa: F401
 
 pytestmark = pytest.mark.security
 
@@ -160,3 +161,31 @@ def test_disponibile_in_tutti_i_profili(profilo):
     from adapters.registry import tools_for_profile
 
     assert "credential_exposure" in tools_for_profile(profilo)
+
+
+def test_la_dashboard_dichiara_le_aree_non_verificate(client, admin):  # noqa: F811
+    """Un'area senza rilievi perche' non controllata non deve sembrare pulita.
+
+    E' il caso del dark web senza connettori configurati: le fonti sono tutte
+    commerciali, la scansione risulta completata e il punteggio dell'area resta
+    alto. Senza dichiarare la lacuna, il risultato e' fuorviante.
+    """
+    from tests.test_company_crud import _azienda
+
+    azienda = _azienda(client, admin)
+    dati = client.get(f"/api/v1/companies/{azienda['id']}/dashboard", headers=admin).json()
+    # Senza scansioni non ci sono lacune da dichiarare, ma il campo deve esserci.
+    assert "coverage_gaps" in dati
+    assert isinstance(dati["coverage_gaps"], list)
+
+
+def test_una_lacuna_riporta_motivo_e_aree_interessate():
+    """Il motivo dev'essere quello registrato dallo strumento, non generico."""
+    import inspect
+
+    from app.api.routers import dashboard
+
+    sorgente = inspect.getsource(dashboard._coverage_gaps)
+    assert "error_message" in sorgente
+    assert "coverage_areas" in sorgente
+    assert "coverage_impact" in sorgente

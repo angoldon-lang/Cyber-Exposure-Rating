@@ -61,6 +61,16 @@ export interface TrendPoint {
   computed_at: string;
 }
 
+export interface CoverageGap {
+  tool_key: string;
+  tool_label: string;
+  status: string;
+  reason: string;
+  areas: string[];
+  areas_it: string[];
+  coverage_impact: number;
+}
+
 export interface DashboardOverview {
   company_id: string;
   company_name: string;
@@ -81,6 +91,7 @@ export interface DashboardOverview {
   last_scan: Record<string, unknown> | null;
   open_remediations: number;
   scope_disclaimer_it: string;
+  coverage_gaps: CoverageGap[];
 }
 
 export interface PortfolioCard {

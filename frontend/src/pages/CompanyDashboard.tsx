@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
 import type { AuthorizationPreview, DashboardOverview, ScanProfile } from '../api/types';
 import { CategoryBars, CategoryRadar, RatingGauge, SeverityBars, TrendChart } from '../components/charts';
-import { Banner, Empty, Spinner, StatTile, formatDateTime } from '../components/ui';
+import { Banner, Chip, Empty, Spinner, StatTile, formatDateTime } from '../components/ui';
 
 const PROFILE_LABEL: Record<ScanProfile, string> = {
   public_passive: 'Public Passive Check',
@@ -171,6 +171,41 @@ export default function CompanyDashboard() {
           </table>
         </div>
       </div>
+
+      {data.coverage_gaps.length > 0 && (
+        <div className="card">
+          <div className="section-head">
+            <h2>Aree non verificate</h2>
+            <Chip tone="medium">{data.coverage_gaps.length} strumenti non eseguiti</Chip>
+          </div>
+          <p className="muted small">
+            Un’area senza rilievi non significa che sia sicura: puo’ non essere stata
+            controllata. Queste lacune riducono gia’ l’affidabilita’ della rilevazione,
+            non il punteggio.
+          </p>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data">
+              <thead>
+                <tr><th>Strumento</th><th>Aree interessate</th><th>Motivo</th><th>Esito</th></tr>
+              </thead>
+              <tbody>
+                {data.coverage_gaps.map((lacuna) => (
+                  <tr key={lacuna.tool_key}>
+                    <td>{lacuna.tool_label}</td>
+                    <td className="small">{lacuna.areas_it.join(', ') || '—'}</td>
+                    <td className="small muted">{lacuna.reason}</td>
+                    <td>
+                      <Chip tone={lacuna.status === 'failed' ? 'high' : 'medium'}>
+                        {lacuna.status === 'failed' ? 'non riuscito' : 'non eseguito'}
+                      </Chip>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h2>Approfondimenti</h2>
