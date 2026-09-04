@@ -13,6 +13,19 @@ help: ## Mostra questo elenco
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
+# --------------------------- prerequisiti ----------------------------------
+# Senza `.env` Compose emette una riga di errore per ogni variabile mancante in
+# ogni servizio: un muro di testo che non dice cosa fare. Meglio fermarsi prima.
+.PHONY: require-env
+require-env:
+	@test -f .env || (echo "Manca il file .env." \
+		&& echo "  make env        crea .env generando i segreti" \
+		&& echo "  make env FORCE=1  lo rigenera (se il volume postgres esiste gia'," \
+		&& echo "                    va rimosso: docker compose down -v)" && exit 1)
+	@grep -qE '^POSTGRES_PASSWORD=.+' .env && grep -qE '^JWT_SECRET_KEY=.+' .env \
+		|| (echo "In .env mancano POSTGRES_PASSWORD e/o JWT_SECRET_KEY." \
+		    && echo "  make env FORCE=1   li rigenera" && exit 1)
+
 # --------------------------- configurazione --------------------------------
 .PHONY: env
 env: ## Crea `.env` da `.env.example` generando i segreti obbligatori
@@ -102,11 +115,11 @@ sbom: ## Genera la SBOM del prodotto (CycloneDX)
 
 # ------------------------------- container ---------------------------------
 .PHONY: build
-build: ## Costruisce le immagini container
+build: require-env ## Costruisce le immagini container
 	$(COMPOSE) build
 
 .PHONY: up
-up: ## Avvia lo stack completo
+up: require-env ## Avvia lo stack completo
 	$(COMPOSE) up -d
 	@echo "Frontend: http://localhost:$${FRONTEND_PORT:-8080}"
 	@echo "API docs: http://localhost:$${API_PORT:-8000}/api/v1/docs"
@@ -120,15 +133,15 @@ logs: ## Segue i log dello stack
 	$(COMPOSE) logs -f --tail=100
 
 .PHONY: compose-migrate
-compose-migrate: ## Applica le migrazioni nel container API
+compose-migrate: require-env ## Applica le migrazioni nel container API
 	$(COMPOSE) exec api sh -lc 'cd /srv/backend && alembic upgrade head'
 
 .PHONY: compose-seed
-compose-seed: ## Crea i dati dimostrativi nel container API
+compose-seed: require-env ## Crea i dati dimostrativi nel container API
 	$(COMPOSE) exec api python -m app.cli seed
 
 .PHONY: harden-db
-harden-db: ## Revoca UPDATE/DELETE sull'audit log (dopo le migrazioni)
+harden-db: require-env ## Revoca UPDATE/DELETE sull'audit log (dopo le migrazioni)
 	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-defenix} -d $${POSTGRES_DB:-defenix} \
 		-c "REVOKE UPDATE, DELETE ON audit_logs FROM defenix_app;"
 
@@ -155,7 +168,7 @@ clean: ## Rimuove artefatti locali
 	rm -rf .pytest_cache .ruff_cache .mypy_cache htmlcov .coverage frontend/dist
 
 .PHONY: up-oidc
-up-oidc: ## Avvia lo stack con Keycloak (profilo oidc)
+up-oidc: require-env ## Avvia lo stack con Keycloak (profilo oidc)
 	@grep -qE '^KEYCLOAK_ADMIN_PASSWORD=.+' .env \
 		|| (echo "KEYCLOAK_ADMIN_PASSWORD non impostata in .env: richiesta dal profilo oidc." \
 		    && echo "  openssl rand -base64 32" && exit 1)
