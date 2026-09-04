@@ -1,7 +1,7 @@
 /** Client HTTP tipizzato verso l'API Defenix. */
 import type {
   Authorization, AuthorizationPreview, Company, CompanyInput, DashboardOverview, Domain,
-  Finding, Page, PortfolioView, PurgeResult, RemediationItem, Report, Scan, ScanComparison,
+  Finding, Health, Page, PortfolioView, PurgeResult, RemediationItem, Report, Scan, ScanComparison,
   ScanDetail, ScanProfile, ScopeEntry, ScopeEntryInput, ScoreDetail, TokenResponse,
   UserProfile, VerificationChallenge, VerificationResult,
 } from './types';
@@ -61,6 +61,7 @@ export const api = {
     request<TokenResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   me: () => request<UserProfile>('/auth/me'),
 
+  health: () => request<Health>('/health'),
   disclaimer: () => request<{ it: string; en: string }>('/meta/disclaimer'),
   profiles: () => request<Record<string, {
     label_it: string; description_it: string; requires_verification: boolean;

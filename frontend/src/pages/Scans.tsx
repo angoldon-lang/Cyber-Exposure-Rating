@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { Scan, ScanDetail } from '../api/types';
+import type { Health, Scan, ScanDetail } from '../api/types';
 import { Banner, Empty, Spinner, formatDateTime } from '../components/ui';
 
 const RUNNING = new Set(['pending', 'queued', 'running', 'normalizing', 'scoring']);
@@ -18,6 +18,11 @@ export default function Scans() {
   const [scans, setScans] = useState<Scan[] | null>(null);
   const [detail, setDetail] = useState<ScanDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
+
+  // Lo stato dei worker si legge una volta: serve solo a spiegare una
+  // scansione ferma in coda, non e' un dato che cambia di continuo.
+  useEffect(() => { api.health().then(setHealth).catch(() => setHealth(null)); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +54,9 @@ export default function Scans() {
   if (error) return <Banner kind="danger">{error}</Banner>;
   if (!scans) return <Spinner />;
 
+  const inCoda = scans.some((s) => RUNNING.has(s.status));
+  const senzaWorker = health !== null && health.workers === 0;
+
   return (
     <>
       <div className="topbar">
@@ -57,6 +65,22 @@ export default function Scans() {
           <p className="sub">Storico delle valutazioni e stato degli strumenti</p>
         </div>
       </div>
+
+      {inCoda && senzaWorker && (
+        <Banner kind="warning">
+          <strong>Nessun worker attivo: la scansione non verra’ eseguita.</strong>
+          <p style={{ margin: '6px 0 0' }}>
+            La richiesta e’ stata accodata correttamente, ma nessun processo la sta
+            prendendo in carico e restera’ in attesa a tempo indeterminato. Le
+            scansioni girano nel servizio <code>worker</code>, separato dall’API.
+          </p>
+          <p style={{ margin: '6px 0 0' }}>
+            Verificare con <code>docker compose ps worker</code> e, se non e’ in
+            esecuzione, <code>docker compose up -d worker</code>. Il dettaglio
+            completo e’ in <code>make doctor</code>.
+          </p>
+        </Banner>
+      )}
 
       {detail && RUNNING.has(detail.status) && (
         <div className="card" style={{ marginBottom: 14 }}>

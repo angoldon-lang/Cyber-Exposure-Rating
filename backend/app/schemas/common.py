@@ -42,6 +42,10 @@ class HealthResponse(BaseModel):
     environment: str
     database: str
     redis: str
+    # Numero di worker che rispondono al ping. Senza worker attivi le scansioni
+    # restano in coda a tempo indeterminato pur essendo state accodate: database
+    # e broker da soli non bastano a dire che la piattaforma e' operativa.
+    workers: int
     scan_mock_mode: bool
     checked_at: datetime
 

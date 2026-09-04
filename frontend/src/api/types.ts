@@ -341,3 +341,14 @@ export interface VerificationResult {
   detail_it: string;
   checked_at: string;
 }
+
+export interface Health {
+  status: string;
+  version: string;
+  environment: string;
+  database: string;
+  redis: string;
+  workers: number;
+  scan_mock_mode: boolean;
+  checked_at: string;
+}

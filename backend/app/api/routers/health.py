@@ -43,11 +43,27 @@ def health(db: Session = Depends(get_db)) -> HealthResponse:
     except Exception as exc:  # noqa: BLE001
         redis_status = f"error: {type(exc).__name__}"
 
-    overall = "ok" if database == "ok" else "degraded"
+    workers = _worker_attivi()
+
+    # Senza worker le scansioni vengono accodate ma nessuno le esegue: e' uno
+    # stato degradato, anche se database e broker rispondono.
+    overall = "ok" if database == "ok" and workers > 0 else "degraded"
     return HealthResponse(status=overall, version=settings.app_version,
                           environment=settings.environment, database=database,
-                          redis=redis_status, scan_mock_mode=settings.scan_mock_mode,
+                          redis=redis_status, workers=workers,
+                          scan_mock_mode=settings.scan_mock_mode,
                           checked_at=datetime.now(UTC))
+
+
+def _worker_attivi() -> int:
+    """Worker Celery che rispondono al ping, 0 se nessuno o se il broker e' giu'."""
+    try:
+        from app.workers.celery_app import celery_app
+
+        risposte = celery_app.control.ping(timeout=1.0)
+        return len(risposte or [])
+    except Exception:  # noqa: BLE001
+        return 0
 
 
 @router.get("/health/live")

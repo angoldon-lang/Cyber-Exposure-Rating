@@ -343,3 +343,27 @@ def test_scansione_marcata_fallita_se_il_broker_non_risponde(client, admin, monk
     messaggio_errore = dettaglio["error_message"] or ""
     assert "broker" in messaggio_errore.lower()
     assert "worker" in messaggio_errore
+
+
+def test_health_segnala_l_assenza_di_worker(client, monkeypatch):  # noqa: F811
+    """Database e broker raggiungibili non bastano a dire che la piattaforma
+    e' operativa: senza worker le scansioni restano accodate per sempre."""
+    from app.api.routers import health as modulo_health
+
+    monkeypatch.setattr(modulo_health, "_worker_attivi", lambda: 0)
+    payload = client.get("/api/v1/health").json()
+    assert payload["workers"] == 0
+    assert payload["status"] == "degraded", "senza worker lo stato non puo' essere «ok»"
+
+    monkeypatch.setattr(modulo_health, "_worker_attivi", lambda: 2)
+    payload = client.get("/api/v1/health").json()
+    assert payload["workers"] == 2
+    assert payload["status"] == "ok"
+
+
+def test_health_non_si_rompe_se_il_broker_e_irraggiungibile(client):  # noqa: F811
+    """Il ping ai worker non deve propagare eccezioni: l'health e' proprio cio'
+    che si interroga quando l'infrastruttura non risponde."""
+    risposta = client.get("/api/v1/health")
+    assert risposta.status_code == 200
+    assert risposta.json()["workers"] == 0

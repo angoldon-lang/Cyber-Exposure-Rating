@@ -21,6 +21,11 @@ riga "il frontend risponde DENTRO il container?"
 $COMPOSE exec -T frontend wget -qO- http://localhost:8080/healthz 2>&1 \
   || echo "(nessuna risposta: nginx non serve, vedere i log qui sotto)"
 
+riga "l'API vede worker attivi? (campo workers)"
+$COMPOSE exec -T api python -c \
+  "import json,urllib.request;d=json.load(urllib.request.urlopen('http://localhost:8000/api/v1/health'));print('  worker attivi:',d['workers'],' stato:',d['status'])" 2>&1 \
+  || echo "(health non interrogabile)"
+
 riga "l'API risponde DENTRO il container?"
 $COMPOSE exec -T api python -c \
   "import urllib.request;print(urllib.request.urlopen('http://localhost:8000/api/v1/health/live',timeout=5).read().decode())" 2>&1 \
