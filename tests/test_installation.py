@@ -97,3 +97,67 @@ def test_cors_origins_dell_esempio_e_leggibile_dalle_impostazioni(monkeypatch, t
     monkeypatch.setenv("CORS_ORIGINS", _entries()["CORS_ORIGINS"])
     settings = Settings(_env_file=None)
     assert settings.cors_origins == ["http://localhost:8080", "http://localhost:5173"]
+
+
+# --------------------------------------------------------------------------
+# Generazione del file .env
+# --------------------------------------------------------------------------
+def _genera(tmp_path, **kwargs):
+    from scripts.generate_env import genera
+
+    destinazione = tmp_path / ".env"
+    genera(ENV_EXAMPLE, destinazione, **{"con_keycloak": False, **kwargs})
+    return destinazione
+
+
+def _valori(percorso: Path) -> dict[str, str]:
+    return {m["key"]: m["value"]
+            for m in (ASSIGNMENT.match(r) for r in percorso.read_text().splitlines()) if m}
+
+
+def test_env_generato_valorizza_i_segreti_obbligatori(tmp_path):
+    valori = _valori(_genera(tmp_path))
+    for chiave in ("POSTGRES_PASSWORD", "JWT_SECRET_KEY", "EVIDENCE_ENCRYPTION_KEY"):
+        assert len(valori[chiave]) >= 20, f"{chiave} troppo corta o vuota"
+    # Keycloak resta vuota se non richiesta: serve solo al profilo `oidc`.
+    assert valori["KEYCLOAK_ADMIN_PASSWORD"] == ""
+    assert _valori(_genera(tmp_path, con_keycloak=True))["KEYCLOAK_ADMIN_PASSWORD"]
+
+
+def test_segreti_generati_non_rompono_il_parser_env(tmp_path):
+    """I valori finiscono in un file `.env` letto sia da Compose sia da
+    pydantic-settings: niente spazi, virgolette, `#` o `$`, che altrimenti
+    verrebbero interpretati o troncherebbero il valore."""
+    valori = _valori(_genera(tmp_path, con_keycloak=True))
+    vietati = set(" \t\"'#$`\\")
+    for chiave in ("POSTGRES_PASSWORD", "JWT_SECRET_KEY", "EVIDENCE_ENCRYPTION_KEY",
+                   "KEYCLOAK_ADMIN_PASSWORD"):
+        assert not (set(valori[chiave]) & vietati), f"{chiave} contiene caratteri ambigui"
+
+
+def test_chiave_evidenze_utilizzabile_da_fernet(tmp_path):
+    """La chiave deve essere accettata da `cryptography`, non solo casuale."""
+    from cryptography.fernet import Fernet
+
+    chiave = _valori(_genera(tmp_path))["EVIDENCE_ENCRYPTION_KEY"]
+    messaggio = b"evidenza riservata"
+    assert Fernet(chiave.encode()).decrypt(Fernet(chiave.encode()).encrypt(messaggio)) == messaggio
+
+
+def test_i_segreti_sono_diversi_a_ogni_generazione(tmp_path):
+    primo = _valori(_genera(tmp_path))
+    secondo = _valori(_genera(tmp_path))
+    for chiave in ("POSTGRES_PASSWORD", "JWT_SECRET_KEY", "EVIDENCE_ENCRYPTION_KEY"):
+        assert primo[chiave] != secondo[chiave], f"{chiave} rigenerata identica"
+
+
+def test_env_generato_leggibile_solo_dal_proprietario(tmp_path):
+    assert _genera(tmp_path).stat().st_mode & 0o077 == 0, "il file dei segreti e' leggibile da altri"
+
+
+def test_readme_non_usa_sed_in_place():
+    """`sed -i` non e' portabile: GNU vuole `sed -i`, BSD/macOS `sed -i ''`.
+    Con la sintassi GNU macOS fallisce con "invalid command code". Le
+    istruzioni di installazione devono restare portabili."""
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "sed -i" not in readme, "istruzione `sed -i` non portabile nel README"

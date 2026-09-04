@@ -73,13 +73,10 @@ deterministici.
 
 ```bash
 git clone <repo> && cd Cyber-Exposure-Rating
-cp .env.example .env
-
-# I due segreti obbligatori: senza di essi `docker compose` si rifiuta di partire.
-sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 32)|" .env
-sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$(openssl rand -base64 48)|" .env
-# Consigliata: cifratura a riposo delle evidenze raw.
-sed -i "s|^EVIDENCE_ENCRYPTION_KEY=.*|EVIDENCE_ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')|" .env
+# Crea `.env` dai valori di esempio generando i segreti obbligatori
+# (password Postgres, chiave JWT, chiave Fernet per le evidenze raw).
+# Senza di essi `docker compose` si rifiuta di partire.
+make env                    # aggiungere KEYCLOAK=1 se si usera' il profilo oidc
 
 make build
 make up
@@ -110,7 +107,9 @@ make web              # http://127.0.0.1:5173
 
 | Comando | Effetto |
 |---|---|
+| `make env` | crea `.env` generando i segreti (`FORCE=1` rigenera, `KEYCLOAK=1` include OIDC) |
 | `make up` / `make down` | avvia / ferma lo stack completo |
+| `make up-oidc` | avvia lo stack con Keycloak (profilo `oidc`) |
 | `make api` | API FastAPI con ricarica automatica |
 | `make worker` | worker Celery sulle code `scans` e `maintenance` |
 | `make web` | frontend Vite in sviluppo |

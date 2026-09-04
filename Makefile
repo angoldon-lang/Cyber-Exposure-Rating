@@ -13,6 +13,11 @@ help: ## Mostra questo elenco
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
+# --------------------------- configurazione --------------------------------
+.PHONY: env
+env: ## Crea `.env` da `.env.example` generando i segreti obbligatori
+	python3 scripts/generate_env.py $(if $(FORCE),--force,) $(if $(KEYCLOAK),--with-keycloak,)
+
 # --------------------------- sviluppo locale -------------------------------
 .PHONY: venv
 venv: ## Crea l'ambiente virtuale e installa le dipendenze
@@ -68,12 +73,12 @@ coverage: ## Test con report di copertura
 
 .PHONY: lint
 lint: ## Analisi statica di backend e frontend
-	.venv/bin/ruff check backend adapters reporting tests
+	.venv/bin/ruff check backend adapters reporting tests scripts
 	cd frontend && npm run typecheck
 
 .PHONY: format
 format: ## Formattazione automatica
-	.venv/bin/ruff format backend adapters reporting tests
+	.venv/bin/ruff format backend adapters reporting tests scripts
 
 .PHONY: check-config
 check-config: ## Valida i file YAML di configurazione
