@@ -275,10 +275,10 @@ class CheckDMARCAdapter(BaseAdapter):
         if not posture["tls_rpt"]:
             add("tls_rpt_missing", "SMTP TLS Reporting non configurato",
                 "Non si ricevono report sugli errori di negoziazione TLS in ingresso.", Severity.INFO)
-        if not posture["caa"]:
-            add("caa_missing", "Record CAA non presente",
-                "Nessuna Certification Authority e' dichiarata come autorizzata all'emissione "
-                "di certificati per il dominio.", Severity.LOW)
+        # Il record CAA riguarda l'emissione di certificati per il dominio, non il
+        # servizio di posta: e' l'adapter DNS ad ancorarlo all'asset dominio. Se lo
+        # ripetessimo qui sull'asset "mail:" lo stesso problema comparirebbe due
+        # volte nel report, con due impronte diverse.
         if posture.get("starttls") is False:
             add("starttls_unsupported", "STARTTLS non supportato dai server di posta",
                 "Uno o piu' MX non negoziano STARTTLS: la posta transita in chiaro fra i server.",

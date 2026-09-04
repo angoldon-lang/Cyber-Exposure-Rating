@@ -37,3 +37,7 @@ reports/
 .DS_Store
 .idea/
 .vscode/
+
+# artefatti di esempio generati localmente
+sample-output/
+demo.db

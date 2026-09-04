@@ -167,10 +167,14 @@ class ZAPBaselineAdapter(BaseAdapter):
                 tool=self.key, target=url, asset_key=f"web:{host}", finding_type=finding_type,
                 title=f"{host}: {sanitize_text(str(alert.get('name', finding_type)), 200)}",
                 description=sanitize_text(str(alert.get("desc", "")), 2000),
-                detail=str(alert.get("pluginid")),
+                # Il plugin id resta un attributo di tracciabilita': non entra
+                # nell'identita' del finding, altrimenti lo stesso problema
+                # rilevato anche da un altro tool verrebbe penalizzato due volte.
+                detail=None,
                 category=WEB, severity=severity,
                 confidence_class=ConfidenceClass.CONFIRMED.value,
                 data_source="OWASP ZAP Baseline (passivo)", source_url=url,
+                attributes={"zap_plugin_id": str(alert.get("pluginid"))},
                 observed_at=datetime.now(UTC)))
         return out
 

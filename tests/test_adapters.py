@@ -295,3 +295,52 @@ def test_severita_maggiore_produce_piu_problemi():
     pulita = build_posture(11, "acme-test.example", "ACME", severity_bias=0.05)
     compromessa = build_posture(11, "acme-test.example", "ACME", severity_bias=0.95)
     assert len(compromessa.subdomains) >= len(pulita.subdomains)
+
+
+# --------------------------------------------------------------------------
+# Nessuna doppia penalizzazione fra tool diversi
+# --------------------------------------------------------------------------
+def test_stesso_problema_da_due_tool_produce_un_solo_finding(adapter_context):
+    """HTTPX e ZAP Baseline rilevano entrambi gli header di sicurezza mancanti.
+
+    Le due evidenze devono convergere sulla stessa impronta, altrimenti lo
+    stesso problema sullo stesso host verrebbe detratto due volte dal rating
+    (requisito: evitare doppie penalizzazioni fra tool che si sovrappongono).
+    """
+    from adapters.phase2 import ZAPBaselineAdapter
+
+    httpx = {e.fingerprint: e for e in HTTPXAdapter(adapter_context).run().evidences}
+    zap = {e.fingerprint: e for e in ZAPBaselineAdapter(adapter_context).run().evidences}
+    assert zap, "l'adapter ZAP non ha prodotto evidenze sintetiche"
+
+    sovrapposti = [
+        e for e in zap.values()
+        if any(h.asset_key == e.asset_key and h.finding_type == e.finding_type
+               for h in httpx.values())
+    ]
+    assert sovrapposti, "nessuna sovrapposizione da verificare: fixture non rappresentativa"
+    for evidence in sovrapposti:
+        assert evidence.fingerprint in httpx, (
+            f"'{evidence.finding_type}' su {evidence.asset_key} genera due impronte "
+            "distinte: il finding verrebbe conteggiato due volte")
+
+
+def test_nessun_adapter_usa_identificatori_interni_come_discriminante(adapter_context):
+    """L'identita' di un finding non deve dipendere da artefatti di un tool.
+
+    Se due adapter descrivono lo stesso problema sullo stesso asset ma uno solo
+    valorizza `detail` (con un plugin id, un codice di regola o simili), la
+    deduplicazione fallisce. Il discriminante deve essere semantico o assente.
+    """
+    from adapters.phase2 import ZAPBaselineAdapter
+
+    per_asset: dict[tuple[str, str], set[str | None]] = {}
+    for adapter_class in [*MVP_ADAPTERS, ZAPBaselineAdapter]:
+        for evidence in adapter_class(adapter_context).run().evidences:
+            key = (evidence.asset_key or evidence.target, evidence.finding_type)
+            per_asset.setdefault(key, set()).add(evidence.detail or None)
+
+    incoerenti = {k: v for k, v in per_asset.items() if None in v and len(v) > 1}
+    assert not incoerenti, (
+        "stesso problema sullo stesso asset descritto con e senza discriminante: "
+        f"{sorted(incoerenti)}")
