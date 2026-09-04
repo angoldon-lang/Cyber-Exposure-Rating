@@ -4,19 +4,25 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from celery import shared_task
-
 from app.core.config import settings
 from app.core.db import session_scope
 from app.core.logging import get_logger
 from app.models.enums import AuditAction, ScanStatus
 from app.models.scanning import Scan
+# I task sono legati esplicitamente a `celery_app`, non registrati con
+# `shared_task`. Con `shared_task` la registrazione avviene sull'app "corrente":
+# nel worker, che importa `celery_app`, e' quella giusta; nell'API, che importa
+# soltanto questo modulo, e' l'app predefinita di Celery, il cui broker non e'
+# configurato. Le due parti finivano cosi' su broker diversi e i messaggi
+# accodati dall'API non raggiungevano mai il worker.
+from app.workers.celery_app import celery_app
 from app.workers.pipeline import ScanPipeline, ScanRequest
 
 logger = get_logger(__name__)
 
 
-@shared_task(name="defenix.scan.run", bind=True, max_retries=1, default_retry_delay=60)
+@celery_app.task(name="defenix.scan.run", bind=True, max_retries=1,
+                 default_retry_delay=60)
 def run_scan_task(self, scan_id: str, email_header: str | None = None) -> dict:  # noqa: ANN001
     """Esegue una scansione gia' autorizzata.
 
@@ -113,7 +119,7 @@ def _connector_config() -> dict:
     }
 
 
-@shared_task(name="defenix.feeds.refresh")
+@celery_app.task(name="defenix.feeds.refresh")
 def refresh_feeds_task() -> dict:
     """Aggiorna la cache locale di CISA KEV. EPSS viene interrogato su richiesta."""
     from pathlib import Path
@@ -132,7 +138,7 @@ def refresh_feeds_task() -> dict:
     return {"status": "ok", "kev_entries": len(entries)}
 
 
-@shared_task(name="defenix.retention.apply")
+@celery_app.task(name="defenix.retention.apply")
 def apply_retention_task() -> dict:
     """Applica le policy di conservazione: cancellazione sicura delle evidenze scadute."""
     from sqlalchemy import delete, select
