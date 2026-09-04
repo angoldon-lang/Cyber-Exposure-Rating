@@ -399,8 +399,13 @@ def run_queued(scan_id: str | None = None) -> dict:
     if not settings.scan_mock_mode:
         raise SystemExit(
             "Rifiutato: con SCAN_MOCK_MODE=false gli strumenti devono girare nei "
-            "worker isolati, non qui.\n"
-            "Avviare il servizio worker:  docker compose up -d worker")
+            "worker isolati, non in questo processo.\n\n"
+            "Per una prova immediata con dati sintetici:\n"
+            "    make scan-now          (forza la modalita' simulata solo per "
+            "questo comando)\n\n"
+            "Per scansioni reali serve il servizio worker:\n"
+            "    docker compose up -d worker\n"
+            "    docker compose logs -f worker")
 
     eseguibili = {ScanStatus.QUEUED.value, ScanStatus.PENDING.value}
     esiti: list[dict] = []
@@ -436,6 +441,11 @@ def run_queued(scan_id: str | None = None) -> dict:
                 dkim_selectors=list(snapshot.get("dkim_selectors", [])),
                 mock_mode=True)
             scan.status = ScanStatus.RUNNING.value
+            # La scansione poteva essere stata richiesta in modalita' reale: qui
+            # viene eseguita comunque con generatori sintetici, e il record deve
+            # dirlo. Altrimenti report e interfaccia presenterebbero dati
+            # simulati come se fossero osservazioni sul dominio reale.
+            scan.mock_mode = True
             nome = scan.company.legal_name
 
         print(f"Eseguo {identificativo[:8]} ({nome})…")

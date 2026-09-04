@@ -146,7 +146,11 @@ compose-seed: require-env ## Crea i dati dimostrativi nel container API
 
 .PHONY: scan-now
 scan-now: require-env ## Esegue subito le scansioni in coda senza attendere il worker
-	$(COMPOSE) exec api python -m app.cli run-queued $(if $(SCAN),--scan-id $(SCAN),)
+	@# `-e SCAN_MOCK_MODE=true` vale solo per questo comando: il file .env non
+	@# viene toccato e i container non vanno ricreati. Gli strumenti reali
+	@# restano confinati nei worker, qui girano solo i generatori sintetici.
+	$(COMPOSE) exec -e SCAN_MOCK_MODE=true api \
+		python -m app.cli run-queued $(if $(SCAN),--scan-id $(SCAN),)
 
 .PHONY: compose-credentials
 compose-credentials: require-env ## Ristampa le credenziali demo dal container API
