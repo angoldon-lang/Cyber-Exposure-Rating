@@ -120,6 +120,7 @@ make web              # http://127.0.0.1:5173
 | `make web` | frontend Vite in sviluppo |
 | `make demo` | scansione dimostrativa end-to-end su dati sintetici |
 | `make credentials` | ristampa le credenziali demo generate |
+| `make compose-credentials` | ristampa le credenziali demo dal container API |
 | `make test` / `make lint` | suite di test / analisi statica |
 | `make check-config` | valida i YAML di scoring e confidenza |
 | `make check-versions` | verifica che le versioni fissate nei Dockerfile esistano ancora |
@@ -130,6 +131,11 @@ make web              # http://127.0.0.1:5173
 ---
 
 ## Credenziali demo
+
+Le password compaiono in chiaro **solo nell'output del comando**: nel database
+sono memorizzate unicamente come hash bcrypt, e un nuovo `seed` non le rigenera
+per utenti gia' esistenti. Conviene quindi salvarle subito:
+`make compose-seed | tee credenziali-demo.txt`.
 
 `make seed` genera password casuali con `secrets.token_urlsafe`, le stampa una
 sola volta e le salva in `.demo-credentials.json` (permessi `0600`, escluso da

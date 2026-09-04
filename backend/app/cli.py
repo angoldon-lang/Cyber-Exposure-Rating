@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -38,7 +39,9 @@ from app.models.scope import Authorization, Brand, Domain, IPAddress, NetworkRan
 configure_logging()
 logger = get_logger(__name__)
 
-CREDENTIALS_FILE = Path("./.demo-credentials.json")
+# Percorso configurabile: nel container l'immagine gira con filesystem in sola
+# lettura, quindi il file va su un volume dedicato (DEMO_CREDENTIALS_PATH).
+CREDENTIALS_FILE = Path(os.environ.get("DEMO_CREDENTIALS_PATH", "./.demo-credentials.json"))
 
 DEMO_TENANT = {"name": "AD Consulting - Defenix", "slug": "defenix"}
 DEMO_COMPANIES = [
@@ -264,10 +267,31 @@ def seed() -> dict:
                 "domain": spec["domain"], "verified": spec["verified"],
                 "severity_bias": spec["severity_bias"]})
 
-    if created["users"]:
+    return created
+
+
+def salva_credenziali(created: dict) -> Path | None:
+    """Salva le credenziali su file, se possibile.
+
+    E' una comodita', non un passaggio obbligatorio: le password sono gia' state
+    stampate su stdout, che resta il canale autorevole. Se la destinazione non e'
+    scrivibile (filesystem in sola lettura del container, permessi, disco pieno)
+    si avvisa e si prosegue: far fallire qui il comando distruggerebbe l'unica
+    copia in chiaro di credenziali gia' scritte nel database.
+    """
+    if not created.get("users"):
+        return None
+    try:
+        CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)
         CREDENTIALS_FILE.write_text(json.dumps(created, indent=2), encoding="utf-8")
         CREDENTIALS_FILE.chmod(0o600)
-    return created
+    except OSError as errore:
+        print(f"\nATTENZIONE: impossibile salvare {CREDENTIALS_FILE}: {errore}",
+              file=sys.stderr)
+        print("Le credenziali sono solo qui sopra: copiarle adesso, nel database "
+              "sono memorizzate unicamente come hash.", file=sys.stderr)
+        return None
+    return CREDENTIALS_FILE
 
 
 def demo_scan(company_slug: str | None = None, profile: str = "verified_standard") -> dict:
@@ -378,9 +402,13 @@ def main() -> None:
         init_db()
     elif args.command == "seed":
         result = seed()
+        # Stampa prima di qualsiasi scrittura su disco: e' l'unica occasione in
+        # cui le password compaiono in chiaro.
         print(json.dumps(result, indent=2, ensure_ascii=False))
         if result.get("users"):
-            print(f"\nCredenziali salvate in {CREDENTIALS_FILE.resolve()} (permessi 0600).")
+            percorso = salva_credenziali(result)
+            if percorso is not None:
+                print(f"\nCredenziali salvate in {percorso.resolve()} (permessi 0600).")
             print("Cambiare le password al primo accesso e non usarle in produzione.")
     elif args.command == "demo-scan":
         print(json.dumps(demo_scan(args.company, args.profile), indent=2, ensure_ascii=False))

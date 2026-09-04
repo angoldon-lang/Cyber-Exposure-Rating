@@ -26,7 +26,7 @@ RUN pip install --no-cache-dir -r /srv/backend/requirements.txt
 # Utente non privilegiato.
 RUN groupadd --system --gid 10001 defenix \
     && useradd --system --uid 10001 --gid defenix --home /srv --shell /usr/sbin/nologin defenix \
-    && mkdir -p /var/lib/defenix/evidence /var/lib/defenix/reports \
+    && mkdir -p /var/lib/defenix/evidence /var/lib/defenix/reports /var/lib/defenix/state \
     && chown -R defenix:defenix /var/lib/defenix /srv
 
 COPY --chown=defenix:defenix backend/ /srv/backend/

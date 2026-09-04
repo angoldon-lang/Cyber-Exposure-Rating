@@ -19,6 +19,7 @@ x-common-env: &common-env
   CELERY_RESULT_BACKEND: redis://redis:6379/2
   ENVIRONMENT: ${ENVIRONMENT:-development}
   JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY obbligatoria}
+  DEMO_CREDENTIALS_PATH: /var/lib/defenix/state/.demo-credentials.json
   AUTH_MODE: ${AUTH_MODE:-local}
   OIDC_ISSUER: ${OIDC_ISSUER:-}
   OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
@@ -81,6 +82,9 @@ services:
     volumes:
       - evidence-data:/var/lib/defenix/evidence
       - report-data:/var/lib/defenix/reports
+      # Il container gira in sola lettura: `seed` ha bisogno di un punto
+      # scrivibile e persistente per il file delle credenziali dimostrative.
+      - state-data:/var/lib/defenix/state
     ports:
       - "${API_PORT:-8000}:8000"
     networks: [backend, frontend]
@@ -210,6 +214,7 @@ volumes:
   redis-data:
   evidence-data:
   report-data:
+  state-data:
 
 networks:
   backend:

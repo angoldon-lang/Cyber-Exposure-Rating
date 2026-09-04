@@ -140,6 +140,10 @@ compose-migrate: require-env ## Applica le migrazioni nel container API
 compose-seed: require-env ## Crea i dati dimostrativi nel container API
 	$(COMPOSE) exec api python -m app.cli seed
 
+.PHONY: compose-credentials
+compose-credentials: require-env ## Ristampa le credenziali demo dal container API
+	$(COMPOSE) exec api python -m app.cli show-credentials
+
 .PHONY: harden-db
 harden-db: require-env ## Revoca UPDATE/DELETE sull'audit log (dopo le migrazioni)
 	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-defenix} -d $${POSTGRES_DB:-defenix} \

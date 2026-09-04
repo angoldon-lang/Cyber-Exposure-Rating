@@ -241,3 +241,70 @@ def test_env_example_resta_nel_contesto():
     """Escluso da `.env.*`, va riammesso: e' l'unico file di configurazione
     che ha senso distribuire."""
     assert not _escluso(".env.example")
+
+
+# --------------------------------------------------------------------------
+# Salvataggio delle credenziali dimostrative
+# --------------------------------------------------------------------------
+def test_seed_non_fallisce_se_la_destinazione_non_e_scrivibile(monkeypatch, tmp_path, capsys):
+    """Il container API gira con filesystem in sola lettura.
+
+    Il file delle credenziali e' una comodita': se non e' scrivibile il comando
+    deve avvisare e proseguire. Farlo fallire distruggerebbe l'unica copia in
+    chiaro di password gia' scritte nel database, dove restano solo come hash e
+    dove un nuovo `seed` non le rigenera per utenti che esistono gia'.
+    """
+    import errno
+
+    from app.cli import salva_credenziali
+
+    def sola_lettura(*_args, **_kwargs):
+        raise OSError(errno.EROFS, "Read-only file system")
+
+    # Il test gira spesso come root, che ignora i permessi di directory: si
+    # riproduce direttamente l'errore restituito dal container (Errno 30).
+    monkeypatch.setattr("app.cli.CREDENTIALS_FILE", tmp_path / ".demo-credentials.json")
+    monkeypatch.setattr(Path, "write_text", sola_lettura)
+
+    credenziali = {"users": [{"email": "a@b.example", "role": "reviewer", "password": "x"}]}
+    assert salva_credenziali(credenziali) is None
+
+    errori = capsys.readouterr().err
+    assert "impossibile salvare" in errori
+    assert "copiarle adesso" in errori
+
+
+def test_credenziali_salvate_con_permessi_ristretti(monkeypatch, tmp_path):
+    from app.cli import salva_credenziali
+
+    destinazione = tmp_path / "stato" / ".demo-credentials.json"
+    monkeypatch.setattr("app.cli.CREDENTIALS_FILE", destinazione)
+    credenziali = {"users": [{"email": "a@b.example", "role": "reviewer", "password": "x"}]}
+
+    assert salva_credenziali(credenziali) == destinazione
+    assert destinazione.stat().st_mode & 0o077 == 0, "file leggibile da altri utenti"
+
+
+def test_percorso_credenziali_configurabile(monkeypatch, tmp_path):
+    """Nel compose il percorso punta a un volume scrivibile."""
+    import importlib
+
+    monkeypatch.setenv("DEMO_CREDENTIALS_PATH", str(tmp_path / "altrove.json"))
+    modulo = importlib.reload(importlib.import_module("app.cli"))
+    try:
+        assert modulo.CREDENTIALS_FILE == tmp_path / "altrove.json"
+    finally:
+        monkeypatch.delenv("DEMO_CREDENTIALS_PATH")
+        importlib.reload(modulo)
+
+
+def test_il_compose_indirizza_le_credenziali_su_un_volume_scrivibile():
+    """`DEMO_CREDENTIALS_PATH` deve cadere sotto un volume montato sull'API,
+    altrimenti si torna a scrivere sul filesystem in sola lettura."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+    percorso = compose["x-common-env"]["DEMO_CREDENTIALS_PATH"]
+    montaggi = [m.split(":")[1] for m in compose["services"]["api"]["volumes"]]
+    assert any(percorso.startswith(f"{m}/") for m in montaggi), (
+        f"{percorso} non e' sotto uno dei volumi dell'API: {montaggi}")
