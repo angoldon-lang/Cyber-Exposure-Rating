@@ -144,6 +144,10 @@ compose-migrate: require-env ## Applica le migrazioni nel container API
 compose-seed: require-env ## Crea i dati dimostrativi nel container API
 	$(COMPOSE) exec api python -m app.cli seed
 
+.PHONY: worker-start
+worker-start: require-env ## Costruisce, avvia e verifica il worker (necessario per le scansioni reali)
+	@bash scripts/avvia_worker.sh
+
 .PHONY: scan-now
 scan-now: require-env ## Esegue subito le scansioni in coda senza attendere il worker
 	@# `-e SCAN_MOCK_MODE=true` vale solo per questo comando: il file .env non

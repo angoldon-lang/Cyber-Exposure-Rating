@@ -408,6 +408,12 @@ def run_queued(scan_id: str | None = None) -> dict:
             "    docker compose up -d worker\n"
             "    docker compose logs -f worker")
 
+    print("ATTENZIONE: esecuzione con GENERATORI SINTETICI.", file=sys.stderr)
+    print("I risultati NON riguardano i domini reali: servono a provare la "
+          "piattaforma.", file=sys.stderr)
+    print("Per analizzare davvero i domini serve il servizio worker "
+          "(docker compose up -d worker).\n", file=sys.stderr)
+
     eseguibili = {ScanStatus.QUEUED.value, ScanStatus.PENDING.value}
     esiti: list[dict] = []
 
@@ -474,7 +480,10 @@ def run_queued(scan_id: str | None = None) -> dict:
         print(f"  completata: rating {esiti[-1]['score']} classe {esiti[-1]['class']} "
               f"({esiti[-1]['findings']} rilievi)")
 
-    return {"status": "ok", "scans": esiti}
+    return {"status": "ok", "mock_mode": True,
+            "avviso": "Risultati prodotti da generatori sintetici: non riguardano "
+                      "i domini reali. Per l'analisi reale avviare il servizio worker.",
+            "scans": esiti}
 
 
 def show_credentials() -> None:
