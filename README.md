@@ -85,6 +85,11 @@ make compose-seed
 make harden-db        # revoca UPDATE/DELETE sull'audit log
 ```
 
+Se l'avvio fallisce con `port is already allocated`, un altro programma occupa
+una delle porte: `make check-ports` dice quali e quale variabile di `.env`
+cambiare. Il frontend raggiunge l'API attraverso il proxy interno di nginx,
+quindi cambiare porta non richiede di toccare `CORS_ORIGINS`.
+
 * Frontend: <http://localhost:8080>
 * API + OpenAPI: <http://localhost:8000/api/v1/docs>
 * Health: <http://localhost:8000/api/v1/health/ready>
@@ -118,6 +123,7 @@ make web              # http://127.0.0.1:5173
 | `make test` / `make lint` | suite di test / analisi statica |
 | `make check-config` | valida i YAML di scoring e confidenza |
 | `make check-versions` | verifica che le versioni fissate nei Dockerfile esistano ancora |
+| `make check-ports` | verifica che le porte pubblicate dallo stack siano libere |
 | `make sbom` | genera la SBOM CycloneDX di backend e frontend |
 | `make backup` / `make restore DUMP=...` | backup e ripristino |
 

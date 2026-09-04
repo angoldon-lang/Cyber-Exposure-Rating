@@ -86,6 +86,10 @@ check-config: ## Valida i file YAML di configurazione
 		from app.services.confidence import ConfidenceEngine; \
 		ScoringEngine(); ConfidenceEngine(); print('configurazione valida')"
 
+.PHONY: check-ports
+check-ports: ## Verifica che le porte pubblicate dallo stack siano libere
+	python3 scripts/check_ports.py
+
 .PHONY: check-versions
 check-versions: ## Verifica che le versioni fissate nei Dockerfile esistano ancora (usa la rete)
 	python3 scripts/check_pinned_versions.py
