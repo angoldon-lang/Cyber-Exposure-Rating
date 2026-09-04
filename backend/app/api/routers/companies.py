@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 
 from app.api.deps import (
@@ -26,7 +26,13 @@ from app.models.enums import (
 from app.models.organization import Company
 from app.models.scope import Authorization, Domain, Scope
 from app.schemas.common import Page
-from app.schemas.organization import CompanyCreate, CompanyRead, CompanyUpdate
+from app.schemas.organization import (
+    CompanyCreate,
+    CompanyPurge,
+    CompanyPurgeResult,
+    CompanyRead,
+    CompanyUpdate,
+)
 from app.schemas.scope import (
     AuthorizationCreate,
     AuthorizationRead,
@@ -42,6 +48,7 @@ from app.schemas.scope import (
     VerificationSubmit,
 )
 from app.services import verification as verification_service
+from app.services.deletion import purge_company
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/companies", tags=["companies"])
@@ -114,6 +121,61 @@ def update_company(payload: CompanyUpdate, company: CompanyDep, db: DbDep,
 # --------------------------------------------------------------------------
 # Domini
 # --------------------------------------------------------------------------
+@router.delete("/{company_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None,
+               response_class=Response)
+def archive_company(company: CompanyDep, db: DbDep, context: RequestContextDep,
+                    current: CurrentUser = Depends(require_permission(Permission.COMPANY_WRITE)),
+                    ) -> None:
+    """Archivia l'azienda: sparisce dagli elenchi operativi, lo storico resta.
+
+    E' l'operazione normale a fine contratto. Per rimuovere davvero i dati
+    serve `POST /companies/{id}/purge`, riservata al Platform Administrator.
+    Riattivare: `PATCH` con `{"is_active": true}`.
+    """
+    if not company.is_active:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Azienda gia' archiviata")
+    company.is_active = False
+    record_audit(db, action=AuditAction.UPDATE.value, tenant_id=company.tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="company", entity_id=str(company.id),
+                 message=f"azienda archiviata: {company.legal_name}", **context)
+    db.commit()
+
+
+@router.post("/{company_id}/purge", response_model=CompanyPurgeResult)
+def purge_company_endpoint(payload: CompanyPurge, company: CompanyDep, db: DbDep,
+                           context: RequestContextDep,
+                           current: CurrentUser = Depends(
+                               require_permission(Permission.PLATFORM_MANAGE)),
+                           ) -> CompanyPurgeResult:
+    """Cancella definitivamente l'azienda e ogni dato collegato.
+
+    Irreversibile. Richiede di ridigitare lo slug e di indicare il motivo, che
+    resta nel registro di audit insieme al conteggio delle righe rimosse: la
+    cancellazione deve restare dimostrabile anche quando i dati non ci sono
+    piu'.
+    """
+    if payload.confirm_slug != company.slug:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Conferma non corrispondente: digitare lo slug '{company.slug}'")
+
+    identificativo, slug, tenant_id = company.id, company.slug, company.tenant_id
+    nome = company.legal_name
+    rimosse = purge_company(db, identificativo)
+    db.delete(company)
+
+    record_audit(db, action=AuditAction.DELETE.value, tenant_id=tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="company", entity_id=str(identificativo),
+                 message=f"cancellazione definitiva di {nome} ({slug}): {payload.reason}",
+                 metadata={"deleted_rows": rimosse}, **context)
+    db.commit()
+    return CompanyPurgeResult(company_id=identificativo, slug=slug, deleted_rows=rimosse,
+                              total_rows=sum(rimosse.values()))
+
+
 @router.get("/{company_id}/domains", response_model=list[DomainRead])
 def list_domains(company: CompanyDep, db: DbDep) -> list[DomainRead]:
     rows = db.execute(
@@ -358,3 +420,67 @@ def add_scope(payload: ScopeEntryCreate, company: CompanyDep, db: DbDep,
     db.commit()
     db.refresh(entry)
     return ScopeEntryRead.model_validate(entry)
+
+
+@router.delete("/{company_id}/scopes/{scope_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None,
+               response_class=Response)
+def delete_scope(scope_id: uuid.UUID, company: CompanyDep, db: DbDep,
+                 context: RequestContextDep,
+                 current: CurrentUser = Depends(
+                     require_permission(Permission.AUTHORIZATION_WRITE)),
+                 ) -> None:
+    """Rimuove una voce di perimetro.
+
+    Il filtro su `company_id` non e' ridondante: senza, un identificativo di
+    un'altra azienda verrebbe cancellato. Un perimetro inesistente restituisce
+    404, mai 403, per non rivelare l'esistenza di risorse altrui.
+    """
+    entry = db.execute(
+        select(Scope).where(Scope.id == scope_id,
+                            Scope.company_id == company.id)).scalar_one_or_none()
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Voce di perimetro non trovata")
+    descrizione = f"{entry.action} {entry.entry_type} {entry.value}"
+    db.delete(entry)
+    record_audit(db, action=AuditAction.DELETE.value, tenant_id=company.tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="scope", entity_id=str(scope_id),
+                 message=f"perimetro rimosso: {descrizione}", **context)
+    db.commit()
+
+
+@router.delete("/{company_id}/domains/{domain_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None,
+               response_class=Response)
+def delete_domain(domain_id: uuid.UUID, company: CompanyDep, db: DbDep,
+                  context: RequestContextDep,
+                  current: CurrentUser = Depends(require_permission(Permission.DOMAIN_WRITE)),
+                  ) -> None:
+    """Rimuove un dominio dal perimetro dichiarato.
+
+    Un dominio verificato che risulta ancora incluso in un'autorizzazione
+    attiva non viene rimosso: si perderebbe la corrispondenza fra il perimetro
+    autorizzato per iscritto e quello registrato. Va prima revocata
+    l'autorizzazione o rimossa la voce di perimetro.
+    """
+    domain = _get_domain(db, company, domain_id)
+    incluso = db.execute(
+        select(func.count()).select_from(Scope).join(
+            Authorization, Scope.authorization_id == Authorization.id
+        ).where(Scope.company_id == company.id,
+                Authorization.status == AuthorizationStatus.ACTIVE.value,
+                Scope.action == ScopeAction.INCLUDE.value,
+                Scope.value.in_([domain.name, f"*.{domain.name}"]))).scalar_one()
+    if incluso:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(f"Il dominio '{domain.name}' e' incluso in un'autorizzazione attiva: "
+                    "revocare l'autorizzazione o rimuovere la voce di perimetro."))
+
+    nome = domain.name
+    db.delete(domain)
+    record_audit(db, action=AuditAction.DELETE.value, tenant_id=company.tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="domain", entity_id=str(domain_id),
+                 message=f"dominio rimosso: {nome}", **context)
+    db.commit()

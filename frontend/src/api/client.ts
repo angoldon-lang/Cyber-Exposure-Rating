@@ -1,8 +1,9 @@
 /** Client HTTP tipizzato verso l'API Defenix. */
 import type {
-  AuthorizationPreview, Company, DashboardOverview, Finding, Page, PortfolioView,
-  RemediationItem, Report, Scan, ScanComparison, ScanDetail, ScanProfile, ScoreDetail,
-  TokenResponse, UserProfile,
+  Authorization, AuthorizationPreview, Company, CompanyInput, DashboardOverview, Domain,
+  Finding, Page, PortfolioView, PurgeResult, RemediationItem, Report, Scan, ScanComparison,
+  ScanDetail, ScanProfile, ScopeEntry, ScopeEntryInput, ScoreDetail, TokenResponse,
+  UserProfile, VerificationChallenge, VerificationResult,
 } from './types';
 
 const BASE = '/api/v1';
@@ -70,6 +71,49 @@ export const api = {
   companies: (search?: string) =>
     request<Page<Company>>(`/companies${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   company: (id: string) => request<Company>(`/companies/${id}`),
+
+  // --- gestione anagrafica -------------------------------------------------
+  createCompany: (body: CompanyInput) =>
+    request<Company>('/companies', { method: 'POST', body: JSON.stringify(body) }),
+  updateCompany: (id: string, body: Partial<CompanyInput> & { is_active?: boolean }) =>
+    request<Company>(`/companies/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  /** Archivia: l'azienda esce dagli elenchi operativi, lo storico resta. */
+  archiveCompany: (id: string) => request<void>(`/companies/${id}`, { method: 'DELETE' }),
+  /** Cancellazione definitiva e irreversibile: richiede di ridigitare lo slug. */
+  purgeCompany: (id: string, body: { confirm_slug: string; reason: string }) =>
+    request<PurgeResult>(`/companies/${id}/purge`, { method: 'POST', body: JSON.stringify(body) }),
+
+  // --- domini e verifica ---------------------------------------------------
+  domains: (companyId: string) => request<Domain[]>(`/companies/${companyId}/domains`),
+  addDomain: (companyId: string, body: { name: string; is_primary?: boolean }) =>
+    request<Domain>(`/companies/${companyId}/domains`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteDomain: (companyId: string, domainId: string) =>
+    request<void>(`/companies/${companyId}/domains/${domainId}`, { method: 'DELETE' }),
+  startVerification: (companyId: string, domainId: string, method: string) =>
+    request<VerificationChallenge>(`/companies/${companyId}/domains/${domainId}/verification`,
+      { method: 'POST', body: JSON.stringify({ method }) }),
+  checkVerification: (companyId: string, domainId: string, method: string) =>
+    request<VerificationResult>(`/companies/${companyId}/domains/${domainId}/verification/check`,
+      { method: 'POST', body: JSON.stringify({ method }) }),
+  approveDomain: (companyId: string, domainId: string,
+                  body: { approver_name: string; document_reference: string; notes?: string }) =>
+    request<VerificationResult>(`/companies/${companyId}/domains/${domainId}/verification/approve`,
+      { method: 'POST', body: JSON.stringify(body) }),
+
+  // --- autorizzazioni e perimetro -----------------------------------------
+  authorizations: (companyId: string) =>
+    request<Authorization[]>(`/companies/${companyId}/authorizations`),
+  createAuthorization: (companyId: string, body: Record<string, unknown>) =>
+    request<Authorization>(`/companies/${companyId}/authorizations`,
+      { method: 'POST', body: JSON.stringify(body) }),
+  revokeAuthorization: (companyId: string, authorizationId: string, reason: string) =>
+    request<Authorization>(`/companies/${companyId}/authorizations/${authorizationId}/revoke`,
+      { method: 'POST', body: JSON.stringify({ reason }) }),
+  scopes: (companyId: string) => request<ScopeEntry[]>(`/companies/${companyId}/scopes`),
+  addScope: (companyId: string, body: ScopeEntryInput) =>
+    request<ScopeEntry>(`/companies/${companyId}/scopes`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteScope: (companyId: string, scopeId: string) =>
+    request<void>(`/companies/${companyId}/scopes/${scopeId}`, { method: 'DELETE' }),
   dashboard: (id: string) => request<DashboardOverview>(`/companies/${id}/dashboard`),
   portfolio: () => request<PortfolioView>('/portfolio'),
 

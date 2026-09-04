@@ -1,4 +1,5 @@
 /** Componenti UI di base: chip, tile, banner, tabelle. */
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { RatingClass, Severity } from '../api/types';
 
@@ -86,4 +87,50 @@ export function formatDateTime(value: string | null | undefined): string {
 export function formatDelta(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
+}
+
+/* -------------------------------- form ---------------------------------- */
+
+/** Campo etichettato. L'errore e' testuale, non solo un bordo colorato: deve
+ *  restare percepibile anche senza distinzione dei colori. */
+export function Field({ label, hint, error, children }: {
+  label: string; hint?: string; error?: string | null; children: ReactNode;
+}) {
+  return (
+    <div className={`field${error ? ' field--invalid' : ''}`}>
+      <label>{label}</label>
+      {children}
+      {hint && !error && <span className="hint">{hint}</span>}
+      {error && <span className="error" role="alert">{error}</span>}
+    </div>
+  );
+}
+
+/** Pulsante per azioni distruttive: richiede una seconda conferma esplicita,
+ *  cosi' un click involontario non cancella nulla. */
+export function ConfirmButton({ label, confirmLabel, onConfirm, disabled, tone = 'danger' }: {
+  label: string; confirmLabel?: string; onConfirm: () => void;
+  disabled?: boolean; tone?: 'danger' | 'ghost';
+}) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const timer = window.setTimeout(() => setArmed(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [armed]);
+
+  if (!armed) {
+    return (
+      <button type="button" className={`btn btn--sm btn--${tone === 'danger' ? 'ghost' : 'ghost'}`}
+              disabled={disabled} onClick={() => setArmed(true)}>
+        {label}
+      </button>
+    );
+  }
+  return (
+    <button type="button" className="btn btn--sm btn--danger" disabled={disabled}
+            onClick={() => { setArmed(false); onConfirm(); }}>
+      {confirmLabel ?? 'Confermi?'}
+    </button>
+  );
 }

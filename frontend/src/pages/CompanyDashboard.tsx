@@ -64,6 +64,9 @@ export default function CompanyDashboard() {
           </p>
         </div>
         <div className="toolbar" style={{ marginBottom: 0 }}>
+          <Link className="btn btn--ghost" to={`/aziende/${companyId}/gestione`}>
+            Gestisci azienda
+          </Link>
           <select value={profile} aria-label="Profilo di scansione"
                   onChange={(e) => setProfile(e.target.value as ScanProfile)}>
             {(Object.keys(PROFILE_LABEL) as ScanProfile[]).map((key) => (

@@ -220,3 +220,34 @@ select, input[type="text"], input[type="email"], input[type="password"] {
 }
 .viz-tooltip__label { color: var(--text-secondary); margin-bottom: 3px; }
 .viz-tooltip__value { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------- form ------------------------------------ */
+textarea, input[type="date"], input[type="datetime-local"], input[type="number"] {
+  font: inherit; font-size: 13px; padding: 6px 9px; border-radius: var(--radius-sm);
+  border: 1px solid var(--axis); background: var(--surface-2); color: var(--text-primary);
+  width: 100%; box-sizing: border-box;
+}
+textarea { min-height: 68px; resize: vertical; }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.field > label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.field > .hint { font-size: 11px; color: var(--text-secondary); }
+.field input, .field select { width: 100%; box-sizing: border-box; }
+.field--invalid input, .field--invalid select, .field--invalid textarea { border-color: var(--status-critical); }
+.field .error { font-size: 11px; color: var(--status-critical); }
+
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px; }
+
+/* Zona delle azioni irreversibili: separata visivamente, non solo per colore.
+   Il bordo e l'etichetta esplicita restano leggibili anche senza percezione
+   cromatica. */
+.danger-zone {
+  border: 1px solid var(--status-critical); border-radius: var(--radius-sm);
+  padding: 14px; margin-top: 18px;
+}
+.danger-zone > h3 { margin: 0 0 4px; font-size: 13px; color: var(--status-critical); }
+.btn--danger { background: var(--status-critical); border-color: var(--status-critical); }
+.btn--sm { padding: 4px 9px; font-size: 12px; }
+
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }

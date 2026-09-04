@@ -59,6 +59,10 @@ class CompanyRead(ORMModel):
     vat_number: str | None
     country: str | None
     sector: str | None
+    # Esposti perche' sono modificabili da `CompanyUpdate`: senza, la scheda
+    # anagrafica non potrebbe mostrare i valori correnti prima di scriverli.
+    size_band: str | None
+    notes: str | None
     is_active: bool
     next_scan_due_at: datetime | None
     created_at: datetime
@@ -106,3 +110,21 @@ class ConnectorRead(ORMModel):
     license_note: str | None
     last_check_at: datetime | None
     last_error: str | None
+
+
+class CompanyPurge(BaseModel):
+    """Conferma della cancellazione definitiva.
+
+    Lo slug va ridigitato: una richiesta costruita per sbaglio (o un click di
+    troppo) non deve poter cancellare i dati di un'azienda sbagliata.
+    """
+
+    confirm_slug: str = Field(min_length=1, max_length=128)
+    reason: str = Field(min_length=3, max_length=512)
+
+
+class CompanyPurgeResult(BaseModel):
+    company_id: uuid.UUID
+    slug: str
+    deleted_rows: dict[str, int]
+    total_rows: int

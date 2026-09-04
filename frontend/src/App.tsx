@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { api, auth } from './api/client';
 import type { Company, UserProfile } from './api/types';
 import CompanyDashboard from './pages/CompanyDashboard';
+import CompanyManage from './pages/CompanyManage';
 import Findings from './pages/Findings';
 import Login from './pages/Login';
 import Portfolio from './pages/Portfolio';
@@ -38,6 +39,10 @@ function Shell({ profile, companies, onLogout }:
         <nav aria-label="Navigazione principale">
           <NavLink to="/portfolio" className={({ isActive }) => (isActive ? 'active' : undefined)}>
             Portfolio
+          </NavLink>
+          <NavLink to="/aziende/nuova/gestione"
+                   className={({ isActive }) => (isActive ? 'active' : undefined)}>
+            Nuova azienda
           </NavLink>
         </nav>
 
@@ -75,6 +80,7 @@ function Shell({ profile, companies, onLogout }:
           <Route path="/" element={<Navigate to="/portfolio" replace />} />
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/aziende/:companyId" element={<CompanyDashboard />} />
+          <Route path="/aziende/:companyId/gestione" element={<CompanyManage />} />
           <Route path="/aziende/:companyId/scansioni" element={<Scans />} />
           <Route path="/scansioni/:scanId/rilievi" element={<Findings />} />
           <Route path="/scansioni/:scanId/remediation" element={<Remediation />} />
@@ -99,10 +105,14 @@ export default function App() {
       .finally(() => setChecking(false));
   }, []);
 
+  // L'elenco viene riletto a ogni cambio di pagina: creando, archiviando o
+  // cancellando un'azienda si passa sempre per una navigazione, quindi la barra
+  // laterale resta allineata senza bisogno di ricaricare a mano.
+  const { pathname } = useLocation();
   useEffect(() => {
     if (!profile) return;
     api.companies().then((page) => setCompanies(page.items)).catch(() => setCompanies([]));
-  }, [profile]);
+  }, [profile, pathname]);
 
   if (checking) return <div className="login"><Spinner /></div>;
   if (!profile) return <Login onLogin={setProfile} />;

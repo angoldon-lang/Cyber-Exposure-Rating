@@ -22,6 +22,9 @@ export default function Portfolio() {
           <h1>Portfolio</h1>
           <p className="sub">Tutte le aziende valutate, con rating corrente e variazione</p>
         </div>
+        <div className="toolbar" style={{ marginBottom: 0 }}>
+          <Link className="btn" to="/aziende/nuova/gestione">Nuova azienda</Link>
+        </div>
       </div>
 
       <div className="grid cols-4" style={{ marginBottom: 16 }}>

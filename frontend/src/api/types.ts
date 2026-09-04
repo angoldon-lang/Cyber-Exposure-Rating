@@ -28,6 +28,8 @@ export interface Company {
   vat_number: string | null;
   country: string | null;
   sector: string | null;
+  size_band: string | null;
+  notes: string | null;
   is_active: boolean;
   next_scan_due_at: string | null;
   created_at: string;
@@ -260,4 +262,82 @@ export interface ScoreDetail {
     coverage_matrix: Array<{ tool: string; status: string; note_it: string; optional: boolean; mocked: boolean }>;
   } | null;
   calculation_trace: Record<string, unknown>;
+}
+
+export interface Domain {
+  id: string;
+  company_id: string;
+  name: string;
+  is_primary: boolean;
+  verification_status: string;
+  verification_method: string | null;
+  verified_at: string | null;
+  registrar: string | null;
+  registry_expiry_date: string | null;
+  dnssec_enabled: boolean | null;
+}
+
+export interface ScopeEntry {
+  id: string;
+  entry_type: string;
+  value: string;
+  action: string;
+  is_active: boolean;
+  note: string | null;
+}
+
+export interface Authorization {
+  id: string;
+  company_id: string;
+  status: string;
+  granting_subject_name: string;
+  granting_subject_role: string | null;
+  granted_at: string;
+  valid_from: string;
+  expires_at: string;
+  revoked_at: string | null;
+  allowed_profiles_json: string[] | null;
+  document_reference: string | null;
+}
+
+export interface CompanyInput {
+  legal_name: string;
+  slug: string;
+  vat_number?: string | null;
+  country?: string | null;
+  sector?: string | null;
+  size_band?: string | null;
+  notes?: string | null;
+}
+
+export interface ScopeEntryInput {
+  entry_type: string;
+  value: string;
+  action: string;
+  note?: string | null;
+}
+
+export interface PurgeResult {
+  company_id: string;
+  slug: string;
+  deleted_rows: Record<string, number>;
+  total_rows: number;
+}
+
+export interface VerificationChallenge {
+  method: string;
+  token: string;
+  record_name: string | null;
+  record_value: string | null;
+  file_path: string | null;
+  instructions_it: string;
+  expires_at: string;
+}
+
+export interface VerificationResult {
+  verified: boolean;
+  status: string;
+  method: string | null;
+  detail_it: string;
+  checked_at: string;
 }
