@@ -1,0 +1,54 @@
+# ---------------------------------------------------------------------------
+# Contesto di build. Il contesto e' la radice del repository (compose usa
+# `context: .`), quindi senza questo file verrebbero inviate al daemon anche
+# le dipendenze installate sull'host e i segreti locali.
+#
+# Il caso piu' insidioso e' `frontend/node_modules`: contiene pacchetti
+# specifici della piattaforma (`@esbuild/darwin-arm64`,
+# `@rollup/rollup-darwin-arm64` su Mac). Copiati sopra quelli Linux installati
+# da `npm ci` nell'immagine, fanno fallire `npm run build` con
+# "Cannot find module @rollup/rollup-linux-x64-gnu".
+# ---------------------------------------------------------------------------
+
+# --- Dipendenze installate sull'host (reinstallate dentro l'immagine) ------
+.venv/
+venv/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# --- Segreti e dati locali: non devono mai entrare in un'immagine ----------
+.env
+.env.*
+!.env.example
+.demo-credentials.json
+*.db
+*.sqlite
+*.sqlite3
+backups/
+sample-output/
+
+# --- Cronologia e strumenti di sviluppo ------------------------------------
+.git/
+.gitignore
+.github/
+.claude/
+
+# --- Artefatti di test e cache ---------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+sbom-*.json
+
+# --- File non necessari a runtime ------------------------------------------
+tests/
+docs/
+*.md
+!README.md
+Makefile
+.dockerignore

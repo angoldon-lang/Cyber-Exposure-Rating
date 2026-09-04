@@ -161,3 +161,83 @@ def test_readme_non_usa_sed_in_place():
     istruzioni di installazione devono restare portabili."""
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert "sed -i" not in readme, "istruzione `sed -i` non portabile nel README"
+
+
+# --------------------------------------------------------------------------
+# Contesto di build delle immagini
+# --------------------------------------------------------------------------
+DOCKERIGNORE = REPO_ROOT / ".dockerignore"
+DOCKERFILES = ("backend/Dockerfile", "workers/Dockerfile", "frontend/Dockerfile")
+
+
+def _regole_dockerignore() -> list[tuple[str, bool]]:
+    """Ritorna (pattern, e_negazione) nell'ordine di dichiarazione."""
+    regole = []
+    for riga in DOCKERIGNORE.read_text(encoding="utf-8").splitlines():
+        riga = riga.strip()
+        if not riga or riga.startswith("#"):
+            continue
+        negato = riga.startswith("!")
+        regole.append((riga.lstrip("!").rstrip("/"), negato))
+    return regole
+
+
+def _escluso(percorso: str) -> bool:
+    """Applica le regole in ordine: vince l'ultima che corrisponde, come Docker."""
+    from fnmatch import fnmatch
+
+    esito = False
+    for pattern, negato in _regole_dockerignore():
+        parti = percorso.split("/")
+        corrisponde = any(
+            fnmatch("/".join(parti[:i + 1]), pattern) or fnmatch(parti[i], pattern)
+            for i in range(len(parti)))
+        if corrisponde:
+            esito = not negato
+    return esito
+
+
+def _sorgenti_copiate() -> set[str]:
+    """Percorsi del contesto referenziati dalle istruzioni COPY dei Dockerfile."""
+    sorgenti: set[str] = set()
+    for nome in DOCKERFILES:
+        for riga in (REPO_ROOT / nome).read_text(encoding="utf-8").splitlines():
+            riga = riga.strip()
+            if not riga.upper().startswith("COPY "):
+                continue
+            argomenti = [a for a in riga.split()[1:] if not a.startswith("--")]
+            if any(a.startswith("--from=") for a in riga.split()):
+                continue  # proviene da uno stage precedente, non dal contesto
+            sorgenti.update(a.rstrip("/") for a in argomenti[:-1])
+    return sorgenti
+
+
+def test_dockerignore_non_esclude_i_file_necessari_alla_build():
+    """Un `.dockerignore` troppo aggressivo fa fallire la build con
+    "file not found in build context", errore che si manifesta solo in
+    container e mai nei test applicativi."""
+    for sorgente in sorted(_sorgenti_copiate()):
+        pulito = sorgente.rstrip("*")
+        if not pulito:
+            continue
+        assert not _escluso(pulito), (
+            f"'{sorgente}' e' referenziato da un COPY ma escluso dal contesto")
+
+
+@pytest.mark.parametrize("percorso", [
+    "frontend/node_modules", ".venv", ".git", "frontend/dist",
+    ".env", ".demo-credentials.json", "demo.db", "sample-output",
+])
+def test_dockerignore_esclude_host_e_segreti(percorso):
+    """`frontend/node_modules` contiene pacchetti specifici della piattaforma
+    (`@esbuild/darwin-arm64` su Mac, `@rollup/rollup-linux-x64-gnu` su Linux):
+    copiato nell'immagine sovrascrive quelli installati da `npm ci` e fa
+    fallire `npm run build`. I segreti non devono comunque mai finire in
+    un'immagine."""
+    assert _escluso(percorso), f"'{percorso}' finirebbe nel contesto di build"
+
+
+def test_env_example_resta_nel_contesto():
+    """Escluso da `.env.*`, va riammesso: e' l'unico file di configurazione
+    che ha senso distribuire."""
+    assert not _escluso(".env.example")
