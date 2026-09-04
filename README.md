@@ -125,6 +125,7 @@ make web              # http://127.0.0.1:5173
 | `make check-config` | valida i YAML di scoring e confidenza |
 | `make check-versions` | verifica che le versioni fissate nei Dockerfile esistano ancora |
 | `make check-ports` | verifica che le porte pubblicate dallo stack siano libere |
+| `make doctor` | raccoglie stato, porte e log dello stack per la diagnosi |
 | `make sbom` | genera la SBOM CycloneDX di backend e frontend |
 | `make backup` / `make restore DUMP=...` | backup e ripristino |
 

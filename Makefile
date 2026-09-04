@@ -99,6 +99,10 @@ check-config: ## Valida i file YAML di configurazione
 		from app.services.confidence import ConfidenceEngine; \
 		ScoringEngine(); ConfidenceEngine(); print('configurazione valida')"
 
+.PHONY: doctor
+doctor: ## Raccoglie stato, porte e log dello stack per la diagnosi
+	@bash scripts/doctor.sh
+
 .PHONY: check-ports
 check-ports: ## Verifica che le porte pubblicate dallo stack siano libere
 	python3 scripts/check_ports.py
