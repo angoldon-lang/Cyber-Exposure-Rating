@@ -162,7 +162,10 @@ services:
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD obbligatoria con il profilo oidc}
+      # Compose interpola l'intero file a prescindere dai profili attivi: un
+      # `:?` qui bloccherebbe anche chi non usa OIDC. Il controllo e' nel
+      # target `make up-oidc`, che rifiuta di partire senza password.
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
       KC_HEALTH_ENABLED: "true"
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-defenix}

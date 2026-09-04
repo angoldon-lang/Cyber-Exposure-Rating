@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import functools
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG_DIR = REPO_ROOT / "config"
@@ -52,7 +52,11 @@ class Settings(BaseSettings):
     oidc_roles_claim: str = "realm_access.roles"
 
     # --- Sicurezza ---
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:8080"]
+    # `NoDecode`: senza questa annotazione pydantic-settings tenta di decodificare
+    # il valore letto da `.env` come JSON e fallisce prima del validatore, che e'
+    # quello che accetta la forma "origine1,origine2" documentata in .env.example.
+    cors_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:5173", "http://localhost:8080"]
     rate_limit_per_minute: int = 120
     secure_cookies: bool = True
     evidence_encryption_key: str | None = None  # Fernet key per evidenze raw

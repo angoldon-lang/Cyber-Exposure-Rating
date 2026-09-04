@@ -74,9 +74,12 @@ deterministici.
 ```bash
 git clone <repo> && cd Cyber-Exposure-Rating
 cp .env.example .env
-# generare i segreti (non usare i valori di esempio in produzione)
-python3 -c "import secrets; print('APP_SECRET_KEY=' + secrets.token_urlsafe(48))" >> .env
-python3 -c "import secrets; print('POSTGRES_PASSWORD=' + secrets.token_urlsafe(24))" >> .env
+
+# I due segreti obbligatori: senza di essi `docker compose` si rifiuta di partire.
+sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 32)|" .env
+sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$(openssl rand -base64 48)|" .env
+# Consigliata: cifratura a riposo delle evidenze raw.
+sed -i "s|^EVIDENCE_ENCRYPTION_KEY=.*|EVIDENCE_ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')|" .env
 
 make build
 make up

@@ -140,3 +140,10 @@ restore: ## Ripristina un dump (DUMP=backups/file.dump)
 clean: ## Rimuove artefatti locali
 	find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .pytest_cache .ruff_cache .mypy_cache htmlcov .coverage frontend/dist
+
+.PHONY: up-oidc
+up-oidc: ## Avvia lo stack con Keycloak (profilo oidc)
+	@grep -qE '^KEYCLOAK_ADMIN_PASSWORD=.+' .env \
+		|| (echo "KEYCLOAK_ADMIN_PASSWORD non impostata in .env: richiesta dal profilo oidc." \
+		    && echo "  openssl rand -base64 32" && exit 1)
+	$(COMPOSE) --profile oidc up -d
