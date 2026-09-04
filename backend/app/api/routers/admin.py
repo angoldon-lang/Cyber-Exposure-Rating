@@ -1,13 +1,12 @@
 """Amministrazione: tenant, utenti, connettori, audit log e assets."""
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func, select
 
-from app.api.deps import CompanyDep, CurrentUser, CurrentUserDep, DbDep, require_permission
+from app.api.deps import CompanyDep, CurrentUser, DbDep, require_permission
 from app.core.config import load_yaml_config
 from app.core.rbac import Permission
 from app.models.audit import AuditLog

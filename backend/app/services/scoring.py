@@ -418,16 +418,29 @@ class ScoringEngine:
         return applied
 
     def _classify(self, score: float) -> tuple[str, str]:
-        for entry in self.config["classes"]:
-            if float(entry["min"]) <= score <= float(entry["max"]):
+        """Assegna la classe confrontando solo il limite inferiore.
+
+        I limiti superiori dichiarati in configurazione sono interi (84, 69,
+        54...): confrontarli direttamente lascerebbe scoperti i punteggi
+        frazionari fra due classi (54.5 non e' ne' <= 54 ne' >= 55) e li
+        farebbe ricadere nella classe peggiore. Ordinando per soglia
+        decrescente e usando il solo `min` la scala resta continua.
+        """
+        for entry in sorted(self.config["classes"], key=lambda e: float(e["min"]), reverse=True):
+            if score >= float(entry["min"]):
                 return str(entry["code"]), str(entry["label_it"])
-        return "E", "Esposizione critica"
+        lowest = min(self.config["classes"], key=lambda e: float(e["min"]))
+        return str(lowest["code"]), str(lowest["label_it"])
 
 
 def class_for_score(score: float, config: dict[str, Any] | None = None) -> str:
-    """Helper leggero usato dal frontend e dai report."""
+    """Helper leggero usato dal frontend e dai report.
+
+    Usa la stessa regola del motore: confronto sul solo limite inferiore,
+    cosi' la scala non ha discontinuita' sui punteggi frazionari.
+    """
     config = config or load_yaml_config("scoring")
-    for entry in config["classes"]:
-        if float(entry["min"]) <= score <= float(entry["max"]):
+    for entry in sorted(config["classes"], key=lambda e: float(e["min"]), reverse=True):
+        if score >= float(entry["min"]):
             return str(entry["code"])
-    return "E"
+    return str(min(config["classes"], key=lambda e: float(e["min"]))["code"])

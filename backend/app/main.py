@@ -98,9 +98,23 @@ async def security_headers(request: Request, call_next):  # noqa: ANN001, ANN201
 
 @app.exception_handler(RequestValidationError)
 async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Errori di validazione in forma serializzabile.
+
+    Pydantic v2 inserisce l'eccezione originale in `ctx`, che non e'
+    serializzabile in JSON: senza questa normalizzazione un validatore
+    personalizzato che solleva `ValueError` produrrebbe un 500 invece di un 422.
+    """
+    detail = [
+        {
+            "loc": [str(part) for part in error.get("loc", ())],
+            "msg": str(error.get("msg", "")),
+            "type": str(error.get("type", "")),
+        }
+        for error in exc.errors()
+    ]
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"error": "Richiesta non valida", "detail": exc.errors()})
+        content={"error": "Richiesta non valida", "detail": detail})
 
 
 @app.exception_handler(Exception)

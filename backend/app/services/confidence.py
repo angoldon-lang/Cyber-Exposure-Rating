@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any, Sequence
 
 from app.core.config import load_yaml_config
-from app.models.enums import AnalystValidation, ToolRunStatus
+from app.models.enums import ToolRunStatus
 
 
 @dataclass
@@ -55,6 +55,9 @@ class ConfidenceInput:
     darkweb_sources_expected: int = 1
     evidence_ages_days: Sequence[float] = field(default_factory=tuple)
     scan_partial: bool = False
+    # Nessun dominio, IP o rete nel perimetro: gli strumenti non hanno avuto
+    # nulla da analizzare, quindi il loro successo non e' copertura.
+    scope_is_empty: bool = False
 
 
 @dataclass
@@ -175,6 +178,13 @@ class ConfidenceEngine:
             total -= amount
             penalties.append({"key": "scan_partial", "amount": amount,
                               "reason_it": "la scansione si e' conclusa in stato parziale"})
+        if data.scope_is_empty:
+            amount = float(configured_penalties.get("empty_scope", 0))
+            total -= amount
+            penalties.append({
+                "key": "empty_scope", "amount": amount,
+                "reason_it": "nessun dominio o indirizzo IP nel perimetro: gli strumenti "
+                             "non hanno avuto alcun target da analizzare"})
 
         value = max(0.0, min(100.0, total))
         threshold = float(self.config.get("minimum_publishable", 50))

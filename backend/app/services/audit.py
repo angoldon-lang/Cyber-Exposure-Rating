@@ -17,6 +17,18 @@ from app.models.audit import AuditLog
 logger = get_logger(__name__)
 
 
+def _normalize_timestamp(value: datetime) -> str:
+    """Rappresentazione stabile del timestamp.
+
+    Alcuni backend (SQLite) non conservano il fuso orario: senza questa
+    normalizzazione l'hash calcolato in scrittura non coinciderebbe con
+    quello ricalcolato in verifica.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat()
+
+
 def _record_hash(previous_hash: str | None, payload: dict[str, Any]) -> str:
     material = json.dumps({"prev": previous_hash, **payload}, sort_keys=True, default=str)
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
@@ -48,7 +60,7 @@ def record_audit(
         "entity_type": entity_type,
         "entity_id": entity_id,
         "outcome": outcome,
-        "occurred_at": occurred_at.isoformat(),
+        "occurred_at": _normalize_timestamp(occurred_at),
     }
     try:
         previous = db.execute(
@@ -81,8 +93,10 @@ def record_audit(
 
 def verify_chain(db: Session, limit: int = 1000) -> dict[str, Any]:
     """Verifica l'integrita' della catena di hash dell'audit log."""
+    # Ordinamento stabile: a parita' di timestamp l'id rompe il pareggio,
+    # cosi' la catena e' verificabile in modo deterministico.
     rows = db.execute(
-        select(AuditLog).order_by(AuditLog.occurred_at).limit(limit)
+        select(AuditLog).order_by(AuditLog.occurred_at, AuditLog.id).limit(limit)
     ).scalars().all()
     broken: list[str] = []
     previous_hash: str | None = None
@@ -94,7 +108,7 @@ def verify_chain(db: Session, limit: int = 1000) -> dict[str, Any]:
             "entity_type": row.entity_type,
             "entity_id": row.entity_id,
             "outcome": row.outcome,
-            "occurred_at": row.occurred_at.isoformat(),
+            "occurred_at": _normalize_timestamp(row.occurred_at),
         })
         if row.record_hash != expected:
             broken.append(str(row.id))

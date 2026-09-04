@@ -10,10 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CompanyDep, CurrentUserDep, DbDep
 from app.api.routers.health import DISCLAIMER_IT
-from app.models.enums import AnalystValidation, ScanStatus
 from app.models.organization import Company
 from app.models.scanning import Finding, Scan
-from app.models.scope import Asset, Domain, EmailDomain
+from app.models.scope import Asset, EmailDomain
 from app.models.scoring import Score
 from app.schemas.scanning import DashboardCompanyCard, DashboardOverview, PortfolioView
 from app.services.confidence import PROVISIONAL_NOTICE_IT

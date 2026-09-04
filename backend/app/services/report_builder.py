@@ -1,7 +1,6 @@
 """Assembla il contesto del report a partire dal database."""
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 from sqlalchemy import select

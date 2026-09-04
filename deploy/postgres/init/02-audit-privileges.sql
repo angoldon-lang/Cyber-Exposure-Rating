@@ -1,0 +1,3 @@
+-- Eseguito dopo `alembic upgrade head` (vedi Makefile: target `harden-db`).
+-- Qui resta come promemoria dell'ordine corretto delle operazioni.
+--   REVOKE UPDATE, DELETE ON audit_logs FROM defenix_app;

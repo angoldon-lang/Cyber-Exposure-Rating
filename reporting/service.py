@@ -6,9 +6,7 @@ import hashlib
 import io
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -98,7 +96,6 @@ def generate_docx(context: ReportContext, *, include_technical: bool = True) -> 
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.shared import Pt, RGBColor
 
-    data = context.as_dict()
     document = Document()
 
     # --- copertina ---

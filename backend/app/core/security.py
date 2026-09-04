@@ -9,7 +9,6 @@ from typing import Any
 import base64
 import bcrypt
 import hashlib
-import hmac
 
 import httpx
 from jose import JWTError, jwt

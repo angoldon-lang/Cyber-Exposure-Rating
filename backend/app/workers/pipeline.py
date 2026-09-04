@@ -20,7 +20,7 @@ from adapters.base import AdapterContext, AdapterResult, AdapterStatus
 from adapters.registry import build_adapters, build_tool_config, coverage_matrix, profile_definition
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.models.enums import ScanStatus, ToolRunStatus
+from app.models.enums import ScanStatus
 from app.services.confidence import ConfidenceEngine, ConfidenceInput, ConfidenceResult, ToolRunSummary
 from app.services.normalization import (
     CorrelatedFinding,
@@ -286,7 +286,9 @@ class ScanPipeline:
             darkweb_sources_available=sum(1 for s in darkweb_tools if s.succeeded),
             darkweb_sources_expected=max(1, len(darkweb_tools)),
             evidence_ages_days=ages,
-            scan_partial=any(r.status is AdapterStatus.FAILED for r in results))
+            scan_partial=any(r.status is AdapterStatus.FAILED for r in results),
+            scope_is_empty=not (self.request.domains or self.request.ip_addresses
+                                or self.request.network_ranges))
 
 
 # ---------------------------------------------------------------------------

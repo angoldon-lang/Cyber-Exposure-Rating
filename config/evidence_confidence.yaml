@@ -2,9 +2,12 @@
 # Il confidence NON modifica il rating: ne dichiara l'affidabilita'.
 version: "1.0.0"
 
-# Il punteggio parte da `base` e ogni fattore aggiunge/sottrae il proprio
-# contributo, pesato. Il risultato viene clampato tra 0 e 100.
-base: 40
+# I pesi dei fattori sommano esattamente a 100: il punteggio e' quindi la
+# percentuale di copertura effettivamente raggiunta, senza saturazione.
+# `base` resta configurabile ma va tenuto a 0, altrimenti la scala si satura
+# nella parte alta e smette di discriminare fra una scansione buona e una
+# eccellente.
+base: 0
 
 factors:
   domain_verified:
@@ -62,6 +65,9 @@ penalties:
   no_domain_verified: 15
   all_tools_failed: 40
   scan_partial: 5
+  # Senza perimetro dichiarato i tool "riescono" senza avere nulla da
+  # analizzare: la scansione non e' mai attendibile, va dichiarata provvisoria.
+  empty_scope: 40
 
 # Sotto questa soglia il rating e' "provvisorio"
 minimum_publishable: 50
