@@ -78,8 +78,17 @@ def readiness(db: Session = Depends(get_db)) -> dict[str, str]:
 
 
 @router.get("/meta/disclaimer")
-def disclaimer() -> dict[str, str]:
-    """Limitazione d'ambito, mostrata nell'interfaccia e in ogni report."""
+def disclaimer(profile: str | None = None) -> dict[str, str]:
+    """Limitazione d'ambito, mostrata nell'interfaccia e in ogni report.
+
+    Il Public Passive Check non richiede autorizzazione: usa solo fonti gia'
+    pubbliche e non interroga i sistemi dell'organizzazione. Dichiarare
+    un'autorizzazione inesistente sarebbe scorretto.
+    """
+    if profile:
+        from reporting.context import disclaimer_for
+
+        return {"it": disclaimer_for(profile), "en": DISCLAIMER_EN}
     return {"it": DISCLAIMER_IT, "en": DISCLAIMER_EN}
 
 

@@ -14,13 +14,36 @@ from app.core.config import load_yaml_config, settings
 from app.core.redaction import mask_email, strip_forbidden_keys
 from app.models.enums import SEVERITY_RANK
 
-DISCLAIMER_IT = (
+_DISCLAIMER_BASE = (
     "Defenix Exposure Rating e' una valutazione della sicurezza osservabile dall'esterno "
     "e dei rischi a cui l'organizzazione potrebbe essere esposta. Non costituisce un "
     "penetration test, un vulnerability assessment completo ne' una certificazione di "
-    "sicurezza. I risultati si riferiscono esclusivamente al perimetro dichiarato e "
-    "autorizzato e allo stato osservato alla data della rilevazione."
+    "sicurezza. "
 )
+
+# Il Public Passive Check consulta esclusivamente fonti gia' pubbliche e non
+# interroga i sistemi dell'organizzazione: non richiede alcuna autorizzazione, e
+# dichiararla nel report sarebbe scorretto. I profili verificati interrogano
+# invece i sistemi e l'autorizzazione scritta e' un presupposto: li' la frase
+# resta, perche' delimita cio' che e' stato lecito osservare.
+_CODA_PASSIVA = (
+    "I risultati derivano esclusivamente da fonti pubbliche, senza alcuna "
+    "interazione con i sistemi dell'organizzazione, e si riferiscono al perimetro "
+    "dichiarato e allo stato osservato alla data della rilevazione."
+)
+_CODA_VERIFICATA = (
+    "I risultati si riferiscono esclusivamente al perimetro dichiarato e autorizzato "
+    "e allo stato osservato alla data della rilevazione."
+)
+
+
+def disclaimer_for(profile_key: str) -> str:
+    """Disclaimer coerente con il profilo effettivamente eseguito."""
+    coda = _CODA_PASSIVA if profile_key == "public_passive" else _CODA_VERIFICATA
+    return _DISCLAIMER_BASE + coda
+
+
+DISCLAIMER_IT = disclaimer_for("verified_standard")
 
 LIMITS_IT = [
     "L'analisi si basa su informazioni osservabili dall'esterno: non sostituisce una "
@@ -146,4 +169,5 @@ def build_context(*, company: dict[str, Any], scan: dict[str, Any], score: dict[
         remediation_plan=remediation_plan, quick_wins=quick_win_items,
         comparison=comparison, coverage_matrix=coverage_matrix, exposure_summary=exposure,
         applied_caps=list(score.get("applied_caps", [])),
+        disclaimer=disclaimer_for(profile_key),
         brand={"name": settings.report_brand_name, "owner": settings.report_brand_owner})

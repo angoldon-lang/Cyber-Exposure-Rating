@@ -11,6 +11,7 @@ from app.api.deps import CurrentUser, CurrentUserDep, DbDep, RequestContextDep, 
 from app.core.rbac import Permission
 from app.models.enums import AuditAction, FindingWorkflowState
 from app.models.scanning import Finding, Scan
+from app.models.scope import Asset
 from app.schemas.common import Page
 from app.schemas.scanning import (
     FindingRead,
@@ -19,6 +20,7 @@ from app.schemas.scanning import (
     ReviewProgress,
 )
 from app.services.audit import record_audit
+from app.services.report_builder import evidence_summary
 from app.services.remediation import build_plan, quick_wins
 from app.services.review import InvalidTransitionError, apply_review_action, review_progress
 
@@ -32,6 +34,29 @@ def _load_scan(db, scan_id: uuid.UUID, current: CurrentUser) -> Scan:  # noqa: A
     if scan is None or not current.company_allowed(scan.company_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Scansione non trovata")
     return scan
+
+
+def _con_asset(db, findings: list[Finding]) -> list[FindingRead]:  # noqa: ANN001
+    """Arricchisce i rilievi con il nome dell'asset colpito.
+
+    Il modello memorizza solo `asset_id`: senza risolverlo, chi legge non ha
+    modo di sapere quale host o dominio verificare. Gli asset si caricano in
+    una sola query, non uno per rilievo.
+    """
+    identificativi = {f.asset_id for f in findings if f.asset_id}
+    nomi: dict = {}
+    if identificativi:
+        nomi = {a.id: a.display_name for a in db.execute(
+            select(Asset).where(Asset.id.in_(identificativi))).scalars().all()}
+
+    letti = []
+    for finding in findings:
+        letto = FindingRead.model_validate(finding)
+        letto.asset_display = nomi.get(finding.asset_id) or finding.detail
+        letto.attributes_json = finding.attributes_json or {}
+        letto.evidence_summary = evidence_summary(finding)
+        letti.append(letto)
+    return letti
 
 
 @router.get("/scans/{scan_id}/findings", response_model=Page[FindingRead])
@@ -55,7 +80,7 @@ def list_findings(scan_id: uuid.UUID, db: DbDep, current: CurrentUserDep,
         select(Finding).where(*conditions)
         .order_by(Finding.severity, Finding.reference_code)
         .offset((page - 1) * page_size).limit(page_size)).scalars().all()
-    return Page[FindingRead](items=[FindingRead.model_validate(r) for r in rows],
+    return Page[FindingRead](items=_con_asset(db, list(rows)),
                              total=total, page=page, page_size=page_size)
 
 
@@ -66,7 +91,7 @@ def get_finding(finding_id: uuid.UUID, db: DbDep, current: CurrentUserDep) -> Fi
     ).scalar_one_or_none()
     if finding is None or not current.company_allowed(finding.company_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Finding non trovato")
-    return FindingRead.model_validate(finding)
+    return _con_asset(db, [finding])[0]
 
 
 @router.post("/findings/{finding_id}/review", response_model=FindingRead)

@@ -135,6 +135,9 @@ export interface Finding {
   applied_deduction: number;
   sources_json: string[] | null;
   asset_id: string | null;
+  asset_display: string | null;
+  attributes_json: Record<string, unknown> | null;
+  evidence_summary: string | null;
 }
 
 export interface Scan {

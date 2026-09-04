@@ -59,6 +59,11 @@ def _finding_payload(finding: Finding, asset_display: str | None,
     return payload
 
 
+def evidence_summary(finding: Finding) -> str:
+    """Sintesi delle evidenze: da quali strumenti proviene il rilievo."""
+    return _evidence_summary(finding)
+
+
 def _evidence_summary(finding: Finding) -> str:
     sources = ", ".join(finding.sources_json or []) or "n/d"
     return (f"Rilevato da: {sources}. "

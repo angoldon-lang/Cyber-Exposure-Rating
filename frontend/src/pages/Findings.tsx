@@ -115,8 +115,8 @@ export default function Findings() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Rif.</th><th>Severita’</th><th>Rilievo</th><th>Area</th>
-                  <th>Attendibilita’</th><th className="num">Detrazione</th>
+                  <th>Rif.</th><th>Severita’</th><th>Rilievo</th><th>Asset interessato</th>
+                  <th>Area</th><th>Attendibilita’</th><th className="num">Detrazione</th>
                   <th>Revisione</th><th>Azioni</th>
                 </tr>
               </thead>
@@ -135,6 +135,7 @@ export default function Findings() {
                         {f.title}
                         {f.cisa_kev && <> <span className="chip chip--critical">CISA KEV</span></>}
                       </td>
+                      <td className="tabular small">{f.asset_display ?? '—'}</td>
                       <td className="small">{CATEGORY_LABEL[f.category] ?? f.category}</td>
                       <td className="small">{CONFIDENCE_LABEL[f.confidence_class] ?? f.confidence_class}</td>
                       <td className="num tabular">
@@ -159,13 +160,39 @@ export default function Findings() {
                     </tr>
                     {expanded === f.id && (
                       <tr key={`${f.id}-detail`}>
-                        <td colSpan={8} style={{ background: 'var(--surface-2)' }}>
+                        <td colSpan={9} style={{ background: 'var(--surface-2)' }}>
                           <p style={{ marginTop: 0 }}>{f.description}</p>
                           <table className="data" style={{ maxWidth: 720 }}>
                             <tbody>
+                              <tr><td>Asset interessato</td>
+                                  <td className="tabular">{f.asset_display ?? '—'}</td></tr>
                               <tr><td>Proprieta’ dell’asset</td>
                                   <td>{OWNERSHIP_LABEL[f.ownership_status] ?? f.ownership_status}</td></tr>
                               <tr><td>Dettaglio</td><td>{f.detail ?? '—'}</td></tr>
+                              {f.evidence_summary && (
+                                <tr><td>Evidenze</td><td>{f.evidence_summary}</td></tr>
+                              )}
+                              {f.attributes_json && Object.keys(f.attributes_json).length > 0 && (
+                                <tr>
+                                  <td>Dati osservati</td>
+                                  <td>
+                                    {/* Servono a riprodurre la verifica: porta, header,
+                                        versione rilevata, codice di risposta. */}
+                                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                                      {Object.entries(f.attributes_json).map(([chiave, valore]) => (
+                                        <li key={chiave} className="small">
+                                          <span className="muted">{chiave}:</span>{' '}
+                                          <span className="tabular">
+                                            {typeof valore === 'object'
+                                              ? JSON.stringify(valore)
+                                              : String(valore)}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </td>
+                                </tr>
+                              )}
                               <tr><td>Prima rilevazione</td><td>{formatDate(f.first_seen_at)}</td></tr>
                               <tr><td>Ultima rilevazione</td><td>{formatDate(f.last_seen_at)}</td></tr>
                               {f.cve_id && (

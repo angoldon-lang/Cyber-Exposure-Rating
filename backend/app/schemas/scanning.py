@@ -130,6 +130,12 @@ class FindingRead(ORMModel):
     applied_deduction: float
     sources_json: list | None
     asset_id: uuid.UUID | None
+    # Senza il nome dell'asset il rilievo non e' verificabile: `asset_id` da solo
+    # e' un identificativo opaco. `attributes_json` porta i dettagli osservati
+    # (porta, header, versione rilevata) che servono a riprodurre la verifica.
+    asset_display: str | None = None
+    attributes_json: dict | None = None
+    evidence_summary: str | None = None
 
 
 class FindingReview(BaseModel):
