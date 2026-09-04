@@ -86,6 +86,10 @@ check-config: ## Valida i file YAML di configurazione
 		from app.services.confidence import ConfidenceEngine; \
 		ScoringEngine(); ConfidenceEngine(); print('configurazione valida')"
 
+.PHONY: check-versions
+check-versions: ## Verifica che le versioni fissate nei Dockerfile esistano ancora (usa la rete)
+	python3 scripts/check_pinned_versions.py
+
 .PHONY: sbom
 sbom: ## Genera la SBOM del prodotto (CycloneDX)
 	$(PIP) install --quiet cyclonedx-bom

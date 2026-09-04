@@ -117,6 +117,7 @@ make web              # http://127.0.0.1:5173
 | `make credentials` | ristampa le credenziali demo generate |
 | `make test` / `make lint` | suite di test / analisi statica |
 | `make check-config` | valida i YAML di scoring e confidenza |
+| `make check-versions` | verifica che le versioni fissate nei Dockerfile esistano ancora |
 | `make sbom` | genera la SBOM CycloneDX di backend e frontend |
 | `make backup` / `make restore DUMP=...` | backup e ripristino |
 

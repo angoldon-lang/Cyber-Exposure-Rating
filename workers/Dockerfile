@@ -27,10 +27,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # testssl.sh: usato come strumento esterno invocato via subprocess (GPL-2.0),
 # non linkato nel prodotto e non ridistribuito in forma modificata.
-ARG TESTSSL_VERSION=3.2rc3
+# Il tag upstream ha il prefisso `v` (`v3.2.4`, non `3.2.4`): senza, il clone
+# fallisce con "Remote branch not found". `--branch` accetta anche i tag.
+ARG TESTSSL_VERSION=v3.2.4
 RUN git clone --depth 1 --branch ${TESTSSL_VERSION} \
         https://github.com/testssl/testssl.sh.git /opt/testssl \
-    && ln -s /opt/testssl/testssl.sh /usr/local/bin/testssl.sh
+    && ln -s /opt/testssl/testssl.sh /usr/local/bin/testssl.sh \
+    && /opt/testssl/testssl.sh --version >/dev/null
 
 COPY --from=tools /out/subfinder /out/httpx /out/naabu /out/nuclei /usr/local/bin/
 

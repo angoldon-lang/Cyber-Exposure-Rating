@@ -44,7 +44,7 @@ rilascio: possono cambiare fra versioni.
   **verificare la licenza di ogni template prima di aggiungerlo**
 
 ### testssl.sh
-- **Versione:** 3.2rc3 · **Licenza:** **GPL-2.0**
+- **Versione:** v3.2.4 · **Licenza:** **GPL-2.0**
 - **Repository:** <https://github.com/testssl/testssl.sh>
 - **Uso:** script shell invocato come **processo esterno** via subprocess.
   Nessun linking, nessuna incorporazione nel codice Defenix
