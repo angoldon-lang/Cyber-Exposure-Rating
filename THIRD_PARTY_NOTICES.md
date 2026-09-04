@@ -33,6 +33,16 @@ rilascio: possono cambiare fra versioni.
 > pubblica, l'impronta e' fissata nel Dockerfile). Non vengono ricompilati ne'
 > modificati, e nessuno di essi e' linkato nel prodotto.
 
+### Fonte di credenziali esposte (connettore generico)
+- **Versione:** n/d · **Licenza:** dipende dal fornitore
+- **Uso:** connettore HTTP verso una fonte di threat intelligence su
+  credenziali esposte, scelta dall'operatore
+- **Rischio:** **le fonti serie in questo ambito sono tutte commerciali.** Il
+  connettore e' parte del prodotto, i dati no: vanno acquistati separatamente e
+  le condizioni d'uso (redistribuzione dei risultati nei report, limiti di
+  interrogazione, obblighi verso gli interessati) dipendono dal contratto con
+  il fornitore. Senza configurazione l'adapter resta inattivo.
+
 ### Naabu
 - **Versione:** 2.3.1 · **Licenza:** MIT
 - **Repository:** <https://github.com/projectdiscovery/naabu>

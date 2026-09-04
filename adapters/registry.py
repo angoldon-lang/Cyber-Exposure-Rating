@@ -12,6 +12,7 @@ from adapters.base import AdapterContext, BaseAdapter
 from adapters.checkdmarc_adapter import CheckDMARCAdapter
 from adapters.ct_adapter import CertificateTransparencyAdapter
 from adapters.dns_adapter import DNSAdapter
+from adapters.credential_exposure_adapter import CredentialExposureAdapter
 from adapters.hibp_adapter import HIBPAdapter
 from adapters.httpx_adapter import HTTPXAdapter
 from adapters.phase2 import (
@@ -46,6 +47,7 @@ ADAPTER_CLASSES: dict[str, type[BaseAdapter]] = {
     TestSSLAdapter.key: TestSSLAdapter,
     RansomwareLiveAdapter.key: RansomwareLiveAdapter,
     HIBPAdapter.key: HIBPAdapter,
+    CredentialExposureAdapter.key: CredentialExposureAdapter,
     VulnerabilityIntelligenceAdapter.key: VulnerabilityIntelligenceAdapter,
     # --- Fase 2 ---
     AmassAdapter.key: AmassAdapter,

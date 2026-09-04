@@ -99,6 +99,12 @@ def _connector_config() -> dict:
     return {
         "hibp": {"api_key": settings.hibp_api_key,
                  "base_url": "https://haveibeenpwned.com/api/v3"},
+        "credential_exposure": {"api_key": settings.credential_exposure_api_key,
+                                "base_url": settings.credential_exposure_url,
+                                # In modalita' simulata il connettore produce dati
+                                # sintetici: senza, l'area dark web resterebbe vuota
+                                # nella dimostrazione.
+                                "mock_enabled": settings.scan_mock_mode},
         "spiderfoot": {"base_url": settings.spiderfoot_url},
         "ransomware_live": {"base_url": settings.ransomware_live_url},
         "kev": {"url": settings.kev_feed_url},

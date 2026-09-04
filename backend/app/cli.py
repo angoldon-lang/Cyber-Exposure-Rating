@@ -363,6 +363,7 @@ def demo_scan(company_slug: str | None = None, profile: str = "verified_standard
             network_ranges=snapshot["network_ranges"], excluded_values=snapshot["excluded"],
             mock_mode=True,
             connector_config={"hibp": {"mock_enabled": True},
+                              "credential_exposure": {"mock_enabled": True},
                               "synthetic": {"severity_bias": bias_by_slug.get(slug, 0.5)}})
         outcome = ScanPipeline(request).run()
 

@@ -150,7 +150,8 @@ class ScanPipeline:
         analysis_adapters = build_adapters(
             analysis_context,
             only=["checkdmarc", "httpx", "testssl", "zap_baseline", "naabu", "nuclei",
-                  "ransomware_live", "hibp", "dnstwist", "email_header"])
+                  "ransomware_live", "hibp", "credential_exposure", "dnstwist",
+                  "email_header"])
         analysis_results = self._execute(analysis_adapters, stage="analysis", base_percent=40)
         self.progress("analysis_completed", 70)
 

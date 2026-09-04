@@ -22,7 +22,7 @@ profiles:
       - fuzzing
       - intrusive_checks
     tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
-            ransomware_live, hibp, dnstwist_passive, kev, epss]
+            ransomware_live, hibp, credential_exposure, dnstwist_passive, kev, epss]
 
   verified_standard:
     label_it: "Verified Standard Check"
@@ -242,6 +242,26 @@ tools:
     coverage_weight: 0.8
     base_url: "https://haveibeenpwned.com/api/v3"
     notes: "Sorgente NON open source. Richiede subscription a pagamento."
+
+  credential_exposure:
+    label: "Credenziali esposte (dark web)"
+    kind: http_api
+    passive: true
+    optional: true
+    requires_api_key: true
+    commercial: true
+    phase: 1
+    timeout_seconds: 120
+    coverage_areas: [darkweb_breach]
+    coverage_weight: 1.0
+    base_url: ""
+    notes: >-
+      Connettore generico verso una fonte di intelligence su credenziali
+      esposte: log di infostealer, combolist, paste e menzioni su canali
+      chiusi. Le fonti serie in questo ambito sono tutte commerciali, quindi
+      indirizzo e chiave si configurano. Nessuna password viene mai letta o
+      memorizzata: della credenziale si registra solo l'esistenza, con
+      l'identita' mascherata.
 
   kev:
     label: "CISA Known Exploited Vulnerabilities"
