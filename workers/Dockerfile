@@ -4,14 +4,63 @@
 # Contiene gli strumenti open source. Gira come utente non root, senza
 # privilegi aggiuntivi e con limiti di CPU/memoria imposti dal compose.
 # ---------------------------------------------------------------------------
-FROM golang:1.23.4-bookworm AS tools
 
-ENV CGO_ENABLED=0 GOBIN=/out
-RUN mkdir -p /out \
-    && go install -ldflags="-s -w" github.com/projectdiscovery/subfinder/v2/cmd/subfinder@v2.6.6 \
-    && go install -ldflags="-s -w" github.com/projectdiscovery/httpx/cmd/httpx@v1.6.9 \
-    && go install -ldflags="-s -w" github.com/projectdiscovery/naabu/v2/cmd/naabu@v2.3.1 \
-    && go install -ldflags="-s -w" github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.3.7
+# ---------------------------------------------------------------------------
+# Strumenti ProjectDiscovery: binari ufficiali gia' compilati.
+#
+# La compilazione da sorgente con `go install` richiedeva parecchi GB di RAM
+# (nuclei ha un albero di dipendenze molto ampio) e veniva terminata dal kernel
+# nella VM di Docker Desktop, con `exit code 1` e nessun messaggio. Scaricare i
+# binari pubblicati e' anche molto piu' rapido e non dipende da proxy.golang.org.
+# ---------------------------------------------------------------------------
+FROM debian:bookworm-slim AS tools
+
+# Fornito automaticamente da BuildKit: amd64, arm64, ...
+ARG TARGETARCH
+ARG SUBFINDER_VERSION=2.6.6
+ARG HTTPX_VERSION=1.6.9
+ARG NAABU_VERSION=2.3.1
+ARG NUCLEI_VERSION=3.3.7
+# naabu non pubblica il file dei checksum: l'impronta e' fissata qui, cosi' la
+# verifica resta obbligatoria per tutti e quattro gli strumenti.
+ARG NAABU_SHA256=834c01c2cdd02efdddb78afee594d1782e704ea6aa7db87e613cf721e11db608
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# naabu non pubblica binari linux/arm64 (usa libpcap tramite CGO): su quella
+# architettura viene omesso. L'adapter lo segnala come `skipped`, riduce la
+# copertura dichiarata e non blocca la scansione; il port scan e' comunque
+# ammesso solo nel profilo Verified Extended Check.
+RUN set -eu; \
+    arch="${TARGETARCH:-amd64}"; \
+    mkdir -p /out /tmp/dl; \
+    scarica() { \
+        nome="$1"; versione="$2"; atteso="${3:-}"; \
+        base="https://github.com/projectdiscovery/${nome}/releases/download/v${versione}"; \
+        archivio="${nome}_${versione}_linux_${arch}.zip"; \
+        curl -fsSL "${base}/${archivio}" -o "/tmp/dl/${archivio}"; \
+        if [ -n "${atteso}" ]; then \
+            echo "${atteso}  ${archivio}" > /tmp/dl/atteso.txt; \
+        else \
+            curl -fsSL "${base}/${nome}_${versione}_checksums.txt" -o /tmp/dl/tutti.txt; \
+            grep " ${archivio}$" /tmp/dl/tutti.txt > /tmp/dl/atteso.txt; \
+        fi; \
+        (cd /tmp/dl && sha256sum -c atteso.txt); \
+        unzip -q -o "/tmp/dl/${archivio}" "${nome}" -d /out; \
+        chmod +x "/out/${nome}"; \
+        "/out/${nome}" -version >/dev/null 2>&1 || true; \
+    }; \
+    scarica subfinder "${SUBFINDER_VERSION}"; \
+    scarica httpx "${HTTPX_VERSION}"; \
+    scarica nuclei "${NUCLEI_VERSION}"; \
+    if [ "${arch}" = "amd64" ]; then \
+        scarica naabu "${NAABU_VERSION}" "${NAABU_SHA256}"; \
+    else \
+        echo "naabu non disponibile per linux/${arch}: omesso"; \
+    fi; \
+    rm -rf /tmp/dl
 
 FROM python:3.11.11-slim-bookworm
 
@@ -35,7 +84,9 @@ RUN git clone --depth 1 --branch ${TESTSSL_VERSION} \
     && ln -s /opt/testssl/testssl.sh /usr/local/bin/testssl.sh \
     && /opt/testssl/testssl.sh --version >/dev/null
 
-COPY --from=tools /out/subfinder /out/httpx /out/naabu /out/nuclei /usr/local/bin/
+# Copia dell'intera cartella: su arm64 naabu non e' presente e un COPY che
+# lo elencasse esplicitamente farebbe fallire la build.
+COPY --from=tools /out/ /usr/local/bin/
 
 WORKDIR /srv
 COPY backend/requirements.txt /srv/backend/requirements.txt

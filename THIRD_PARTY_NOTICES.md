@@ -27,12 +27,20 @@ rilascio: possono cambiare fra versioni.
 - **Repository:** <https://github.com/projectdiscovery/httpx>
 - **Uso:** binario invocato via subprocess · **Rischio:** nessuno
 
+> **Modalita' di ottenimento.** I quattro strumenti ProjectDiscovery sono
+> scaricati come binari ufficiali dalle release GitHub e verificati con SHA-256
+> prima dell'installazione (checksum pubblicati upstream; per Naabu, che non li
+> pubblica, l'impronta e' fissata nel Dockerfile). Non vengono ricompilati ne'
+> modificati, e nessuno di essi e' linkato nel prodotto.
+
 ### Naabu
 - **Versione:** 2.3.1 · **Licenza:** MIT
 - **Repository:** <https://github.com/projectdiscovery/naabu>
 - **Uso:** binario invocato via subprocess, solo nel profilo esteso
 - **Rischio:** nessuno sul piano della licenza. Richiede `NET_RAW` per il SYN
-  scan: rimuovibile se il profilo esteso non viene usato
+  scan: rimuovibile se il profilo esteso non viene usato. Upstream non pubblica
+  binari `linux/arm64` (usa libpcap tramite CGO): su quell'architettura non
+  viene installato e l'adapter lo dichiara `skipped`, riducendo la copertura
 
 ### Nuclei
 - **Versione:** 3.3.7 · **Licenza:** MIT (motore)

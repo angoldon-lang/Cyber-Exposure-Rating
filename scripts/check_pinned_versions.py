@@ -20,8 +20,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILES = ("backend/Dockerfile", "workers/Dockerfile", "frontend/Dockerfile")
 
-# `go install ...@vX.Y.Z` e `ARG TESTSSL_VERSION=vX.Y.Z` + il repo del clone.
-GO_MODULE = re.compile(r"go install .*?github\.com/([\w.-]+/[\w.-]+)(?:/v\d+)?/cmd/[\w.-]+@(\S+)")
+# Rilascio ProjectDiscovery scaricato da `scarica <nome> "${<NOME>_VERSION}"`,
+# con la versione dichiarata da `ARG <NOME>_VERSION=X.Y.Z` (senza prefisso `v`
+# nel nome del file, con prefisso nel tag).
+PD_TOOL = re.compile(r"^\s*scarica (\w+) \"\$\{(\w+_VERSION)\}\"", re.MULTILINE)
 CLONE = re.compile(r"git clone [^\n]*?--branch \$\{(\w+)\}[^\n]*?"
                    r"https://github\.com/([\w.-]+?/[\w.-]+?)(?:\.git)?(?:\s|$)")
 ARG_VERSION = re.compile(r"^ARG (\w+_VERSION)=(\S+)", re.MULTILINE)
@@ -44,8 +46,9 @@ def main() -> int:
         # Le continuazioni di riga spezzerebbero le espressioni regolari.
         continuo = testo.replace("\\\n", " ")
         args = dict(ARG_VERSION.findall(testo))
-        for repo, tag in GO_MODULE.findall(continuo):
-            da_verificare.append((nome, repo, tag))
+        for tool, arg in PD_TOOL.findall(testo):
+            if arg in args:
+                da_verificare.append((nome, f"projectdiscovery/{tool}", f"v{args[arg]}"))
         for arg, repo in CLONE.findall(continuo):
             if arg in args:
                 da_verificare.append((nome, repo, args[arg]))
