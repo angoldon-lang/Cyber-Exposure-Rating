@@ -39,7 +39,7 @@ profiles:
       - data_modification
       - fuzzing
     tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
-            ransomware_live, hibp, dnstwist, kev, epss,
+            ransomware_live, hibp, credential_exposure, dnstwist, kev, epss,
             httpx, testssl, zap_baseline, amass_passive, email_header]
 
   verified_extended:
@@ -64,7 +64,7 @@ profiles:
       - destructive_exploits
       - third_party_scanning
     tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
-            ransomware_live, hibp, dnstwist, kev, epss,
+            ransomware_live, hibp, credential_exposure, dnstwist, kev, epss,
             httpx, testssl, zap_baseline, amass, email_header,
             naabu, nmap, nuclei]
 

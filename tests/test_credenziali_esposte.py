@@ -150,3 +150,13 @@ def test_non_duplica_i_rilievi_gia_prodotti_da_hibp(adapter_context):
         assert evidenza.fingerprint in hibp, (
             f"'{evidenza.finding_type}' su {evidenza.asset_key} ({evidenza.detail}) "
             "genera due impronte distinte")
+
+
+@pytest.mark.parametrize("profilo", ["public_passive", "verified_standard", "verified_extended"])
+def test_disponibile_in_tutti_i_profili(profilo):
+    """La ricerca di credenziali esposte e' passiva e non interroga i sistemi:
+    ometterla dai profili verificati farebbe perdere silenziosamente l'area
+    dark web proprio nelle scansioni piu' complete."""
+    from adapters.registry import tools_for_profile
+
+    assert "credential_exposure" in tools_for_profile(profilo)
