@@ -99,6 +99,12 @@ class ReportContext:
     applied_caps: list[dict[str, Any]]
     brand: dict[str, str]
     disclaimer: str = DISCLAIMER_IT
+    # Testi liberi del tenant: gia' sanificati alla scrittura e comunque
+    # sottoposti all'autoescape dei template.
+    intro_text: str | None = None
+    footer_text: str | None = None
+    contact_block: str | None = None
+    logo_data_uri: str | None = None
     limits: list[str] = field(default_factory=lambda: list(LIMITS_IT))
 
     def as_dict(self) -> dict[str, Any]:
@@ -115,6 +121,8 @@ class ReportContext:
             "quick_wins": self.quick_wins, "comparison": self.comparison,
             "coverage_matrix": self.coverage_matrix, "exposure_summary": self.exposure_summary,
             "applied_caps": self.applied_caps, "brand": self.brand,
+            "intro_text": self.intro_text, "footer_text": self.footer_text,
+            "contact_block": self.contact_block, "logo_data_uri": self.logo_data_uri,
             "disclaimer": self.disclaimer, "limits": self.limits,
             "severity_label": SEVERITY_LABEL_IT, "confidence_label_map": CONFIDENCE_LABEL_IT,
             "ownership_label": OWNERSHIP_LABEL_IT, "effort_label": EFFORT_LABEL_IT,
@@ -139,7 +147,8 @@ def build_context(*, company: dict[str, Any], scan: dict[str, Any], score: dict[
                   findings: list[dict[str, Any]], remediation_plan: list[dict[str, Any]],
                   quick_win_items: list[dict[str, Any]], comparison: dict[str, Any] | None,
                   coverage_matrix: list[dict[str, Any]], exposure: dict[str, Any],
-                  language: str = "it", unmask_pii: bool = False) -> ReportContext:
+                  language: str = "it", unmask_pii: bool = False,
+                  branding: dict[str, Any] | None = None) -> ReportContext:
     profiles = load_yaml_config("tool_profiles").get("profiles", {})
     profile_key = str(scan.get("profile_key", "public_passive"))
     profile_label = str(profiles.get(profile_key, {}).get("label_it", profile_key))
@@ -170,4 +179,14 @@ def build_context(*, company: dict[str, Any], scan: dict[str, Any], score: dict[
         comparison=comparison, coverage_matrix=coverage_matrix, exposure_summary=exposure,
         applied_caps=list(score.get("applied_caps", [])),
         disclaimer=disclaimer_for(profile_key),
-        brand={"name": settings.report_brand_name, "owner": settings.report_brand_owner})
+        intro_text=(branding or {}).get("report_intro_it"),
+        footer_text=(branding or {}).get("report_footer_it"),
+        contact_block=(branding or {}).get("contact_block_it"),
+        logo_data_uri=(branding or {}).get("logo_data_uri"),
+        brand={
+            # La personalizzazione del tenant prevale sui valori di ambiente,
+            # che restano il ripiego per un tenant che non l'ha impostata.
+            "name": (branding or {}).get("brand_name") or settings.report_brand_name,
+            "owner": (branding or {}).get("brand_owner") or settings.report_brand_owner,
+            "color": (branding or {}).get("primary_color") or "",
+        })

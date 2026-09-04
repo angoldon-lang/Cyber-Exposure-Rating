@@ -3,6 +3,7 @@ siano registrate su `Base.metadata` (necessario per Alembic e per i test)."""
 from app.models.audit import AuditLog
 from app.models.base import Base, GUID, utcnow
 from app.models.organization import (
+    TenantBranding,
     APIKeyReference,
     Company,
     Connector,
@@ -40,5 +41,6 @@ __all__ = [
     "Brand", "Company", "ConfidenceScore", "Connector", "Domain", "EmailDomain", "Evidence",
     "Finding", "GUID", "IPAddress", "NetworkRange", "Remediation", "Report", "ReportVersion",
     "RetentionPolicy", "Role", "Scan", "ScanProfile", "Scope", "Score", "ScoreCategory",
-    "Tenant", "ToolRun", "User", "Vulnerability", "user_roles", "utcnow",
+    "Tenant",
+    "TenantBranding", "ToolRun", "User", "Vulnerability", "user_roles", "utcnow",
 ]

@@ -355,3 +355,14 @@ export interface Health {
   scan_mock_mode: boolean;
   checked_at: string;
 }
+
+export interface Branding {
+  brand_name: string | null;
+  brand_owner: string | null;
+  primary_color: string | null;
+  report_intro_it: string | null;
+  report_footer_it: string | null;
+  contact_block_it: string | null;
+  has_logo: boolean;
+  logo_filename: string | null;
+}

@@ -128,3 +128,25 @@ class CompanyPurgeResult(BaseModel):
     slug: str
     deleted_rows: dict[str, int]
     total_rows: int
+
+
+class BrandingRead(ORMModel):
+    brand_name: str | None
+    brand_owner: str | None
+    primary_color: str | None
+    report_intro_it: str | None
+    report_footer_it: str | None
+    contact_block_it: str | None
+    has_logo: bool = False
+    logo_filename: str | None = None
+
+
+class BrandingUpdate(BaseModel):
+    brand_name: str | None = Field(default=None, max_length=128)
+    brand_owner: str | None = Field(default=None, max_length=255)
+    # Solo notazione esadecimale: il valore finisce in un attributo `style` dei
+    # report, e un colore arbitrario permetterebbe di iniettare altre proprieta'.
+    primary_color: str | None = Field(default=None, pattern=r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+    report_intro_it: str | None = Field(default=None, max_length=4000)
+    report_footer_it: str | None = Field(default=None, max_length=4000)
+    contact_block_it: str | None = Field(default=None, max_length=2000)

@@ -4,7 +4,18 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import GUID, Base, JSONType, TimestampMixin, UUIDPrimaryKeyMixin, tenant_column
@@ -157,3 +168,33 @@ class RetentionPolicy(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     anonymize_instead: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     legal_basis: Mapped[str | None] = mapped_column(Text)
     last_applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TenantBranding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Personalizzazione dei report e dell'interfaccia per un tenant.
+
+    Il logo e' conservato nel database e non su disco: il container API gira
+    con filesystem in sola lettura, e un file su volume andrebbe replicato e
+    messo in backup separatamente rispetto ai dati che descrive.
+    """
+
+    __tablename__ = "tenant_branding"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        GUID(), ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False, unique=True, index=True)
+
+    brand_name: Mapped[str | None] = mapped_column(String(128))
+    brand_owner: Mapped[str | None] = mapped_column(String(255))
+    primary_color: Mapped[str | None] = mapped_column(String(9))
+    # Testi liberi inseriti nei report: sanificati alla scrittura, mai
+    # interpretati come markup nei template (autoescape di Jinja2).
+    report_intro_it: Mapped[str | None] = mapped_column(Text)
+    report_footer_it: Mapped[str | None] = mapped_column(Text)
+    contact_block_it: Mapped[str | None] = mapped_column(Text)
+
+    logo_bytes: Mapped[bytes | None] = mapped_column(LargeBinary)
+    logo_mime: Mapped[str | None] = mapped_column(String(64))
+    logo_filename: Mapped[str | None] = mapped_column(String(255))
+
+    tenant: Mapped[Tenant] = relationship()

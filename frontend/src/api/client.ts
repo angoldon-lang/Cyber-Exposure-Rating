@@ -1,6 +1,7 @@
 /** Client HTTP tipizzato verso l'API Defenix. */
 import type {
-  Authorization, AuthorizationPreview, Company, CompanyInput, DashboardOverview, Domain,
+  Authorization, AuthorizationPreview, Branding, Company, CompanyInput, DashboardOverview,
+  Domain,
   Finding, Health, Page, PortfolioView, PurgeResult, RemediationItem, Report, Scan, ScanComparison,
   ScanDetail, ScanProfile, ScopeEntry, ScopeEntryInput, ScoreDetail, TokenResponse,
   UserProfile, VerificationChallenge, VerificationResult,
@@ -67,6 +68,31 @@ export const api = {
     label_it: string; description_it: string; requires_verification: boolean;
     requires_authorization: boolean; tools: string[]; forbidden_actions: string[];
   }>>('/meta/profiles'),
+  branding: () => request<Branding>('/branding'),
+  updateBranding: (body: Partial<Branding>) =>
+    request<Branding>('/branding', { method: 'PUT', body: JSON.stringify(body) }),
+  deleteLogo: () => request<void>('/branding/logo', { method: 'DELETE' }),
+  logoUrl: () => `${BASE}/branding/logo`,
+  /** Il logo si carica come multipart: non si imposta Content-Type a mano,
+   *  ci pensa il browser aggiungendo il boundary. */
+  uploadLogo: async (file: File): Promise<Branding> => {
+    const dati = new FormData();
+    dati.append('file', file);
+    const headers = new Headers();
+    const token = auth.token;
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const risposta = await fetch(`${BASE}/branding/logo`, { method: 'POST', body: dati, headers });
+    if (!risposta.ok) {
+      let messaggio = `Errore ${risposta.status}`;
+      try {
+        const corpo = await risposta.json();
+        if (typeof corpo?.detail === 'string') messaggio = corpo.detail;
+      } catch { /* corpo non JSON */ }
+      throw new ApiError(risposta.status, messaggio);
+    }
+    return (await risposta.json()) as Branding;
+  },
+
   scoringModel: () => request<Record<string, unknown>>('/meta/scoring-model'),
 
   companies: (search?: string) =>

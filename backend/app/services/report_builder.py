@@ -85,6 +85,32 @@ def _impact(finding: Finding) -> str:
     }.get(finding.severity, "Vedi descrizione del rilievo.")
 
 
+def _branding_del_tenant(db: Session, tenant_id) -> dict[str, Any]:  # noqa: ANN001
+    """Personalizzazione da inserire nel report.
+
+    Il logo viaggia come data URI: WeasyPrint riceve un solo documento e non
+    deve risolvere alcun riferimento esterno durante la generazione del PDF.
+    """
+    import base64
+
+    from app.models.organization import TenantBranding
+
+    riga = db.execute(
+        select(TenantBranding).where(TenantBranding.tenant_id == tenant_id)).scalar_one_or_none()
+    if riga is None:
+        return {}
+
+    dati: dict[str, Any] = {
+        "brand_name": riga.brand_name, "brand_owner": riga.brand_owner,
+        "primary_color": riga.primary_color, "report_intro_it": riga.report_intro_it,
+        "report_footer_it": riga.report_footer_it, "contact_block_it": riga.contact_block_it,
+    }
+    if riga.logo_bytes:
+        codificato = base64.b64encode(riga.logo_bytes).decode("ascii")
+        dati["logo_data_uri"] = f"data:{riga.logo_mime or 'image/png'};base64,{codificato}"
+    return dati
+
+
 def build_report_context(db: Session, scan: Scan, *, language: str = "it",
                          unmask_pii: bool = False,
                          comparison: dict[str, Any] | None = None) -> ReportContext:
@@ -139,6 +165,7 @@ def build_report_context(db: Session, scan: Scan, *, language: str = "it",
             break
 
     return build_context(
+        branding=_branding_del_tenant(db, scan.tenant_id),
         company={"legal_name": company.legal_name, "vat_number": company.vat_number},
         scan={"profile_key": scan.profile_key, "scope_snapshot": scan.scope_snapshot_json or {}},
         score={

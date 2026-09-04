@@ -1,6 +1,8 @@
 """Generazione dei report: HTML, PDF, Word, JSON e CSV."""
 from __future__ import annotations
 
+import re
+
 import csv
 import hashlib
 import io
@@ -57,7 +59,22 @@ def _stylesheet() -> str:
 
 def render_html(context: ReportContext, template_name: str) -> str:
     template = _environment().get_template(template_name)
-    return template.render(**context.as_dict(), stylesheet=_stylesheet())
+    return template.render(**context.as_dict(), stylesheet=_stylesheet_per(context))
+
+
+def _stylesheet_per(context: ReportContext) -> str:
+    """Foglio di stile con il colore del tenant, se impostato.
+
+    Il valore e' gia' vincolato alla sola notazione esadecimale dallo schema di
+    validazione: qui viene comunque riverificato, perche' il foglio di stile non
+    passa dall'autoescape dei template.
+    """
+    base = _stylesheet()
+    colore = (context.brand or {}).get("color") or ""
+    if not re.fullmatch(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})", colore):
+        return base
+    return f"{base}\n:root {{ --brand: {colore}; }}\n" \
+           f"h1, h2 {{ color: {colore}; }}\n.cover {{ border-top: 6px solid {colore}; }}\n"
 
 
 def _slug(value: str) -> str:

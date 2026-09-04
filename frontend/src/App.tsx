@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-
 import { api, auth } from './api/client';
 import type { Company, UserProfile } from './api/types';
 import CompanyDashboard from './pages/CompanyDashboard';
+import BrandingPage from './pages/Branding';
 import CompanyManage from './pages/CompanyManage';
 import Findings from './pages/Findings';
 import Login from './pages/Login';
@@ -70,6 +71,10 @@ function Shell({ profile, companies, onLogout }:
                    className={({ isActive }) => (isActive ? 'active' : undefined)}>
             Nuova azienda
           </NavLink>
+          <NavLink to="/personalizzazione"
+                   className={({ isActive }) => (isActive ? 'active' : undefined)}>
+            Personalizzazione
+          </NavLink>
         </nav>
 
         <div>
@@ -107,6 +112,7 @@ function Shell({ profile, companies, onLogout }:
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/aziende/:companyId" element={<CompanyDashboard />} />
           <Route path="/aziende/:companyId/gestione" element={<CompanyManage />} />
+          <Route path="/personalizzazione" element={<BrandingPage />} />
           <Route path="/aziende/:companyId/scansioni" element={<Scans />} />
           <Route path="/scansioni/:scanId/rilievi" element={<Findings />} />
           <Route path="/scansioni/:scanId/remediation" element={<Remediation />} />

@@ -115,3 +115,9 @@ ul { margin: 0 0 3mm; padding-left: 5mm; }
 li { margin-bottom: 1mm; }
 .page-break { page-break-before: always; }
 .no-break { page-break-inside: avoid; }
+
+/* Personalizzazione del tenant ------------------------------------------- */
+.cover .logo { max-height: 60px; max-width: 240px; margin-bottom: 12px; }
+.intro { font-size: 10.5pt; border-left: 3px solid #ccc; padding-left: 10px; margin-bottom: 14px; }
+.contatti { margin-top: 24px; }
+.contatti p { white-space: pre-line; }

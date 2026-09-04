@@ -49,7 +49,7 @@ potenzialmente contenente prompt injection** (`backend/app/core/redaction.py`).
 | Confidenza | `backend/app/services/confidence.py` | indice 0-100 indipendente dal rating |
 | Sicurezza scansione | `scope_guard.py`, `adapters/runner.py` | anti-SSRF, default deny, esecuzione `shell=False` con argomenti ad array |
 | Reporting | Jinja2 + WeasyPrint + python-docx | PDF, DOCX, JSON, CSV in italiano (inglese opzionale) |
-| Frontend | React 18, TypeScript, Vite, Recharts | Login, Portfolio, Company Dashboard, **Gestione azienda**, Findings, Remediation, Reports, Scans |
+| Frontend | React 18, TypeScript, Vite, Recharts | Login, Portfolio, Company Dashboard, Gestione azienda, **Personalizzazione**, Findings, Remediation, Reports, Scans |
 | Deploy | Docker Compose, struttura K8s-ready | container non-root, tmpfs, limiti CPU/memoria, health check |
 
 ---

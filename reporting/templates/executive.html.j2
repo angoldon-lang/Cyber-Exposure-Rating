@@ -7,6 +7,11 @@
 {# ------------------------------ 1. Copertina ------------------------------ #}
 <section class="cover">
   <div>
+    {# Il logo arriva come data URI: nessun riferimento esterno da risolvere
+       durante la generazione del PDF. #}
+    {% if logo_data_uri %}
+      <img src="{{ logo_data_uri }}" alt="{{ brand.name }}" class="logo">
+    {% endif %}
     <h1>{{ brand.name }}<br>Exposure Rating</h1>
     <p class="subtitle">Valutazione dell'esposizione cyber osservabile dall'esterno</p>
   </div>
@@ -30,11 +35,13 @@
     </div>
   </div>
   <p class="footer-note">{{ disclaimer }}<br><br>
+    {% if footer_text %}{{ footer_text }}<br><br>{% endif %}
     Documento riservato prodotto da {{ brand.owner }}. Distribuzione limitata al destinatario.</p>
 </section>
 
 {# --------------------------- 2. Sintesi esecutiva -------------------------- #}
 <h2>Sintesi per la direzione</h2>
+{% if intro_text %}<p class="intro">{{ intro_text }}</p>{% endif %}
 {% if is_provisional %}
 <div class="callout warning">
   <strong>{{ provisional_notice }}</strong><br>
@@ -208,6 +215,13 @@
 <div class="callout">
   <strong>Disclaimer.</strong> {{ disclaimer }}
 </div>
+
+{% if contact_block %}
+<section class="contatti">
+  <h2>Contatti</h2>
+  <p>{{ contact_block }}</p>
+</section>
+{% endif %}
 
 </body>
 </html>
