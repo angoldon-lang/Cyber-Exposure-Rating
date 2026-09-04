@@ -30,6 +30,10 @@ riga "il frontend raggiunge l'API? (proxy /api/)"
 $COMPOSE exec -T frontend wget -qO- http://api:8000/api/v1/health/live 2>&1 \
   || echo "(il frontend non raggiunge l'API: problema di rete fra i container)"
 
+riga "ultime scansioni registrate"
+$COMPOSE exec -T api python - < scripts/diagnostica_scansioni.py 2>&1 \
+  || echo "(impossibile interrogare il database)"
+
 riga "il worker e' attivo e vede le code?"
 $COMPOSE exec -T worker celery -A app.workers.celery_app.celery_app inspect ping 2>&1 \
   || echo "(il worker non risponde: senza, le scansioni restano in coda)"
