@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import httpx
 
+from adapters.http_sicuro import get_seguendo_redirect
 from adapters.base import AdapterResult, AdapterStatus, BaseAdapter, NormalizedEvidence
 from adapters.synthetic import build_posture
 from app.models.enums import ConfidenceClass, ScoreCategoryKey, Severity
@@ -32,7 +33,10 @@ class RDAPAdapter(BaseAdapter):
             for domain in self.context.scope_guard.filter_targets(self.context.domains, "hostname"):
                 checked += 1
                 try:
-                    response = client.get(f"{RDAP_BOOTSTRAP}{domain}")
+                    # Il bootstrap RDAP rimanda al registro competente: senza
+                    # seguire il salto non si ottiene mai la risposta.
+                    response = get_seguendo_redirect(
+                        client, f"{RDAP_BOOTSTRAP}{domain}")
                     response.raise_for_status()
                     payload = response.json()
                 except Exception as exc:  # noqa: BLE001

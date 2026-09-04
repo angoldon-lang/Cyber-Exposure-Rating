@@ -93,10 +93,16 @@ COPY backend/requirements.txt /srv/backend/requirements.txt
 RUN pip install --no-cache-dir -r /srv/backend/requirements.txt \
     && pip install --no-cache-dir checkdmarc==5.7.4 dnstwist==20240812
 
-RUN groupadd --system --gid 10002 scanner \
-    && useradd --system --uid 10002 --gid scanner --home /srv --shell /usr/sbin/nologin scanner \
+# Stesso gruppo condiviso dell'immagine API (gid 10000): il worker scrive le
+# evidenze grezze che l'API deve poter rileggere. Utenti distinti, gruppo comune.
+RUN groupadd --system --gid 10000 defenixdata \
+    && groupadd --system --gid 10002 scanner \
+    && useradd --system --uid 10002 --gid scanner --groups defenixdata \
+       --home /srv --shell /usr/sbin/nologin scanner \
     && mkdir -p /var/lib/defenix/evidence /tmp/defenix-feeds \
-    && chown -R scanner:scanner /var/lib/defenix /tmp/defenix-feeds /srv
+    && chown -R scanner:defenixdata /var/lib/defenix \
+    && chmod -R 2775 /var/lib/defenix \
+    && chown -R scanner:scanner /tmp/defenix-feeds /srv
 
 COPY --chown=scanner:scanner backend/ /srv/backend/
 COPY --chown=scanner:scanner adapters/ /srv/adapters/
