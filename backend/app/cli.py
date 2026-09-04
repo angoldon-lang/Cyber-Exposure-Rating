@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -378,6 +379,93 @@ def demo_scan(company_slug: str | None = None, profile: str = "verified_standard
     return {"status": "ok", "scans": results}
 
 
+def run_queued(scan_id: str | None = None) -> dict:
+    """Esegue subito le scansioni in coda, senza passare da Celery.
+
+    Serve quando il worker non e' disponibile: la scansione resterebbe
+    accodata a tempo indeterminato e non c'e' modo di sbloccarla
+    dall'interfaccia. Riusa esattamente la stessa pipeline del worker, quindi
+    il risultato e' identico.
+
+    Consentito solo in modalita' simulata: con `SCAN_MOCK_MODE=false` i tool
+    verrebbero eseguiti nel processo che lancia il comando, mentre devono
+    girare esclusivamente nei worker isolati. In quel caso il comando si
+    rifiuta di procedere e indica di avviare il servizio worker.
+    """
+    from app.models.enums import ScanStatus
+    from app.services.persistence import persist_outcome
+    from app.workers.pipeline import ScanPipeline, ScanRequest
+
+    if not settings.scan_mock_mode:
+        raise SystemExit(
+            "Rifiutato: con SCAN_MOCK_MODE=false gli strumenti devono girare nei "
+            "worker isolati, non qui.\n"
+            "Avviare il servizio worker:  docker compose up -d worker")
+
+    eseguibili = {ScanStatus.QUEUED.value, ScanStatus.PENDING.value}
+    esiti: list[dict] = []
+
+    with session_scope() as db:
+        if scan_id:
+            # Indicata esplicitamente: si esegue qualunque sia lo stato. Serve a
+            # riprendere una scansione rimasta in `running` dopo un'interruzione,
+            # che altrimenti nessuno raccoglierebbe piu'.
+            query = select(Scan).where(Scan.id == uuid.UUID(scan_id))
+        else:
+            query = select(Scan).where(Scan.status.in_(eseguibili))
+        da_eseguire = [str(s.id) for s in db.execute(query).scalars().all()]
+
+    if not da_eseguire:
+        print("Nessuna scansione in coda.")
+        return {"status": "ok", "scans": []}
+
+    for identificativo in da_eseguire:
+        with session_scope() as db:
+            scan = db.get(Scan, uuid.UUID(identificativo))
+            snapshot = scan.scope_snapshot_json or {}
+            richiesta = ScanRequest(
+                scan_id=str(scan.id), tenant_id=str(scan.tenant_id),
+                company_id=str(scan.company_id), company_name=scan.company.legal_name,
+                profile=scan.profile_key,
+                domains=list(snapshot.get("domains", [])),
+                verified_domains=list(snapshot.get("verified_domains", [])),
+                ip_addresses=list(snapshot.get("ip_addresses", [])),
+                authorized_ips=list(snapshot.get("authorized_ips", [])),
+                network_ranges=list(snapshot.get("network_ranges", [])),
+                excluded_values=list(snapshot.get("excluded", [])),
+                dkim_selectors=list(snapshot.get("dkim_selectors", [])),
+                mock_mode=True)
+            scan.status = ScanStatus.RUNNING.value
+            nome = scan.company.legal_name
+
+        print(f"Eseguo {identificativo[:8]} ({nome})…")
+        try:
+            esito = ScanPipeline(richiesta).run()
+        except Exception as errore:  # noqa: BLE001
+            with session_scope() as db:
+                scan = db.get(Scan, uuid.UUID(identificativo))
+                scan.status = ScanStatus.FAILED.value
+                scan.error_message = f"{type(errore).__name__}: {errore}"[:2000]
+                scan.finished_at = datetime.now(UTC)
+            print(f"  fallita: {errore}", file=sys.stderr)
+            esiti.append({"scan_id": identificativo, "status": "failed", "error": str(errore)})
+            continue
+
+        with session_scope() as db:
+            scan = db.get(Scan, uuid.UUID(identificativo))
+            punteggio = persist_outcome(db, scan, esito)
+            esiti.append({
+                "scan_id": identificativo, "company": nome,
+                "status": scan.status,
+                "score": round(float(punteggio.overall_score), 2) if punteggio else None,
+                "class": punteggio.rating_class if punteggio else None,
+                "findings": len(esito.normalization.findings)})
+        print(f"  completata: rating {esiti[-1]['score']} classe {esiti[-1]['class']} "
+              f"({esiti[-1]['findings']} rilievi)")
+
+    return {"status": "ok", "scans": esiti}
+
+
 def show_credentials() -> None:
     if not CREDENTIALS_FILE.is_file():
         print("Nessun file di credenziali: eseguire prima `python -m app.cli seed`",
@@ -396,6 +484,9 @@ def main() -> None:
     scan_parser.add_argument("--profile", default="verified_standard",
                              choices=[p.value for p in ScanProfileType])
     subparsers.add_parser("show-credentials", help="ristampa le credenziali demo generate")
+    run_parser = subparsers.add_parser(
+        "run-queued", help="esegue subito le scansioni in coda, senza Celery")
+    run_parser.add_argument("--scan-id", default=None, help="una sola scansione")
 
     args = parser.parse_args()
     if args.command == "init-db":
@@ -412,6 +503,8 @@ def main() -> None:
             print("Cambiare le password al primo accesso e non usarle in produzione.")
     elif args.command == "demo-scan":
         print(json.dumps(demo_scan(args.company, args.profile), indent=2, ensure_ascii=False))
+    elif args.command == "run-queued":
+        print(json.dumps(run_queued(args.scan_id), indent=2, ensure_ascii=False))
     elif args.command == "show-credentials":
         show_credentials()
 

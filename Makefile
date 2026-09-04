@@ -144,6 +144,10 @@ compose-migrate: require-env ## Applica le migrazioni nel container API
 compose-seed: require-env ## Crea i dati dimostrativi nel container API
 	$(COMPOSE) exec api python -m app.cli seed
 
+.PHONY: scan-now
+scan-now: require-env ## Esegue subito le scansioni in coda senza attendere il worker
+	$(COMPOSE) exec api python -m app.cli run-queued $(if $(SCAN),--scan-id $(SCAN),)
+
 .PHONY: compose-credentials
 compose-credentials: require-env ## Ristampa le credenziali demo dal container API
 	$(COMPOSE) exec api python -m app.cli show-credentials

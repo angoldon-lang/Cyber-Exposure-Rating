@@ -367,3 +367,21 @@ def test_health_non_si_rompe_se_il_broker_e_irraggiungibile(client):  # noqa: F8
     risposta = client.get("/api/v1/health")
     assert risposta.status_code == 200
     assert risposta.json()["workers"] == 0
+
+
+# --------------------------------------------------------------------------
+# Esecuzione senza worker
+# --------------------------------------------------------------------------
+def test_run_queued_rifiuta_la_modalita_reale(monkeypatch):
+    """Con SCAN_MOCK_MODE=false gli strumenti girerebbero nel processo che
+    lancia il comando: devono restare confinati nei worker isolati."""
+    import pytest as _pytest
+
+    from app.cli import run_queued
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "scan_mock_mode", False)
+    with _pytest.raises(SystemExit) as errore:
+        run_queued()
+    assert "SCAN_MOCK_MODE=false" in str(errore.value)
+    assert "worker" in str(errore.value)
