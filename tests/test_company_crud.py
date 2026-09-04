@@ -299,3 +299,47 @@ def test_un_visualizzatore_non_puo_rimuovere_domini(client, admin, cliente):  # 
                           json={"name": "acme-prova.example"}).json()
     assert client.delete(f"/api/v1/companies/{azienda['id']}/domains/{dominio['id']}",
                          headers=cliente).status_code == 403
+
+
+# --------------------------------------------------------------------------
+# Accodamento della scansione
+# --------------------------------------------------------------------------
+def test_scansione_marcata_fallita_se_il_broker_non_risponde(client, admin, monkeypatch):  # noqa: F811
+    """Con Redis irraggiungibile la scansione non deve restare «in coda».
+
+    Nessun worker la prenderebbe mai in carico, ma l'interfaccia continuerebbe
+    a mostrarla in attesa: l'operatore non ha modo di capire che l'accodamento
+    non e' avvenuto.
+    """
+    import contextlib
+
+    azienda = _azienda(client, admin)
+    client.post(f"/api/v1/companies/{azienda['id']}/domains", headers=admin,
+                json={"name": "acme-prova.example", "is_primary": True})
+
+    def broker_irraggiungibile(*_args, **_kwargs):
+        raise ConnectionError("Error 111 connecting to redis:6379. Connection refused.")
+
+    @contextlib.contextmanager
+    def sessione_di_test():
+        """`_enqueue` apre una sessione propria: qui va ricondotta al database
+        del test, altrimenti scriverebbe altrove."""
+        db = client.session_factory()
+        try:
+            yield db
+            db.commit()
+        finally:
+            db.close()
+
+    monkeypatch.setattr("app.workers.tasks.run_scan_task.delay", broker_irraggiungibile)
+    monkeypatch.setattr("app.core.db.session_scope", sessione_di_test)
+
+    risposta = client.post(f"/api/v1/companies/{azienda['id']}/scans", headers=admin,
+                           json={"profile": "public_passive"})
+    assert risposta.status_code == 202, risposta.text
+
+    dettaglio = client.get(f"/api/v1/scans/{risposta.json()['id']}", headers=admin).json()
+    assert dettaglio["status"] == "failed", "la scansione non deve restare in coda"
+    messaggio_errore = dettaglio["error_message"] or ""
+    assert "broker" in messaggio_errore.lower()
+    assert "worker" in messaggio_errore

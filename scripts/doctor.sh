@@ -30,6 +30,21 @@ riga "il frontend raggiunge l'API? (proxy /api/)"
 $COMPOSE exec -T frontend wget -qO- http://api:8000/api/v1/health/live 2>&1 \
   || echo "(il frontend non raggiunge l'API: problema di rete fra i container)"
 
+riga "il worker e' attivo e vede le code?"
+$COMPOSE exec -T worker celery -A app.workers.celery_app.celery_app inspect ping 2>&1 \
+  || echo "(il worker non risponde: senza, le scansioni restano in coda)"
+
+riga "task registrati nel worker"
+$COMPOSE exec -T worker celery -A app.workers.celery_app.celery_app inspect registered 2>&1 \
+  | head -12 || echo "(nessun task registrato)"
+
+riga "messaggi in attesa nelle code Redis"
+$COMPOSE exec -T redis redis-cli -n 1 llen scans 2>&1 | sed 's/^/  scans: /'
+$COMPOSE exec -T redis redis-cli -n 1 llen maintenance 2>&1 | sed 's/^/  maintenance: /'
+
+riga "ultime 25 righe di log: worker"
+$COMPOSE logs --tail=25 --no-color worker 2>&1
+
 riga "ultime 25 righe di log: frontend"
 $COMPOSE logs --tail=25 --no-color frontend 2>&1
 

@@ -12,15 +12,41 @@ import Reports from './pages/Reports';
 import Scans from './pages/Scans';
 import { Spinner } from './components/ui';
 
+/** Sezioni sempre raggiungibili per l'azienda selezionata.
+ *
+ *  Prima erano linkate solo dalla dashboard, e solo quando esisteva gia' una
+ *  scansione completata: con una scansione in coda la sezione Scansioni era
+ *  irraggiungibile, proprio quando serviva per seguirne l'avanzamento. */
+function SezioniAzienda({ companyId }: { companyId: string }) {
+  const voci = [
+    { to: `/aziende/${companyId}`, etichetta: 'Dashboard', end: true },
+    { to: `/aziende/${companyId}/scansioni`, etichetta: 'Scansioni', end: false },
+    { to: `/aziende/${companyId}/gestione`, etichetta: 'Gestione', end: false },
+  ];
+  return (
+    <div className="subnav">
+      {voci.map((voce) => (
+        <NavLink key={voce.to} to={voce.to} end={voce.end}
+                 className={({ isActive }) => (isActive ? 'active' : undefined)}>
+          {voce.etichetta}
+        </NavLink>
+      ))}
+    </div>
+  );
+}
+
 function CompanyNav({ companies }: { companies: Company[] }) {
   const { companyId } = useParams();
   return (
     <nav aria-label="Aziende">
       {companies.map((company) => (
-        <NavLink key={company.id} to={`/aziende/${company.id}`}
-                 className={companyId === company.id ? 'active' : undefined}>
-          {company.legal_name}
-        </NavLink>
+        <div key={company.id}>
+          <NavLink to={`/aziende/${company.id}`}
+                   className={companyId === company.id ? 'active' : undefined}>
+            {company.legal_name}
+          </NavLink>
+          {companyId === company.id && <SezioniAzienda companyId={company.id} />}
+        </div>
       ))}
     </nav>
   );

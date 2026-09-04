@@ -195,8 +195,13 @@ def start_scan(payload: ScanCreate, company: CompanyDep, db: DbDep, context: Req
 
 
 def _enqueue(scan: Scan, email_header: str | None) -> None:
-    """Accoda la scansione su Celery; se il broker non e' raggiungibile lo
-    stato resta `queued` e un operatore puo' rilanciarla."""
+    """Accoda la scansione su Celery.
+
+    Se il broker non risponde, la scansione viene marcata come fallita con il
+    motivo. In precedenza restava `queued` a tempo indeterminato: nessun worker
+    l'avrebbe mai presa in carico, ma l'interfaccia continuava a mostrarla in
+    attesa, senza alcun modo di accorgersi che l'accodamento non era avvenuto.
+    """
     from app.core.db import session_scope
     from app.core.logging import get_logger
 
@@ -211,6 +216,15 @@ def _enqueue(scan: Scan, email_header: str | None) -> None:
                 row.celery_task_id = async_result.id
     except Exception as exc:  # noqa: BLE001
         logger.error("scan_enqueue_failed", scan_id=str(scan.id), error=str(exc))
+        with session_scope() as db:
+            row = db.get(Scan, scan.id)
+            if row is not None:
+                row.status = ScanStatus.FAILED.value
+                row.finished_at = datetime.now(UTC)
+                row.error_message = (
+                    "Accodamento non riuscito: il broker delle code non e' "
+                    f"raggiungibile ({exc}). Verificare che i servizi redis e "
+                    "worker siano attivi, poi riavviare la scansione.")
 
 
 @router.get("/scans/{scan_id}", response_model=ScanDetail)

@@ -251,3 +251,10 @@ textarea { min-height: 68px; resize: vertical; }
 
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
 .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+
+/* Sotto-voci dell'azienda selezionata nella barra laterale. */
+.subnav { display: flex; flex-direction: column; margin: 2px 0 8px 12px;
+          border-left: 1px solid rgba(255,255,255,.18); }
+.subnav a { font-size: 12px; padding: 4px 10px; opacity: .78; }
+.subnav a:hover { opacity: 1; }
+.subnav a.active { opacity: 1; font-weight: 600; }
