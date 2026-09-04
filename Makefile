@@ -161,13 +161,8 @@ compose-credentials: require-env ## Ristampa le credenziali demo dal container A
 	$(COMPOSE) exec api python -m app.cli show-credentials
 
 .PHONY: fix-evidence-perms
-fix-evidence-perms: ## Corregge i permessi del volume delle evidenze (volumi creati prima della correzione)
-	@# Docker copia proprietario e permessi dall'immagine solo quando crea il
-	@# volume: un volume gia' esistente conserva quelli vecchi, e il worker non
-	@# puo' scrivervi. Si corregge una sola volta, con un container temporaneo.
-	$(COMPOSE) run --rm --user root --entrypoint sh api -c \
-		'chgrp -R 10000 /var/lib/defenix && chmod -R 2775 /var/lib/defenix && \
-		 echo "permessi corretti:" && ls -ld /var/lib/defenix/evidence'
+fix-evidence-perms: ## Corregge i permessi dei volumi condivisi (creati prima della correzione)
+	@bash scripts/ripara_permessi.sh
 
 .PHONY: harden-db
 harden-db: require-env ## Revoca UPDATE/DELETE sull'audit log (dopo le migrazioni)

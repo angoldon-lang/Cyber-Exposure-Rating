@@ -114,3 +114,59 @@ def test_consente_un_nome_che_risolve_a_indirizzo_pubblico(monkeypatch):
 def test_destinazioni_sempre_rifiutate(url):
     consentito, _ = destinazione_consentita(url)
     assert not consentito, f"{url} non doveva essere consentito"
+
+
+# --------------------------------------------------------------------------
+# Evidenze grezze non conservate
+# --------------------------------------------------------------------------
+def test_la_perdita_di_evidenze_grezze_e_riportata(monkeypatch):
+    """Un permesso mancante sul volume non deve restare confinato nei log.
+
+    L'evidenza grezza dimostra da dove viene un rilievo: se non viene
+    conservata, chi legge il dettaglio della scansione deve saperlo.
+    """
+    import errno
+    import uuid as _uuid
+    from types import SimpleNamespace
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from app.models import Base
+    from app.models.scanning import Scan
+    from app.services import persistence
+
+    monkeypatch.setattr(persistence, "store_raw_output",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            OSError(errno.EACCES, "Permission denied")))
+
+    motore = create_engine("sqlite://", connect_args={"check_same_thread": False},
+                           poolclass=StaticPool, future=True)
+    Base.metadata.create_all(motore)
+    with sessionmaker(bind=motore, future=True)() as db:
+        scan = Scan(tenant_id=_uuid.uuid4(), company_id=_uuid.uuid4(),
+                    profile_key="public_passive", status="running", mock_mode=True)
+        db.add(scan)
+        db.flush()
+
+        esito = SimpleNamespace(
+            tool_runs=[{"tool_key": "dns", "status": "success", "target_count": 1},
+                       {"tool_key": "kev", "status": "success", "target_count": 0}],
+            raw_outputs={"dns": b"contenuto grezzo", "kev": b"altro"})
+        _, persi = persistence._persist_tool_runs(db, scan, esito)
+
+    assert persi == ["dns", "kev"], "gli strumenti con evidenza persa vanno riportati tutti"
+    motore.dispose()
+
+
+def test_il_messaggio_indica_come_rimediare():
+    """Chi legge il dettaglio deve sapere anche cosa fare."""
+    import inspect
+
+    from app.services import persistence
+
+    sorgente = inspect.getsource(persistence.persist_outcome)
+    assert "raw_evidence_not_stored" in sorgente
+    assert "fix-evidence-perms" in sorgente
+    assert "I rilievi restano validi" in sorgente

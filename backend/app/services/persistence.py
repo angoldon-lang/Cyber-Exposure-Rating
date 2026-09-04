@@ -60,7 +60,7 @@ def persist_outcome(db: Session, scan: Scan, outcome: ScanOutcome) -> Score:
     }
 
     asset_ids = _persist_assets(db, scan, outcome, now)
-    tool_run_ids = _persist_tool_runs(db, scan, outcome)
+    tool_run_ids, raw_non_salvati = _persist_tool_runs(db, scan, outcome)
     _persist_evidences(db, scan, outcome, asset_ids, tool_run_ids, now)
     _persist_findings(db, scan, outcome, asset_ids, remediation_ids, now)
     score = _persist_score(db, scan, outcome, now)
@@ -69,7 +69,17 @@ def persist_outcome(db: Session, scan: Scan, outcome: ScanOutcome) -> Score:
     scan.progress_percent = 100
     scan.current_stage = "completed"
     scan.finished_at = now
-    scan.stats_json = outcome.stats
+    statistiche = dict(outcome.stats)
+    if raw_non_salvati:
+        # Visibile nel dettaglio della scansione, non solo nei log del worker.
+        statistiche["raw_evidence_not_stored"] = sorted(raw_non_salvati)
+        scan.error_message = (
+            "Evidenze grezze non conservate per: "
+            + ", ".join(sorted(raw_non_salvati))
+            + ". I rilievi restano validi, ma l'output originale degli strumenti "
+              "non e' disponibile per la verifica. Controllare i permessi del "
+              "volume delle evidenze (make fix-evidence-perms).")
+    scan.stats_json = statistiche
     scan.scoring_config_version = outcome.scoring.config_version
     db.flush()
     return score
@@ -119,8 +129,14 @@ def _persist_assets(db: Session, scan: Scan, outcome: ScanOutcome,
     return ids
 
 
-def _persist_tool_runs(db: Session, scan: Scan, outcome: ScanOutcome) -> dict[str, uuid.UUID]:
+def _persist_tool_runs(db: Session, scan: Scan,
+                       outcome: ScanOutcome) -> tuple[dict[str, uuid.UUID], list[str]]:
     ids: dict[str, uuid.UUID] = {}
+    # Strumenti il cui output originale non e' stato conservato. L'evidenza
+    # grezza e' cio' che permette di dimostrare da dove viene un rilievo: se va
+    # persa la scansione resta utilizzabile, ma il fatto non puo' restare
+    # confinato nei log del worker.
+    raw_non_salvati: list[str] = []
     for record in outcome.tool_runs:
         raw_reference: str | None = None
         raw_payload = outcome.raw_outputs.get(record["tool_key"])
@@ -128,7 +144,9 @@ def _persist_tool_runs(db: Session, scan: Scan, outcome: ScanOutcome) -> dict[st
             try:
                 raw_reference, _ = store_raw_output(str(scan.id), record["tool_key"], raw_payload)
             except OSError as exc:  # pragma: no cover
-                logger.warning("raw_output_store_failed", tool=record["tool_key"], error=str(exc))
+                raw_non_salvati.append(record["tool_key"])
+                logger.error("raw_output_store_failed", tool=record["tool_key"], error=str(exc),
+                             scan_id=str(scan.id))
         run = ToolRun(
             tenant_id=scan.tenant_id, scan_id=scan.id, tool_key=record["tool_key"],
             tool_version=record.get("tool_version"), status=record["status"],
@@ -145,7 +163,7 @@ def _persist_tool_runs(db: Session, scan: Scan, outcome: ScanOutcome) -> dict[st
         db.add(run)
         db.flush()
         ids[record["tool_key"]] = run.id
-    return ids
+    return ids, raw_non_salvati
 
 
 def _persist_evidences(db: Session, scan: Scan, outcome: ScanOutcome,
