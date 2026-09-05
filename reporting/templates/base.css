@@ -18,7 +18,12 @@
     font-size: 7.5pt; color: #8a8f98;
   }
 }
-@page :first { margin: 0; }
+/* La copertina occupa l'intera pagina, senza margini. La regola e' legata alla
+   pagina denominata e non a `:first`: i due documenti (esecutivo e allegato)
+   vengono renderizzati separatamente e le pagine concatenate, quindi `:first`
+   colpiva anche la prima pagina dell'allegato, che finiva contro il bordo. */
+@page copertina { margin: 0; }
+.cover { page: copertina; }
 
 :root {
   --ink: #12161c;
