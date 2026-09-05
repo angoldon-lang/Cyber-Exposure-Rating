@@ -155,6 +155,7 @@ def build_report_context(db: Session, scan: Scan, *, language: str = "it",
         "critical": sum(1 for f in findings if f.severity == "critical"),
         "high": sum(1 for f in findings if f.severity == "high"),
     }
+    inventario = _inventario_asset(asset_rows, unmask_pii=unmask_pii)
 
     from app.core.config import load_yaml_config
 
@@ -191,4 +192,43 @@ def build_report_context(db: Session, scan: Scan, *, language: str = "it",
         quick_win_items=[item.as_dict() for item in quick_wins(plan_items)],
         comparison=comparison,
         coverage_matrix=(score.confidence.coverage_matrix_json or []) if score.confidence else [],
-        exposure=exposure, language=language, unmask_pii=unmask_pii)
+        exposure=exposure, asset_inventory=inventario,
+        language=language, unmask_pii=unmask_pii)
+
+
+TIPI_ASSET_IT = {
+    "domain": "Domini", "subdomain": "Sottodomini", "ip_address": "Indirizzi IP",
+    "network_range": "Reti", "asn": "Sistemi autonomi", "web_service": "Servizi web",
+    "mail_service": "Servizi di posta", "network_service": "Servizi di rete",
+    "email_address": "Indirizzi e-mail", "brand": "Marchi", "certificate": "Certificati",
+}
+
+
+def _inventario_asset(righe: list[Asset], *, unmask_pii: bool) -> list[dict[str, Any]]:
+    """Elenco degli asset osservati, raggruppato per tipo.
+
+    Gli asset scomparsi restano, marcati: un asset non piu' osservato puo'
+    essere un servizio dismesso oppure un servizio che non ha risposto, e sono
+    due cose diverse che il lettore deve poter distinguere.
+
+    Il nome mostrato e' `display_name`, gia' mascherato all'origine per gli
+    indirizzi e-mail; la chiave in chiaro compare solo per il ruolo
+    autorizzato a vedere i dati personali.
+    """
+    gruppi: dict[str, list[dict[str, Any]]] = {}
+    for riga in sorted(righe, key=lambda r: (r.asset_type, r.display_name)):
+        nome = riga.asset_key if (unmask_pii and riga.asset_type == "email_address") \
+            else riga.display_name
+        tecnologie = ", ".join(
+            " ".join(str(p) for p in (t.get("name"), t.get("version")) if p)
+            for t in (riga.technologies_json or []))
+        gruppi.setdefault(riga.asset_type, []).append({
+            "name": nome,
+            "ownership": riga.ownership_status,
+            "technologies": tecnologie,
+            "discovered_by": ", ".join(riga.discovered_by_json or []),
+            "disappeared": riga.disappeared_at is not None,
+            "excluded": riga.excluded_from_rating,
+        })
+    return [{"type": tipo, "label_it": TIPI_ASSET_IT.get(tipo, tipo), "items": voci}
+            for tipo, voci in sorted(gruppi.items(), key=lambda v: -len(v[1]))]

@@ -96,6 +96,10 @@ class ReportContext:
     comparison: dict[str, Any] | None
     coverage_matrix: list[dict[str, Any]]
     exposure_summary: dict[str, Any]
+    # Elenco degli asset osservati, raggruppato per tipo. Il riepilogo dava
+    # solo i conteggi: un numero non e' verificabile, e l'allegato tecnico
+    # esiste proprio per permettere la verifica.
+    asset_inventory: list[dict[str, Any]]
     applied_caps: list[dict[str, Any]]
     brand: dict[str, str]
     disclaimer: str = DISCLAIMER_IT
@@ -120,6 +124,7 @@ class ReportContext:
             "findings": self.findings, "remediation_plan": self.remediation_plan,
             "quick_wins": self.quick_wins, "comparison": self.comparison,
             "coverage_matrix": self.coverage_matrix, "exposure_summary": self.exposure_summary,
+            "asset_inventory": self.asset_inventory,
             "applied_caps": self.applied_caps, "brand": self.brand,
             "intro_text": self.intro_text, "footer_text": self.footer_text,
             "contact_block": self.contact_block, "logo_data_uri": self.logo_data_uri,
@@ -147,6 +152,7 @@ def build_context(*, company: dict[str, Any], scan: dict[str, Any], score: dict[
                   findings: list[dict[str, Any]], remediation_plan: list[dict[str, Any]],
                   quick_win_items: list[dict[str, Any]], comparison: dict[str, Any] | None,
                   coverage_matrix: list[dict[str, Any]], exposure: dict[str, Any],
+                  asset_inventory: list[dict[str, Any]] | None = None,
                   language: str = "it", unmask_pii: bool = False,
                   branding: dict[str, Any] | None = None) -> ReportContext:
     profiles = load_yaml_config("tool_profiles").get("profiles", {})
@@ -177,6 +183,7 @@ def build_context(*, company: dict[str, Any], scan: dict[str, Any], score: dict[
         top_risks=ranked[:5], findings=sanitized,
         remediation_plan=remediation_plan, quick_wins=quick_win_items,
         comparison=comparison, coverage_matrix=coverage_matrix, exposure_summary=exposure,
+        asset_inventory=list(asset_inventory or []),
         applied_caps=list(score.get("applied_caps", [])),
         disclaimer=disclaimer_for(profile_key),
         intro_text=(branding or {}).get("report_intro_it"),

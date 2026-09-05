@@ -553,7 +553,7 @@ function SchedaRete({ companyId }: { companyId: string }) {
                   <td><code>{voce.address}</code></td>
                   <td>
                     {voce.cloud_provider ?? voce.asn_org ?? <span className="muted">n/d</span>}
-                    {voce.is_cdn && <> <Chip tone="warn">CDN</Chip></>}
+                    {voce.is_cdn && <> <Chip tone="medium">CDN</Chip></>}
                   </td>
                   <td className="muted small">{voce.reverse_dns ?? '—'}</td>
                   <td>

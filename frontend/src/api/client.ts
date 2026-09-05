@@ -1,5 +1,6 @@
 /** Client HTTP tipizzato verso l'API Defenix. */
 import type {
+  Asset, AssetSummary,
   Authorization, AuthorizationPreview, Branding, Company, CompanyInput, DashboardOverview,
   Domain,
   Finding, Health, IPAddressEntry, NetworkRangeEntry, Page, PortfolioView, PurgeResult,
@@ -161,6 +162,12 @@ export const api = {
   deleteNetwork: (companyId: string, networkId: string) =>
     request<void>(`/companies/${companyId}/networks/${networkId}`, { method: 'DELETE' }),
   dashboard: (id: string) => request<DashboardOverview>(`/companies/${id}/dashboard`),
+
+  // --- inventario degli asset ----------------------------------------------
+  assets: (companyId: string, params: Record<string, string> = {}) =>
+    request<Page<Asset>>(`/companies/${companyId}/assets?${new URLSearchParams(params)}`),
+  assetsSummary: (companyId: string) =>
+    request<AssetSummary>(`/companies/${companyId}/assets/summary`),
   portfolio: () => request<PortfolioView>('/portfolio'),
 
   scans: (companyId: string) => request<Page<Scan>>(`/companies/${companyId}/scans`),

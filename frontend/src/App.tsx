@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { api, auth } from './api/client';
 import type { Company, UserProfile } from './api/types';
+import Assets from './pages/Assets';
 import CompanyDashboard from './pages/CompanyDashboard';
 import BrandingPage from './pages/Branding';
 import CompanyManage from './pages/CompanyManage';
@@ -22,6 +23,7 @@ function SezioniAzienda({ companyId }: { companyId: string }) {
   const voci = [
     { to: `/aziende/${companyId}`, etichetta: 'Dashboard', end: true },
     { to: `/aziende/${companyId}/scansioni`, etichetta: 'Scansioni', end: false },
+    { to: `/aziende/${companyId}/asset`, etichetta: 'Asset', end: false },
     { to: `/aziende/${companyId}/gestione`, etichetta: 'Gestione', end: false },
   ];
   return (
@@ -114,6 +116,7 @@ function Shell({ profile, companies, onLogout }:
           <Route path="/aziende/:companyId/gestione" element={<CompanyManage />} />
           <Route path="/personalizzazione" element={<BrandingPage />} />
           <Route path="/aziende/:companyId/scansioni" element={<Scans />} />
+          <Route path="/aziende/:companyId/asset" element={<Assets />} />
           <Route path="/scansioni/:scanId/rilievi" element={<Findings />} />
           <Route path="/scansioni/:scanId/remediation" element={<Remediation />} />
           <Route path="/scansioni/:scanId/report" element={<Reports />} />

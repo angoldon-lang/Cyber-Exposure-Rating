@@ -252,10 +252,33 @@ class AssetRead(ORMModel):
     display_name: str
     ownership_status: str
     ownership_reason: str | None
+    ownership_confidence: float
     is_internet_facing: bool
     is_cdn_fronted: bool
+    is_third_party_hosted: bool
     excluded_from_rating: bool
+    exclusion_reason: str | None
     first_seen_at: datetime
     last_seen_at: datetime
     disappeared_at: datetime | None
     technologies_json: list | None
+    # Senza questi due campi l'inventario dice *cosa* e' stato trovato ma non
+    # *come*: un asset non verificabile e' un asset di cui non ci si puo'
+    # fidare, e la fonte e' la prima cosa che un analista controlla.
+    attributes_json: dict | None
+    discovered_by_json: list | None
+
+
+class AssetSummary(BaseModel):
+    """Conteggi dell'inventario, indipendenti dalla pagina mostrata.
+
+    Derivarli dagli elementi della pagina corrente darebbe numeri diversi a
+    ogni filtro e a ogni scorrimento: sarebbero conteggi della vista, non
+    dell'inventario.
+    """
+
+    total: int
+    disappeared: int
+    by_type: dict[str, int]
+    by_ownership: dict[str, int]
+    by_tool: dict[str, int]

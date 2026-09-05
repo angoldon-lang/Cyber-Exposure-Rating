@@ -310,6 +310,35 @@ export interface ScopeEntry {
   note: string | null;
 }
 
+export interface Asset {
+  id: string;
+  asset_key: string;
+  asset_type: string;
+  display_name: string;
+  ownership_status: string;
+  ownership_reason: string | null;
+  ownership_confidence: number;
+  is_internet_facing: boolean;
+  is_cdn_fronted: boolean;
+  is_third_party_hosted: boolean;
+  excluded_from_rating: boolean;
+  exclusion_reason: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  disappeared_at: string | null;
+  technologies_json: Array<Record<string, unknown>> | null;
+  attributes_json: Record<string, unknown> | null;
+  discovered_by_json: string[] | null;
+}
+
+export interface AssetSummary {
+  total: number;
+  disappeared: number;
+  by_type: Record<string, number>;
+  by_ownership: Record<string, number>;
+  by_tool: Record<string, number>;
+}
+
 export interface IPAddressEntry {
   id: string;
   address: string;

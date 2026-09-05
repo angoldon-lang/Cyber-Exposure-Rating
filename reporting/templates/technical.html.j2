@@ -89,6 +89,35 @@
   {% endif %}
 {% endfor %}
 
+{# ------------------------ Inventario degli asset -------------------------- #}
+{% if asset_inventory %}
+<h3 class="page-break">Asset osservati</h3>
+<p class="small muted">
+  Elenco di cio' che la rilevazione ha attribuito all'organizzazione, con lo strumento
+  che lo ha individuato. Gli asset marcati come non piu' osservati non vengono rimossi:
+  un asset scomparso puo' essere un servizio dismesso oppure un servizio che non ha
+  risposto durante la rilevazione, e sono due situazioni diverse. Gli asset di terze
+  parti sono elencati per completezza ma esclusi dal calcolo del rating.
+</p>
+{% for gruppo in asset_inventory %}
+<h4>{{ gruppo.label_it }} ({{ gruppo['items']|length }})</h4>
+<table>
+  <thead><tr><th>Asset</th><th style="width:32mm">Proprieta'</th>
+    <th style="width:40mm">Tecnologie</th><th style="width:38mm">Individuato da</th></tr></thead>
+  <tbody>
+  {% for voce in gruppo['items'] %}
+    <tr><td><span class="code">{{ voce.name }}</span>
+      {%- if voce.disappeared %} <span class="badge">non piu' osservato</span>{% endif %}
+      {%- if voce.excluded %} <span class="badge">escluso dal rating</span>{% endif %}</td>
+      <td class="small">{{ ownership_label.get(voce.ownership, voce.ownership) }}</td>
+      <td class="small">{{ voce.technologies or '—' }}</td>
+      <td class="small">{{ voce.discovered_by or '—' }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+{% endif %}
+
 {# --------------------- Piano di remediation completo ---------------------- #}
 <h3 class="page-break">Piano di remediation</h3>
 <table>

@@ -122,7 +122,8 @@ export default function CompanyDashboard() {
         <StatTile label="Affidabilita’ rilevazione"
                   value={data.confidence !== null ? `${data.confidence.toFixed(0)}%` : '—'}
                   hint={data.confidence_label_it} />
-        <StatTile label="Asset osservati" value={assets.total ?? 0}
+        <StatTile label="Asset osservati"
+                  value={<Link to={`/aziende/${companyId}/asset`}>{assets.total ?? 0}</Link>}
                   hint={`${assets.verified_owned ?? 0} verificati · ${assets.third_party ?? 0} di terzi (esclusi)`} />
         <StatTile label="Rilievi critici" value={data.severity_counts?.critical ?? 0}
                   tone={(data.severity_counts?.critical ?? 0) > 0 ? 'var(--status-critical)' : undefined}
@@ -176,7 +177,7 @@ export default function CompanyDashboard() {
         <div className="card">
           <div className="section-head">
             <h2>Indirizzi IP pubblici</h2>
-            <Chip tone={(data.ip_perimeter.candidates ?? 0) > 0 ? 'medium' : 'neutral'}>
+            <Chip tone={(data.ip_perimeter.candidates ?? 0) > 0 ? 'medium' : 'info'}>
               {data.ip_perimeter.discovered} individuati
             </Chip>
           </div>

@@ -17,7 +17,7 @@ from app.api.deps import (
 from app.core.config import load_yaml_config
 from app.core.rbac import Permission
 from app.models.audit import AuditLog
-from app.core.redaction import sanitize_text
+from app.core.redaction import mask_email, sanitize_text
 from app.models.enums import AuditAction
 from app.models.organization import Connector, Tenant, TenantBranding
 from app.models.scope import Asset
@@ -29,7 +29,7 @@ from app.schemas.organization import (
     TenantCreate,
     TenantRead,
 )
-from app.schemas.scope import AssetRead
+from app.schemas.scope import AssetRead, AssetSummary
 from app.services.audit import record_audit, verify_chain
 
 router = APIRouter(tags=["admin"])
@@ -112,10 +112,48 @@ def audit_integrity(db: DbDep,
     return {**result, "checked_at": datetime.now(UTC).isoformat()}
 
 
+def _asset_leggibile(riga: Asset, unmask: bool) -> AssetRead:
+    """Converte un asset rispettando il mascheramento dei dati personali.
+
+    `display_name` era gia' mascherato all'origine, ma `asset_key` no: per un
+    indirizzo e-mail la chiave e' l'indirizzo in chiaro, ed e' quella che
+    l'inventario mostra come identita' dell'asset. Senza questo passaggio la
+    lista degli asset restituirebbe l'indirizzo completo a chiunque possa
+    leggerla, vanificando il mascheramento applicato ovunque altro.
+    """
+    lettura = AssetRead.model_validate(riga)
+    if riga.asset_type == "email_address" and not unmask:
+        lettura = lettura.model_copy(update={"asset_key": mask_email(riga.asset_key)})
+    return lettura
+
+
+@router.get("/companies/{company_id}/assets/summary", response_model=AssetSummary)
+def assets_summary(company: CompanyDep, db: DbDep) -> AssetSummary:
+    """Composizione dell'inventario: per tipo, per proprieta' e per strumento."""
+    righe = db.execute(select(Asset).where(Asset.company_id == company.id)).scalars().all()
+    per_tipo: dict[str, int] = {}
+    per_proprieta: dict[str, int] = {}
+    per_strumento: dict[str, int] = {}
+    for riga in righe:
+        per_tipo[riga.asset_type] = per_tipo.get(riga.asset_type, 0) + 1
+        per_proprieta[riga.ownership_status] = per_proprieta.get(riga.ownership_status, 0) + 1
+        for strumento in riga.discovered_by_json or []:
+            per_strumento[str(strumento)] = per_strumento.get(str(strumento), 0) + 1
+    return AssetSummary(
+        total=len(righe),
+        disappeared=sum(1 for r in righe if r.disappeared_at is not None),
+        by_type=dict(sorted(per_tipo.items(), key=lambda v: -v[1])),
+        by_ownership=dict(sorted(per_proprieta.items(), key=lambda v: -v[1])),
+        by_tool=dict(sorted(per_strumento.items(), key=lambda v: -v[1])))
+
+
 @router.get("/companies/{company_id}/assets", response_model=Page[AssetRead])
-def list_assets(company: CompanyDep, db: DbDep, asset_type: str | None = None,
-                ownership_status: str | None = None, include_disappeared: bool = True,
-                page: int = 1, page_size: int = Query(default=100, le=500)) -> Page[AssetRead]:
+def list_assets(company: CompanyDep, db: DbDep, current: CurrentUserDep,
+                asset_type: str | None = None, ownership_status: str | None = None,
+                include_disappeared: bool = True, discovered_by: str | None = None,
+                q: str | None = None, page: int = 1,
+                page_size: int = Query(default=100, le=500)) -> Page[AssetRead]:
+    unmask = current.has(Permission.PII_UNMASK)
     conditions = [Asset.company_id == company.id]
     if asset_type:
         conditions.append(Asset.asset_type == asset_type)
@@ -123,11 +161,33 @@ def list_assets(company: CompanyDep, db: DbDep, asset_type: str | None = None,
         conditions.append(Asset.ownership_status == ownership_status)
     if not include_disappeared:
         conditions.append(Asset.disappeared_at.is_(None))
+    if q:
+        # La ricerca corre su `display_name` e non su `asset_key`: per gli
+        # indirizzi e-mail la chiave e' in chiaro e il nome mostrato e'
+        # mascherato. Cercare sulla chiave permetterebbe di confermare un
+        # indirizzo completo a chi non ha il permesso di vederlo.
+        termine = f"%{q.strip().lower()}%"
+        conditions.append(func.lower(Asset.display_name).like(termine))
+    ordinamento = (Asset.asset_type, Asset.asset_key)
+    if discovered_by:
+        # Lo strumento di scoperta sta in una colonna JSON e il confronto in
+        # SQL non e' portabile fra SQLite e PostgreSQL: il filtro resta in
+        # Python, e per questo va applicato PRIMA di impaginare. Applicarlo
+        # dopo darebbe pagine parzialmente vuote e un totale che non
+        # corrisponde a cio' che si vede.
+        tutte = db.execute(select(Asset).where(*conditions)
+                           .order_by(*ordinamento)).scalars().all()
+        filtrate = [r for r in tutte if discovered_by in (r.discovered_by_json or [])]
+        inizio = (page - 1) * page_size
+        return Page[AssetRead](
+            items=[_asset_leggibile(r, unmask) for r in filtrate[inizio:inizio + page_size]],
+            total=len(filtrate), page=page, page_size=page_size)
+
     total = db.execute(select(func.count()).select_from(Asset).where(*conditions)).scalar_one()
     rows = db.execute(
-        select(Asset).where(*conditions).order_by(Asset.asset_type, Asset.asset_key)
+        select(Asset).where(*conditions).order_by(*ordinamento)
         .offset((page - 1) * page_size).limit(page_size)).scalars().all()
-    return Page[AssetRead](items=[AssetRead.model_validate(r) for r in rows],
+    return Page[AssetRead](items=[_asset_leggibile(r, unmask) for r in rows],
                            total=total, page=page, page_size=page_size)
 
 

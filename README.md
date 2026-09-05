@@ -175,6 +175,22 @@ Gli asset sono classificati come *Verified Owned*, *Likely Owned*, *Unverified*,
 *Third Party*, *Excluded*: solo i primi due influenzano il rating, i secondi con
 regole piu' restrittive.
 
+### Inventario degli asset
+
+Ogni asset attribuito all'azienda e' consultabile in *Asset* (sotto la scheda
+dell'azienda), con il tipo, lo stato di proprieta', le tecnologie rilevate e
+**lo strumento che lo ha individuato**: la provenienza e' la prima cosa da
+controllare per stabilire se ci si possa fidare di un asset. Lo stesso elenco
+compare nell'allegato tecnico del report.
+
+Gli asset non piu' osservati non vengono cancellati ma marcati: un asset
+scomparso puo' essere un servizio dismesso oppure un servizio che non ha
+risposto durante la rilevazione, e sono due situazioni diverse.
+
+Gli indirizzi e-mail sono mostrati mascherati; l'indirizzo completo e'
+visibile solo ai ruoli con il permesso `pii:unmask`, e la ricerca opera sul
+nome mascherato per non permettere di confermare un indirizzo per tentativi.
+
 ### Perimetro di rete
 
 Gli indirizzi IP raggiunti dai domini in perimetro vengono classificati a ogni
