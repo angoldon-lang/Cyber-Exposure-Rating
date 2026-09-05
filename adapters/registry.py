@@ -30,6 +30,7 @@ from adapters.spiderfoot_adapter import SpiderFootAdapter
 from adapters.subfinder_adapter import SubfinderAdapter
 from adapters.testssl_adapter import TestSSLAdapter
 from adapters.vulnintel_adapter import VulnerabilityIntelligenceAdapter
+from adapters.xposedornot_adapter import XposedOrNotAdapter
 from app.core.config import load_yaml_config
 from app.core.logging import get_logger
 
@@ -48,6 +49,7 @@ ADAPTER_CLASSES: dict[str, type[BaseAdapter]] = {
     RansomwareLiveAdapter.key: RansomwareLiveAdapter,
     HIBPAdapter.key: HIBPAdapter,
     CredentialExposureAdapter.key: CredentialExposureAdapter,
+    XposedOrNotAdapter.key: XposedOrNotAdapter,
     VulnerabilityIntelligenceAdapter.key: VulnerabilityIntelligenceAdapter,
     # --- Fase 2 ---
     AmassAdapter.key: AmassAdapter,

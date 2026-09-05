@@ -90,6 +90,7 @@ class ScanPipeline:
     # ------------------------------------------------------------------
     def build_context(self, *, known_subdomains: Sequence[str] = (),
                       web_targets: Sequence[str] = (),
+                      discovered_emails: Sequence[str] = (),
                       extra_tool_config: dict[str, Any] | None = None) -> AdapterContext:
         ownership = self._ownership_context()
         guard = build_scope_guard_from_ownership(
@@ -111,6 +112,7 @@ class ScanPipeline:
             email_header=self.request.email_header,
             dkim_selectors=list(self.request.dkim_selectors),
             known_subdomains=list(known_subdomains),
+            discovered_emails=list(discovered_emails),
             web_targets=list(web_targets),
             mock_mode=self.request.mock_mode,
             tool_config=tool_config,
@@ -141,17 +143,24 @@ class ScanPipeline:
         subdomains = sorted({asset.asset_key for result in discovery_results
                              for asset in result.assets
                              if asset.asset_type in {"subdomain", "domain"}})
+        # Gli indirizzi e-mail emersi in discovery sono l'input delle verifiche
+        # sulle violazioni: senza questo passaggio XposedOrNot non ha nulla da
+        # cercare e la sezione dark web resta vuota.
+        discovered_emails = sorted({asset.asset_key for result in discovery_results
+                                    for asset in result.assets
+                                    if asset.asset_type == "email_address"})
         self.progress("discovery_completed", 35)
 
         # --- Fase 2: analisi (posta, web, TLS, dark web) ---
         analysis_context = self.build_context(
             known_subdomains=subdomains,
+            discovered_emails=discovered_emails,
             web_targets=[f"https://{host}" for host in subdomains[:200]])
         analysis_adapters = build_adapters(
             analysis_context,
             only=["checkdmarc", "httpx", "testssl", "zap_baseline", "naabu", "nuclei",
-                  "ransomware_live", "hibp", "credential_exposure", "dnstwist",
-                  "email_header"])
+                  "ransomware_live", "hibp", "credential_exposure", "xposedornot",
+                  "dnstwist", "email_header"])
         analysis_results = self._execute(analysis_adapters, stage="analysis", base_percent=40)
         self.progress("analysis_completed", 70)
 

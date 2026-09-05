@@ -159,6 +159,10 @@ class AdapterContext:
     email_header: str | None = None
     dkim_selectors: list[str] = field(default_factory=list)
     known_subdomains: list[str] = field(default_factory=list)
+    # Indirizzi e-mail emersi dalla fase di discovery (SpiderFoot e simili).
+    # Sono separati da `email_addresses`, che contiene quelli dichiarati: la
+    # provenienza cambia l'affidabilita' e va conservata.
+    discovered_emails: list[str] = field(default_factory=list)
     web_targets: list[str] = field(default_factory=list)
     mock_mode: bool = True
     tool_config: dict[str, Any] = field(default_factory=dict)

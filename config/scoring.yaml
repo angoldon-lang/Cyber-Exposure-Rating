@@ -761,6 +761,61 @@ rules:
     decay: breach_old
     remediation: REM-CRED-ROTATION
 
+  # Esposizione degli indirizzi e-mail. La detrazione per singola violazione e'
+  # volutamente piccola: e' un fatto per coppia (indirizzo, violazione) e in
+  # un'organizzazione di media dimensione se ne contano decine. Il peso vero
+  # sta su DW-EMAIL-CRED-RECENT, che e' una sola per indirizzo e corrisponde a
+  # un rimedio concreto: cambiare quella password adesso.
+  - id: DW-EMAIL-IN-BREACH
+    category: darkweb_breach
+    match: {finding_type: "email_exposed_in_breach"}
+    severity: low
+    deduction: 1
+    max_deduction: 12
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: credential_exposure
+    decay: breach_old
+    remediation: REM-CRED-ROTATION
+
+  - id: DW-EMAIL-CRED-RECENT
+    category: darkweb_breach
+    match: {finding_type: "email_credentials_recently_exposed"}
+    severity: high
+    deduction: 8
+    max_deduction: 32
+    min_confidence: confirmed
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: credential_exposure
+    decay: breach_recent
+    remediation: REM-CRED-ROTATION
+
+  - id: DW-EMAIL-PASTE
+    category: darkweb_breach
+    match: {finding_type: "email_in_public_paste"}
+    severity: medium
+    deduction: 3
+    max_deduction: 12
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type]
+    root_cause_group: darkweb_exposure
+    remediation: REM-MON-SOC
+
+  - id: DW-LEAKSITE-CONTENT
+    category: darkweb_breach
+    match: {finding_type: "organisation_data_on_leak_site"}
+    severity: high
+    deduction: 12
+    max_deduction: 24
+    min_confidence: probable
+    required_ownership: likely_owned
+    dedup_key: [asset_key, finding_type, detail]
+    root_cause_group: darkweb_exposure
+    remediation: REM-MON-SOC
+
   - id: DW-LOOKALIKE-DOMAIN
     category: darkweb_breach
     match: {finding_type: "lookalike_domain_registered"}

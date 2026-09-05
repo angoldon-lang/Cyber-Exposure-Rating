@@ -140,6 +140,7 @@ rilascio: possono cambiare fra versioni.
 | RDAP | protocollo standard | gratuito | politiche per registro |
 | Ransomware.live | progetto AGPL-3.0, API pubblica | gratuito | **uso dell'API, non del codice**; verificare i termini per l'uso commerciale |
 | **Have I Been Pwned** | **servizio commerciale** | **a pagamento** | **NON open source.** Richiede abbonamento; i termini limitano la ridistribuzione dei dati |
+| XposedOrNot | API pubblica, progetto open source | gratuito, senza registrazione | limiti severi per indirizzo IP: 2 richieste al secondo, 25 all'ora, 100 al giorno. L'endpoint per dominio richiede invece API key e validazione del dominio sul portale della fonte: **non e' usato** |
 
 > Un connettore open source **non** implica che la fonte sia gratuita.
 > La matrice di copertura (`GET /api/v1/coverage-matrix`) distingue le fonti

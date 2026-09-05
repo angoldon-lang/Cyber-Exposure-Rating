@@ -22,7 +22,8 @@ profiles:
       - fuzzing
       - intrusive_checks
     tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
-            ransomware_live, hibp, credential_exposure, dnstwist_passive, kev, epss]
+            ransomware_live, hibp, credential_exposure, xposedornot,
+            dnstwist_passive, kev, epss]
 
   verified_standard:
     label_it: "Verified Standard Check"
@@ -39,7 +40,7 @@ profiles:
       - data_modification
       - fuzzing
     tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
-            ransomware_live, hibp, credential_exposure, dnstwist, kev, epss,
+            ransomware_live, hibp, credential_exposure, xposedornot, dnstwist, kev, epss,
             httpx, testssl, zap_baseline, amass_passive, email_header]
 
   verified_extended:
@@ -64,7 +65,7 @@ profiles:
       - destructive_exploits
       - third_party_scanning
     tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
-            ransomware_live, hibp, credential_exposure, dnstwist, kev, epss,
+            ransomware_live, hibp, credential_exposure, xposedornot, dnstwist, kev, epss,
             httpx, testssl, zap_baseline, amass, email_header,
             naabu, nmap, nuclei]
 
@@ -124,6 +125,11 @@ tools:
     coverage_areas: [attack_surface, darkweb_breach]
     coverage_weight: 1.0
     # Moduli ammessi per profilo: nessun modulo attivo nel profilo passivo.
+    # I moduli di raccolta indirizzi (sfp_skymem, sfp_emailformat, sfp_email)
+    # devono precedere quelli sulle violazioni: sfp_psbdmp, sfp_ahmia e
+    # sfp_haveibeenpwned lavorano sugli EMAILADDR prodotti dai primi. Senza i
+    # raccoglitori i moduli sulle violazioni non ricevono alcun input e la
+    # sezione dark web resta vuota anche quando l'esposizione esiste.
     modules:
       public_passive:
         - sfp_dnsresolve
@@ -132,6 +138,10 @@ tools:
         - sfp_threatcrowd
         - sfp_whois
         - sfp_email
+        - sfp_skymem
+        - sfp_emailformat
+        - sfp_psbdmp
+        - sfp_haveibeenpwned
         - sfp_ahmia
         - sfp_similar
         - sfp_pastebin
@@ -141,20 +151,26 @@ tools:
         - sfp_hackertarget
         - sfp_whois
         - sfp_email
+        - sfp_skymem
+        - sfp_emailformat
+        - sfp_psbdmp
+        - sfp_haveibeenpwned
         - sfp_ahmia
         - sfp_similar
         - sfp_pastebin
         - sfp_webframework
-        - sfp_httpheaders
       verified_extended:
         - sfp_dnsresolve
         - sfp_crt
         - sfp_whois
         - sfp_email
+        - sfp_skymem
+        - sfp_emailformat
+        - sfp_psbdmp
+        - sfp_haveibeenpwned
         - sfp_ahmia
         - sfp_similar
         - sfp_webframework
-        - sfp_httpheaders
         - sfp_portscan_tcp
     forbidden_modules:
       - sfp_bruteforce
@@ -162,8 +178,12 @@ tools:
       - sfp_tool_nmap
       - sfp_tool_nuclei
     notes: >-
-      Alcune fonti usate da SpiderFoot richiedono API key a pagamento.
-      Le key sono gestite dal Connector registry, non hardcoded.
+      Alcune fonti usate da SpiderFoot richiedono API key a pagamento
+      (sfp_haveibeenpwned, sfp_dehashed, sfp_hunter, sfp_intelx): senza key il
+      modulo non produce eventi e non fa fallire la scansione. I moduli
+      gratuiti su indirizzi e violazioni sono sfp_skymem, sfp_emailformat,
+      sfp_psbdmp e sfp_ahmia. Le key sono gestite dal Connector registry,
+      non hardcoded.
 
   checkdmarc:
     label: "checkdmarc"
@@ -262,6 +282,30 @@ tools:
       indirizzo e chiave si configurano. Nessuna password viene mai letta o
       memorizzata: della credenziale si registra solo l'esistenza, con
       l'identita' mascherata.
+
+  xposedornot:
+    label: "XposedOrNot (indirizzi e-mail in violazioni)"
+    kind: http_api
+    passive: true
+    phase: 1
+    timeout_seconds: 300
+    coverage_areas: [darkweb_breach]
+    coverage_weight: 1.0
+    base_url: "https://api.xposedornot.com/v1"
+    # La fonte e' gratuita e senza API key, ma limitata per indirizzo IP a
+    # 2 richieste al secondo, 25 all'ora e 100 al giorno: oltre questi numeri
+    # risponde 429. Da qui il tetto di indirizzi per scansione e la pausa.
+    max_targets: 20
+    seconds_between_requests: 0.6
+    # L'oggetto della verifica e' l'indirizzo, non la credenziale: di ogni
+    # violazione si conservano nome, anno, dimensione e categorie di dato.
+    # Nessuna password viene mai letta.
+    only_verified_domains: false
+    notes: >-
+      Fonte gratuita e senza registrazione per sapere quali indirizzi
+      dell'organizzazione compaiono in violazioni di dati pubblicate.
+      L'endpoint per dominio richiede invece una API key e la validazione
+      del dominio sul portale della fonte: non e' usato.
 
   kev:
     label: "CISA Known Exploited Vulnerabilities"
