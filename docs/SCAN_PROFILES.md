@@ -21,9 +21,11 @@ Utilizzabile senza alcuna autorizzazione perche' consulta esclusivamente
 fonti pubbliche: non tocca l'infrastruttura del target.
 
 **Fonti:** DNS pubblico, RDAP, Certificate Transparency, enumerazione passiva
-dei sottodomini, OSINT via SpiderFoot (solo moduli passivi), configurazione
+dei sottodomini, classificazione degli indirizzi IP pubblici (reverse DNS e
+rete RDAP), OSINT via SpiderFoot (solo moduli passivi), configurazione
 e-mail pubblicata in DNS, leak site ransomware, fonti di data breach,
-domini simili, CISA KEV ed EPSS.
+indirizzi e-mail esposti in violazioni (XposedOrNot), domini simili,
+CISA KEV ed EPSS.
 
 **Vietato:** port scanning, vulnerability scanning, brute force, crawling
 aggressivo, tentativi di autenticazione, exploit, fuzzing, verifiche
@@ -83,6 +85,35 @@ Naabu (MIT) e' preferito a Nmap: la Nmap Public Source License limita la
 redistribuzione in prodotti commerciali. L'adapter Nmap resta previsto per
 installazioni che dispongano di una licenza propria; l'alias di default punta
 a Naabu.
+
+## Il perimetro degli indirizzi IP
+
+I domini in perimetro risolvono su indirizzi IP, e quegli indirizzi espongono
+servizi. Non tutti sono pero' sondabili.
+
+A ogni scansione, in **tutti** i profili, gli indirizzi raggiunti vengono
+arricchiti con il reverse DNS e con la rete RDAP e classificati:
+
+| Classificazione | Significato | Scansione attiva |
+|---|---|---|
+| Rete condivisa | edge di CDN o reverse proxy (Cloudflare, Akamai, Fastly...): risponde per molti clienti insieme | **mai**, in nessun profilo |
+| Hosting | l'istanza e' del cliente, la rete e' del fornitore (AWS, Azure, OVH, Aruba...) | ammessa se autorizzata |
+| Rete propria | assegnazione diretta o hosting dedicato | ammessa se autorizzata |
+
+Gli indirizzi entrano nel perimetro come **inventario**, mai come autorizzati:
+una scansione non puo' autorizzare se stessa. L'autorizzazione e' un atto
+esplicito dell'analista, in *Gestione azienda → Perimetro di rete*, registrato
+nel log di audit con l'identita' di chi l'ha compiuto. Il motivo non e'
+formale: sondare porte su un indirizzo che non appartiene al cliente e' un
+fatto di cui qualcuno deve rispondere.
+
+Il rifiuto di autorizzare un indirizzo di CDN e' applicato dal server, non
+dall'interfaccia: l'API risponde 409 anche a una richiesta costruita a mano.
+
+Conseguenza pratica: nel profilo Extended il port scanning non parte finche'
+nessun indirizzo e' autorizzato, e lo dichiara — «N indirizzi IP pubblici
+individuati, nessuno coperto da un'autorizzazione esplicita» — invece di
+risultare semplicemente senza rilievi.
 
 ## Gate di autorizzazione
 

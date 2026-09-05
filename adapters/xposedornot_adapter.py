@@ -261,19 +261,18 @@ class XposedOrNotAdapter(BaseAdapter):
             posture = build_posture(self.context.seed(dominio), dominio,
                                     self.context.company_name,
                                     severity_bias=self.context.severity_bias)
-            # Le violazioni sintetiche sono le stesse usate dagli altri
-            # adapter dark web: in mock mode le fonti devono raccontare la
-            # stessa azienda, altrimenti la deduplicazione non e' verificabile.
-            violazioni = [{"breach": str(v["name"]), "domain": "",
-                           "year": str(v["year"]), "records": int(v["account_count"]) * 1000,
-                           "data": [str(c) for c in v.get("classes", [])]}
-                          for v in posture.breaches]
-            for indice, locale in enumerate(("mario.rossi", "info", "amministrazione")):
-                indirizzo = f"{locale}@{dominio}"
-                quota = violazioni[: max(0, len(violazioni) - indice)]
-                asset.append(self._asset(indirizzo, len(quota)))
-                raw[mask_email(indirizzo)] = {"breaches": len(quota)}
-                evidenze.extend(self._evidenze(indirizzo, quota))
+            per_indirizzo: dict[str, list[dict[str, Any]]] = {}
+            for esposizione in posture.email_exposures:
+                per_indirizzo.setdefault(str(esposizione["address"]), []).append({
+                    "breach": str(esposizione["breach"]),
+                    "domain": "",
+                    "year": str(esposizione["year"]),
+                    "records": int(esposizione["records"]),
+                    "data": [str(c) for c in esposizione["classes"]]})
+            for indirizzo, violazioni in sorted(per_indirizzo.items()):
+                asset.append(self._asset(indirizzo, len(violazioni)))
+                raw[mask_email(indirizzo)] = {"breaches": len(violazioni)}
+                evidenze.extend(self._evidenze(indirizzo, violazioni))
         return AdapterResult(tool=self.key, status=AdapterStatus.SUCCESS, evidences=evidenze,
                              assets=asset, was_mocked=True, tool_version="XposedOrNot v1 (mock)",
                              target_count=len(asset), raw_output=self.dump_json(raw))

@@ -14,9 +14,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.models.enums import FindingWorkflowState
+from app.models.enums import FindingWorkflowState, OwnershipStatus
 from app.models.scanning import Evidence, Finding, Remediation, Scan, ToolRun
-from app.models.scope import Asset
+from app.models.scope import Asset, IPAddress
 from app.models.scoring import ConfidenceScore, Score, ScoreCategory
 from app.services.remediation import catalog, remediation_for_finding
 from app.workers.pipeline import ScanOutcome, store_raw_output
@@ -60,6 +60,7 @@ def persist_outcome(db: Session, scan: Scan, outcome: ScanOutcome) -> Score:
     }
 
     asset_ids = _persist_assets(db, scan, outcome, now)
+    _persist_ip_inventory(db, scan, outcome)
     tool_run_ids, raw_non_salvati = _persist_tool_runs(db, scan, outcome)
     _persist_evidences(db, scan, outcome, asset_ids, tool_run_ids, now)
     _persist_findings(db, scan, outcome, asset_ids, remediation_ids, now)
@@ -127,6 +128,48 @@ def _persist_assets(db: Session, scan: Scan, outcome: ScanOutcome,
             row.disappeared_at = now
     db.flush()
     return ids
+
+
+def _persist_ip_inventory(db: Session, scan: Scan, outcome: ScanOutcome) -> None:
+    """Registra nel perimetro gli indirizzi IP pubblici scoperti.
+
+    Un indirizzo scoperto entra come inventario, MAI come autorizzato: la
+    scansione non puo' autorizzare se stessa. L'autorizzazione resta un atto
+    dell'analista, registrato nel log di audit.
+
+    Per lo stesso motivo un indirizzo gia' autorizzato non viene mai
+    declassato da una scansione successiva: revocare un'autorizzazione e'
+    anch'esso un atto esplicito.
+    """
+    esistenti = {
+        riga.address: riga
+        for riga in db.execute(
+            select(IPAddress).where(IPAddress.company_id == scan.company_id)).scalars().all()
+    }
+    for asset in outcome.normalization.assets:
+        if asset.asset_type != "ip_address":
+            continue
+        attributi = asset.attributes or {}
+        if "network_type" not in attributi:
+            # Asset prodotto da un adapter che non classifica la rete: senza
+            # classificazione non c'e' nulla da registrare oltre a cio' che
+            # gia' esiste.
+            continue
+        riga = esistenti.get(asset.asset_key)
+        if riga is None:
+            riga = IPAddress(
+                tenant_id=scan.tenant_id, company_id=scan.company_id,
+                address=asset.asset_key, version=6 if ":" in asset.asset_key else 4,
+                ownership_status=OwnershipStatus.UNVERIFIED.value)
+            db.add(riga)
+            esistenti[asset.asset_key] = riga
+        riga.asn = attributi.get("asn")
+        riga.asn_org = (attributi.get("asn_org") or "")[:255] or None
+        riga.reverse_dns = (attributi.get("reverse_dns") or "")[:253] or None
+        riga.is_cdn = bool(attributi.get("is_cdn"))
+        riga.is_shared_hosting = attributi.get("network_type") == "condivisa"
+        riga.cloud_provider = (attributi.get("provider") or "")[:64] or None
+    db.flush()
 
 
 def _persist_tool_runs(db: Session, scan: Scan,

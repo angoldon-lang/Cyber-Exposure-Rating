@@ -86,11 +86,14 @@ class ScanPipeline:
         self.scoring_engine = scoring_engine or ScoringEngine()
         self.confidence_engine = confidence_engine or ConfidenceEngine()
         self.profile_definition = profile_definition(request.profile)
+        self.ip_perimeter_summary: dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     def build_context(self, *, known_subdomains: Sequence[str] = (),
                       web_targets: Sequence[str] = (),
                       discovered_emails: Sequence[str] = (),
+                      resolved_ips: dict[str, list[str]] | None = None,
+                      ip_addresses: Sequence[str] | None = None,
                       extra_tool_config: dict[str, Any] | None = None) -> AdapterContext:
         ownership = self._ownership_context()
         guard = build_scope_guard_from_ownership(
@@ -105,7 +108,8 @@ class ScanPipeline:
             profile=self.request.profile, scope_guard=guard,
             domains=list(self.request.domains),
             verified_domains=list(self.request.verified_domains),
-            ip_addresses=list(self.request.ip_addresses),
+            ip_addresses=list(self.request.ip_addresses if ip_addresses is None
+                              else ip_addresses),
             network_ranges=list(self.request.network_ranges),
             brands=list(self.request.brands),
             email_addresses=list(self.request.email_addresses),
@@ -113,6 +117,7 @@ class ScanPipeline:
             dkim_selectors=list(self.request.dkim_selectors),
             known_subdomains=list(known_subdomains),
             discovered_emails=list(discovered_emails),
+            resolved_ips=dict(resolved_ips or {}),
             web_targets=list(web_targets),
             mock_mode=self.request.mock_mode,
             tool_config=tool_config,
@@ -151,10 +156,27 @@ class ScanPipeline:
                                     if asset.asset_type == "email_address"})
         self.progress("discovery_completed", 35)
 
+        # --- Fase 1b: perimetro IP -------------------------------------
+        # Gli indirizzi raggiunti dai domini vanno classificati prima della
+        # fase attiva: senza sapere quali appartengono a una CDN, il port
+        # scanning non ha bersagli leciti da proporre.
+        perimeter_context = self.build_context(
+            resolved_ips=_resolved_ips(discovery_results))
+        perimeter_results = self._execute(
+            build_adapters(perimeter_context, only=["ip_perimeter"]),
+            stage="ip_perimeter", base_percent=35)
+        ip_addresses = sorted({asset.asset_key for result in perimeter_results
+                               for asset in result.assets
+                               if asset.asset_type == "ip_address"}
+                              | set(self.request.ip_addresses))
+        self.ip_perimeter_summary = _riepilogo_perimetro_ip(
+            perimeter_results, set(self.request.authorized_ips))
+
         # --- Fase 2: analisi (posta, web, TLS, dark web) ---
         analysis_context = self.build_context(
             known_subdomains=subdomains,
             discovered_emails=discovered_emails,
+            ip_addresses=ip_addresses,
             web_targets=[f"https://{host}" for host in subdomains[:200]])
         analysis_adapters = build_adapters(
             analysis_context,
@@ -177,7 +199,7 @@ class ScanPipeline:
         intel_results = self._execute(build_adapters(intel_context, only=["kev"]),
                                       stage="vulnerability_intelligence", base_percent=80)
 
-        all_results = discovery_results + analysis_results + intel_results
+        all_results = discovery_results + perimeter_results + analysis_results + intel_results
         output = normalization.run(all_results)
 
         # --- Fase 5: scoring deterministico ---
@@ -199,6 +221,7 @@ class ScanPipeline:
             normalization=output, scoring=scoring, confidence=confidence,
             raw_outputs={r.tool: r.raw_output for r in all_results if r.raw_output},
             stats={**output.stats,
+                   "ip_perimeter": self.ip_perimeter_summary,
                    "duration_seconds": (datetime.now(UTC) - started).total_seconds(),
                    "tools_total": len(all_results),
                    "tools_failed": failed,
@@ -302,6 +325,50 @@ class ScanPipeline:
 
 
 # ---------------------------------------------------------------------------
+def _resolved_ips(results: Sequence[AdapterResult]) -> dict[str, list[str]]:
+    """Indirizzo -> domini che lo risolvono, dagli asset della discovery."""
+    mappa: dict[str, set[str]] = {}
+    for result in results:
+        for asset in result.assets:
+            if asset.asset_type != "ip_address":
+                continue
+            origine = asset.attributes.get("from_domain")
+            mappa.setdefault(asset.asset_key, set())
+            if origine:
+                mappa[asset.asset_key].add(str(origine).lower())
+            for relazione in asset.relationships:
+                if relazione.get("type") == "resolves_to" and relazione.get("source"):
+                    mappa[asset.asset_key].add(str(relazione["source"]).lower())
+    return {indirizzo: sorted(domini) for indirizzo, domini in mappa.items()}
+
+
+def _riepilogo_perimetro_ip(results: Sequence[AdapterResult],
+                            autorizzati: set[str]) -> dict[str, Any]:
+    """Quanti indirizzi pubblici, quanti autorizzati, quanti esclusi e perche'.
+
+    Serve al report e alla dashboard: un port scanning che non trova nulla
+    perche' nessun indirizzo e' autorizzato non deve somigliare a un port
+    scanning che non trova nulla perche' non c'e' nulla.
+    """
+    classificati = [asset for result in results for asset in result.assets
+                    if asset.asset_type == "ip_address"]
+    if not classificati:
+        return {}
+    candidati = [a for a in classificati
+                 if a.attributes.get("scannable") and a.asset_key not in autorizzati]
+    terzi = [a for a in classificati if not a.attributes.get("scannable")]
+    return {
+        "discovered": len(classificati),
+        "authorized": len([a for a in classificati if a.asset_key in autorizzati]),
+        "candidates": len(candidati),
+        "third_party": len(terzi),
+        "candidate_addresses": sorted(a.asset_key for a in candidati)[:50],
+        "third_party_addresses": sorted(
+            {f"{a.asset_key} ({a.attributes.get('provider') or 'fornitore non identificato'})"
+             for a in terzi})[:50],
+    }
+
+
 def store_raw_output(scan_id: str, tool_key: str, payload: bytes,
                      base_path: Path | None = None) -> tuple[str, str]:
     """Salva l'output grezzo in uno storage protetto (accesso ristretto ai

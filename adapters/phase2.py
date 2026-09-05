@@ -340,9 +340,19 @@ class NaabuAdapter(BaseAdapter):
     def execute(self) -> AdapterResult:
         ips = self.context.scope_guard.filter_targets(self.context.ip_addresses, "ip")
         if not ips:
-            return AdapterResult(tool=self.key, status=AdapterStatus.SKIPPED,
-                                 error_message="nessun IP con autorizzazione esplicita",
-                                 coverage_impact=self.coverage_weight)
+            # Distinguere i due casi cambia l'azione dell'operatore: se nessun
+            # indirizzo e' stato trovato il perimetro e' incompleto, se ne sono
+            # stati trovati ma nessuno e' autorizzato manca solo un consenso.
+            scoperti = len([a for a in self.context.ip_addresses if a])
+            return AdapterResult(
+                tool=self.key, status=AdapterStatus.SKIPPED,
+                error_message=(
+                    f"{scoperti} indirizzi IP pubblici individuati, nessuno coperto da "
+                    "un'autorizzazione esplicita: autorizzarli in Gestione azienda "
+                    "prima di eseguire il port scanning"
+                    if scoperti else
+                    "nessun indirizzo IP pubblico individuato per i domini in perimetro"),
+                coverage_impact=self.coverage_weight)
         ports = ",".join(str(p) for p in self.config.get("default_ports", [80, 443]))
         from adapters.runner import TemporaryWorkspace
 

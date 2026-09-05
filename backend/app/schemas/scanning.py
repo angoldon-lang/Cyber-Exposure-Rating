@@ -268,6 +268,11 @@ class DashboardOverview(BaseModel):
     # e' indistinguibile da un'area controllata e risultata pulita: il rating
     # e' alto in entrambi i casi, ma significano cose opposte.
     coverage_gaps: list[dict[str, Any]] = []
+    # Quanti indirizzi IP pubblici sono stati individuati, quanti sono
+    # autorizzati alla scansione attiva e quanti appartengono a
+    # infrastruttura condivisa di terzi. Un port scanning senza risultati
+    # perche' nessun indirizzo e' autorizzato non e' un port scanning pulito.
+    ip_perimeter: dict[str, Any] = {}
     review_progress: dict[str, Any]
     last_scan: dict[str, Any] | None
     open_remediations: int

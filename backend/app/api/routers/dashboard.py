@@ -113,6 +113,7 @@ def company_dashboard(company: CompanyDep, db: DbDep) -> DashboardOverview:
         severity_counts=severity_counts, trend=trend, assets=asset_counts,
         email_posture=email_posture, darkweb=darkweb,
         coverage_gaps=_coverage_gaps(db, scan) if scan else [],
+        ip_perimeter=dict((scan.stats_json or {}).get("ip_perimeter") or {}) if scan else {},
         review_progress={k: v for k, v in progress.items() if k != "computed_at"},
         last_scan={"id": str(scan.id), "profile": scan.profile_key, "status": scan.status,
                    "started_at": scan.started_at.isoformat() if scan.started_at else None,

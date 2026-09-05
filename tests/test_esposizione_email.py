@@ -208,3 +208,29 @@ def test_i_nuovi_tipi_hanno_una_regola_di_scoring():
     for tipo in ("email_exposed_in_breach", "email_credentials_recently_exposed",
                  "email_in_public_paste", "organisation_data_on_leak_site"):
         assert tipo in regole, f"nessuna regola di scoring per '{tipo}'"
+
+
+# ------------------------------------------------------------------- demo
+def test_i_dati_sintetici_mostrano_sempre_almeno_un_indirizzo_esposto(adapter_context):
+    """In mock mode la verifica sulle violazioni deve vedersi sempre.
+
+    L'esposizione sintetica derivava dall'elenco di violazioni dell'azienda
+    demo, che per molti seed e' vuoto: la sezione restava vuota e la funzione
+    sembrava non funzionare.
+    """
+    esito = XposedOrNotAdapter(adapter_context).run()
+    per_violazione = [e for e in esito.evidences
+                      if e.finding_type == "email_exposed_in_breach"]
+    assert per_violazione, "nessuna esposizione nei dati sintetici"
+    assert all("@" in e.asset_key for e in per_violazione)
+
+
+def test_in_mock_mode_le_due_fonti_non_contano_due_volte(adapter_context):
+    """Le due fonti raccontano la stessa azienda sintetica: se le impronte
+    divergessero, la demo mostrerebbe il doppio dei rilievi reali."""
+    da_xon = {e.fingerprint for e in XposedOrNotAdapter(adapter_context).run().evidences
+              if e.finding_type == "email_exposed_in_breach"}
+    da_sf = {e.fingerprint for e in SpiderFootAdapter(adapter_context).run().evidences
+             if e.finding_type == "email_exposed_in_breach"}
+    assert da_sf and da_xon
+    assert da_sf == da_xon, "le due fonti producono impronte diverse per gli stessi fatti"

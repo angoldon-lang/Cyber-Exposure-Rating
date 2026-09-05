@@ -15,6 +15,7 @@ from adapters.dns_adapter import DNSAdapter
 from adapters.credential_exposure_adapter import CredentialExposureAdapter
 from adapters.hibp_adapter import HIBPAdapter
 from adapters.httpx_adapter import HTTPXAdapter
+from adapters.ip_perimeter_adapter import IPPerimeterAdapter
 from adapters.phase2 import (
     AILAdapter,
     AmassAdapter,
@@ -41,6 +42,7 @@ ADAPTER_CLASSES: dict[str, type[BaseAdapter]] = {
     DNSAdapter.key: DNSAdapter,
     RDAPAdapter.key: RDAPAdapter,
     CertificateTransparencyAdapter.key: CertificateTransparencyAdapter,
+    IPPerimeterAdapter.key: IPPerimeterAdapter,
     SubfinderAdapter.key: SubfinderAdapter,
     SpiderFootAdapter.key: SpiderFootAdapter,
     CheckDMARCAdapter.key: CheckDMARCAdapter,

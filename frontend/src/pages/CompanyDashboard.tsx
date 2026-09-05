@@ -172,6 +172,34 @@ export default function CompanyDashboard() {
         </div>
       </div>
 
+      {(data.ip_perimeter?.discovered ?? 0) > 0 && (
+        <div className="card">
+          <div className="section-head">
+            <h2>Indirizzi IP pubblici</h2>
+            <Chip tone={(data.ip_perimeter.candidates ?? 0) > 0 ? 'medium' : 'neutral'}>
+              {data.ip_perimeter.discovered} individuati
+            </Chip>
+          </div>
+          <p className="muted small">
+            Il port scanning agisce solo sugli indirizzi autorizzati. Gli indirizzi di CDN e
+            reverse proxy rispondono per molti clienti insieme e non sono mai bersaglio:
+            sondarli significherebbe sondare l’infrastruttura del fornitore.
+          </p>
+          <div className="grid grid--3">
+            <StatTile label="Autorizzati alla scansione attiva"
+                      value={data.ip_perimeter.authorized ?? 0} />
+            <StatTile label="Individuati ma non autorizzati"
+                      value={data.ip_perimeter.candidates ?? 0}
+                      hint={(data.ip_perimeter.candidates ?? 0) > 0
+                        ? 'Autorizzabili in Gestione azienda → Perimetro di rete'
+                        : undefined} />
+            <StatTile label="Infrastruttura condivisa di terzi"
+                      value={data.ip_perimeter.third_party ?? 0}
+                      hint={data.ip_perimeter.third_party_addresses?.slice(0, 3).join(', ')} />
+          </div>
+        </div>
+      )}
+
       {data.coverage_gaps.length > 0 && (
         <div className="card">
           <div className="section-head">

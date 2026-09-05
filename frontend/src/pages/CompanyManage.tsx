@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
 import type {
-  Authorization, Company, CompanyInput, Domain, ScopeEntry,
+  Authorization, Company, CompanyInput, Domain, IPAddressEntry, NetworkRangeEntry, ScopeEntry,
 } from '../api/types';
 import {
   Banner, Chip, ConfirmButton, Empty, Field, Spinner, formatDate, formatDateTime,
@@ -478,6 +478,148 @@ function SchedaAutorizzazioni({ companyId }: { companyId: string }) {
 }
 
 /** Archiviazione e cancellazione definitiva. */
+function SchedaRete({ companyId }: { companyId: string }) {
+  const [indirizzi, setIndirizzi] = useState<IPAddressEntry[] | null>(null);
+  const [reti, setReti] = useState<NetworkRangeEntry[] | null>(null);
+  const [nuovoIp, setNuovoIp] = useState('');
+  const [nuovaRete, setNuovaRete] = useState('');
+  const [errore, setErrore] = useState<string | null>(null);
+
+  const ricarica = useCallback(() => {
+    api.ips(companyId).then(setIndirizzi).catch((e) => setErrore(messaggio(e)));
+    api.networks(companyId).then(setReti).catch((e) => setErrore(messaggio(e)));
+  }, [companyId]);
+  useEffect(ricarica, [ricarica]);
+
+  async function esegui(azione: () => Promise<unknown>) {
+    setErrore(null);
+    try { await azione(); ricarica(); }
+    catch (e) { setErrore(messaggio(e)); }
+  }
+
+  const candidati = (indirizzi ?? []).filter((i) => !i.authorized && !i.is_cdn);
+
+  return (
+    <div className="card">
+      <h2>Perimetro di rete</h2>
+      <p className="muted small">
+        Gli indirizzi raggiunti dai domini in perimetro vengono scoperti a ogni scansione e
+        aggiunti qui come inventario. Il port scanning del profilo Extended agisce solo su
+        quelli autorizzati: l’autorizzazione e’ una decisione esplicita, registrata nel log
+        di audit. Gli indirizzi di CDN e reverse proxy non sono autorizzabili, perche’
+        rispondono per molti clienti insieme.
+      </p>
+      {errore && <Banner kind="danger">{errore}</Banner>}
+
+      <div className="toolbar">
+        <input type="text" value={nuovoIp} onChange={(e) => setNuovoIp(e.target.value)}
+               placeholder="203.0.113.10" style={{ minWidth: 200 }} />
+        <button className="btn" disabled={nuovoIp.trim().length < 2}
+                onClick={() => esegui(async () => {
+                  await api.addIp(companyId, { address: nuovoIp.trim() });
+                  setNuovoIp('');
+                })}>
+          Aggiungi indirizzo
+        </button>
+        {candidati.length > 0 && (
+          <button className="btn secondary"
+                  onClick={() => esegui(async () => {
+                    for (const voce of candidati) {
+                      await api.setIpAuthorization(companyId, voce.id, true);
+                    }
+                  })}>
+            Autorizza i {candidati.length} indirizzi non ancora autorizzati
+          </button>
+        )}
+      </div>
+
+      {!indirizzi ? <Spinner /> : indirizzi.length === 0 ? (
+        <Empty>
+          Nessun indirizzo IP nel perimetro. Vengono aggiunti automaticamente dalla prima
+          scansione, oppure inseriti qui a mano.
+        </Empty>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Indirizzo</th><th>Rete</th><th>Reverse DNS</th>
+                <th>Scansione attiva</th><th />
+              </tr>
+            </thead>
+            <tbody>
+              {indirizzi.map((voce) => (
+                <tr key={voce.id}>
+                  <td><code>{voce.address}</code></td>
+                  <td>
+                    {voce.cloud_provider ?? voce.asn_org ?? <span className="muted">n/d</span>}
+                    {voce.is_cdn && <> <Chip tone="warn">CDN</Chip></>}
+                  </td>
+                  <td className="muted small">{voce.reverse_dns ?? '—'}</td>
+                  <td>
+                    {voce.is_cdn ? (
+                      <span className="muted small">non autorizzabile</span>
+                    ) : (
+                      <label className="small">
+                        <input type="checkbox" checked={voce.authorized}
+                               onChange={(e) => esegui(() => api.setIpAuthorization(
+                                 companyId, voce.id, e.target.checked))} />
+                        {' '}{voce.authorized ? 'autorizzata' : 'non autorizzata'}
+                      </label>
+                    )}
+                  </td>
+                  <td>
+                    <ConfirmButton label="Rimuovi" confirmLabel={`Rimuovere ${voce.address}?`}
+                                   onConfirm={() => esegui(() => api.deleteIp(companyId, voce.id))} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <h3 style={{ marginTop: 20 }}>Reti autorizzate</h3>
+      <p className="muted small">
+        Una rete autorizzata copre tutti gli indirizzi che contiene, presenti e futuri.
+        Il limite e’ /16.
+      </p>
+      <div className="toolbar">
+        <input type="text" value={nuovaRete} onChange={(e) => setNuovaRete(e.target.value)}
+               placeholder="203.0.113.0/24" style={{ minWidth: 200 }} />
+        <button className="btn" disabled={nuovaRete.trim().length < 4}
+                onClick={() => esegui(async () => {
+                  await api.addNetwork(companyId, { cidr: nuovaRete.trim() });
+                  setNuovaRete('');
+                })}>
+          Aggiungi rete
+        </button>
+      </div>
+      {!reti ? <Spinner /> : reti.length === 0 ? (
+        <Empty>Nessuna rete dichiarata.</Empty>
+      ) : (
+        <table className="data">
+          <thead><tr><th>Rete</th><th>Descrizione</th><th /></tr></thead>
+          <tbody>
+            {reti.map((rete) => (
+              <tr key={rete.id}>
+                <td><code>{rete.cidr}</code></td>
+                <td className="muted small">{rete.description ?? '—'}</td>
+                <td>
+                  <ConfirmButton label="Rimuovi" confirmLabel={`Rimuovere ${rete.cidr}?`}
+                                 onConfirm={() => esegui(
+                                   () => api.deleteNetwork(companyId, rete.id))} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+
 function ZonaPericolosa({ azienda, onCambio }: {
   azienda: Company; onCambio: (azienda: Company | null) => void;
 }) {
@@ -592,6 +734,7 @@ export default function CompanyManage() {
         <>
           <SchedaDomini companyId={azienda.id} onCambio={() => setVersione((v) => v + 1)} />
           <SchedaAutorizzazioni companyId={azienda.id} />
+          <SchedaRete companyId={azienda.id} />
           <ZonaPericolosa azienda={azienda} onCambio={(a) => a && setAzienda(a)} />
         </>
       )}

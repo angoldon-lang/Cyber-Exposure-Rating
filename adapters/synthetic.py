@@ -109,6 +109,11 @@ class SyntheticPosture:
     email: dict[str, Any] = field(default_factory=dict)
     vulnerabilities: list[dict[str, Any]] = field(default_factory=list)
     breaches: list[dict[str, Any]] = field(default_factory=list)
+    # Indirizzi dell'azienda sintetica e violazioni in cui compaiono. E' un
+    # dato a se' e non un derivato di `breaches`: le fonti che lo leggono
+    # devono vedere sempre la stessa esposizione, altrimenti in demo la
+    # sezione resta vuota a seconda del seed e la funzione sembra rotta.
+    email_exposures: list[dict[str, Any]] = field(default_factory=list)
     stealer_logs: list[dict[str, Any]] = field(default_factory=list)
     ransomware: list[dict[str, Any]] = field(default_factory=list)
     lookalikes: list[dict[str, Any]] = field(default_factory=list)
@@ -242,6 +247,23 @@ def build_posture(seed: int, domain: str, company_name: str, *, severity_bias: f
             "breach_date": datetime(entry["year"], dw_rng.randint(1, 12), dw_rng.randint(1, 28), tzinfo=UTC).isoformat(),
             "is_recent": (now.year - entry["year"]) <= 3,
         })
+    # --- esposizione degli indirizzi e-mail ---------------------------
+    email_rng = _rng(seed, "email_exposure")
+    for indice, locale in enumerate(("mario.rossi", "info", "amministrazione")):
+        # Il primo indirizzo e' sempre esposto: senza almeno un caso la demo
+        # non mostrerebbe mai la verifica sulle violazioni.
+        quante = max(1 - indice, 0) + int(email_rng.random() * 3 * (0.5 + severity_bias))
+        if not quante:
+            continue
+        for violazione in email_rng.sample(BREACH_POOL, min(quante, len(BREACH_POOL))):
+            posture.email_exposures.append({
+                "address": f"{locale}@{domain}",
+                "breach": violazione["name"],
+                "year": violazione["year"],
+                "classes": list(violazione["classes"]),
+                "records": email_rng.randint(10_000, 5_000_000),
+            })
+
     if dw_rng.random() < 0.35 * (1 + severity_bias):
         posture.stealer_logs.append({
             "account_count": dw_rng.randint(1, 12),

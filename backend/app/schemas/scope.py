@@ -5,10 +5,11 @@ import ipaddress
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, computed_field, field_validator
 
 from app.models.enums import ScanProfileType, ScopeAction, ScopeEntryType, VerificationMethod
 from app.schemas.common import ORMModel
+from app.services.ip_perimeter import indirizzo_pubblico
 from app.services.scope_guard import ScopeViolation, normalize_hostname
 
 
@@ -115,6 +116,94 @@ class ScopeEntryRead(ORMModel):
     action: str
     is_active: bool
     note: str | None
+
+
+class IPAddressCreate(BaseModel):
+    """Indirizzo IP da inserire nel perimetro.
+
+    `authorized` traduce la decisione dell'analista: un indirizzo autorizzato
+    diventa bersaglio ammissibile per la scansione attiva, uno non autorizzato
+    resta soltanto inventario. Il valore predefinito e' la non autorizzazione:
+    sondare un indirizzo e' un'azione che va scelta, non subita.
+    """
+
+    address: str = Field(min_length=2, max_length=45)
+    authorized: bool = False
+    note: str | None = Field(default=None, max_length=255)
+
+    @field_validator("address")
+    @classmethod
+    def _pubblico(cls, value: str) -> str:
+        value = value.strip()
+        try:
+            ip = ipaddress.ip_address(value)
+        except ValueError as exc:
+            raise ValueError(f"indirizzo IP non valido: {exc}") from exc
+        # La definizione di «pubblico» e' quella del ScopeGuard: accettare qui
+        # un indirizzo che li' verrebbe rifiutato produrrebbe un perimetro che
+        # non si puo' scansionare, senza che nulla lo spieghi.
+        if not indirizzo_pubblico(value):
+            raise ValueError("un indirizzo privato, di loopback, riservato o non "
+                             "instradabile su Internet non e' esposizione esterna "
+                             "e non puo' entrare nel perimetro")
+        return str(ip)
+
+
+class IPAddressRead(ORMModel):
+    id: uuid.UUID
+    address: str
+    version: int
+    ownership_status: str
+    asn: int | None
+    asn_org: str | None
+    is_cdn: bool
+    is_shared_hosting: bool
+    cloud_provider: str | None
+    reverse_dns: str | None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def authorized(self) -> bool:
+        """Autorizzato alla scansione attiva.
+
+        L'autorizzazione non e' un campo a se': e' lo stato di proprieta'
+        accertata, lo stesso che il ScopeGuard legge per ammettere un
+        bersaglio. Duplicarlo in una colonna separata creerebbe due verita'
+        che possono divergere.
+        """
+        return self.ownership_status == "verified_owned"
+
+
+class IPAuthorizationUpdate(BaseModel):
+    authorized: bool
+
+
+class NetworkRangeCreate(BaseModel):
+    cidr: str = Field(min_length=4, max_length=64)
+    description: str | None = Field(default=None, max_length=255)
+    authorized: bool = False
+
+    @field_validator("cidr")
+    @classmethod
+    def _valida(cls, value: str) -> str:
+        try:
+            rete = ipaddress.ip_network(value.strip(), strict=False)
+        except ValueError as exc:
+            raise ValueError(f"rete non valida: {exc}") from exc
+        if rete.num_addresses > 65536:
+            raise ValueError("la rete autorizzata non puo' superare /16 (65536 indirizzi)")
+        if not indirizzo_pubblico(str(rete.network_address)):
+            raise ValueError("una rete privata o non instradabile su Internet non e' "
+                             "esposizione esterna")
+        return str(rete)
+
+
+class NetworkRangeRead(ORMModel):
+    id: uuid.UUID
+    cidr: str
+    description: str | None
+    ownership_status: str
+    asn: int | None
 
 
 class AuthorizationCreate(BaseModel):

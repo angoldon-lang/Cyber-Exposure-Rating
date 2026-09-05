@@ -175,6 +175,17 @@ Gli asset sono classificati come *Verified Owned*, *Likely Owned*, *Unverified*,
 *Third Party*, *Excluded*: solo i primi due influenzano il rating, i secondi con
 regole piu' restrittive.
 
+### Perimetro di rete
+
+Gli indirizzi IP raggiunti dai domini in perimetro vengono classificati a ogni
+scansione (reverse DNS e rete RDAP) e registrati come inventario in *Gestione
+azienda → Perimetro di rete*. Il port scanning del profilo Extended agisce solo
+su quelli **autorizzati**: l'autorizzazione e' un atto esplicito dell'analista,
+registrato nel log di audit. Gli indirizzi di CDN e reverse proxy non sono
+autorizzabili, e il rifiuto e' applicato dal server: rispondono per molti
+clienti insieme, e sondarli significherebbe sondare l'infrastruttura del
+fornitore. Il dettaglio della regola e' in `docs/SCAN_PROFILES.md`.
+
 ---
 
 ## Profili di scansione

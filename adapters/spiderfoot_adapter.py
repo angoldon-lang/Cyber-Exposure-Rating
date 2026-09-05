@@ -306,13 +306,16 @@ class SpiderFootAdapter(BaseAdapter):
                     asset_key=address, asset_type=AssetType.EMAIL_ADDRESS.value,
                     display_name=mask_email(address), discovered_by=self.key,
                     attributes={"spiderfoot_event": "EMAILADDR", "masked": True}))
-                # In mock mode le fonti devono raccontare la stessa azienda: la
-                # sovrapposizione con XposedOrNot e' cio' che rende verificabile
-                # la deduplicazione fra due fonti sullo stesso fatto.
-                for violazione in posture.breaches[: max(0, len(posture.breaches) - index)]:
-                    evidences.append(evidenza_violazione(
-                        tool=self.key, indirizzo=address, violazione=str(violazione["name"]),
-                        fonte_dati="SpiderFoot (moduli su violazioni di dati)"))
+            # In mock mode le fonti devono raccontare la stessa azienda: la
+            # sovrapposizione con XposedOrNot e' cio' che rende verificabile la
+            # deduplicazione fra due fonti sullo stesso fatto. Questa fonte non
+            # conosce anno ne' categorie: produce la stessa evidenza con la
+            # severita' che quei dati mancanti consentono.
+            for esposizione in posture.email_exposures:
+                evidences.append(evidenza_violazione(
+                    tool=self.key, indirizzo=str(esposizione["address"]),
+                    violazione=str(esposizione["breach"]),
+                    fonte_dati="SpiderFoot (moduli su violazioni di dati)"))
             for mention in posture.darkweb_mentions:
                 evidences.append(self._darkweb_evidence(mention["source"]))
         return AdapterResult(tool=self.key, status=AdapterStatus.SUCCESS, evidences=evidences,

@@ -19,12 +19,13 @@ from app.core.rbac import Permission
 from app.models.enums import (
     AuditAction,
     AuthorizationStatus,
+    OwnershipStatus,
     ScopeAction,
     VerificationMethod,
     VerificationStatus,
 )
 from app.models.organization import Company
-from app.models.scope import Authorization, Domain, Scope
+from app.models.scope import Authorization, Domain, IPAddress, NetworkRange, Scope
 from app.schemas.common import Page
 from app.schemas.organization import (
     CompanyCreate,
@@ -39,7 +40,12 @@ from app.schemas.scope import (
     AuthorizationRevoke,
     DomainCreate,
     DomainRead,
+    IPAddressCreate,
+    IPAddressRead,
+    IPAuthorizationUpdate,
     ManualApproval,
+    NetworkRangeCreate,
+    NetworkRangeRead,
     ScopeEntryCreate,
     ScopeEntryRead,
     VerificationChallengeRead,
@@ -483,4 +489,163 @@ def delete_domain(domain_id: uuid.UUID, company: CompanyDep, db: DbDep,
                  actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
                  entity_type="domain", entity_id=str(domain_id),
                  message=f"dominio rimosso: {nome}", **context)
+    db.commit()
+
+
+# --------------------------------------------------------------------------
+# Perimetro di rete: indirizzi IP e reti
+#
+# Prima di questi endpoint non esisteva alcun modo di inserire un indirizzo nel
+# perimetro: il port scanning era ammesso dal profilo ma non aveva bersagli
+# possibili, perche' il ScopeGuard ammette solo indirizzi coperti da una voce
+# esplicita e nessuna interfaccia permetteva di crearne una.
+# --------------------------------------------------------------------------
+@router.get("/{company_id}/ips", response_model=list[IPAddressRead])
+def list_ips(company: CompanyDep, db: DbDep) -> list[IPAddressRead]:
+    rows = db.execute(
+        select(IPAddress).where(IPAddress.company_id == company.id)
+        .order_by(IPAddress.address)).scalars().all()
+    return [IPAddressRead.model_validate(r) for r in rows]
+
+
+@router.post("/{company_id}/ips", response_model=IPAddressRead,
+             status_code=status.HTTP_201_CREATED)
+def add_ip(payload: IPAddressCreate, company: CompanyDep, db: DbDep,
+           context: RequestContextDep,
+           current: CurrentUser = Depends(require_permission(Permission.AUTHORIZATION_WRITE)),
+           ) -> IPAddressRead:
+    esistente = db.execute(
+        select(IPAddress).where(IPAddress.company_id == company.id,
+                                IPAddress.address == payload.address)).scalar_one_or_none()
+    if esistente is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"L'indirizzo {payload.address} e' gia' nel perimetro")
+    riga = IPAddress(
+        tenant_id=company.tenant_id, company_id=company.id, address=payload.address,
+        version=6 if ":" in payload.address else 4,
+        ownership_status=(OwnershipStatus.VERIFIED_OWNED.value if payload.authorized
+                          else OwnershipStatus.UNVERIFIED.value))
+    db.add(riga)
+    db.flush()
+    record_audit(db, action=AuditAction.CREATE.value, tenant_id=company.tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="ip_address", entity_id=str(riga.id),
+                 message=(f"indirizzo {payload.address} aggiunto al perimetro"
+                          + (" e autorizzato alla scansione attiva" if payload.authorized else "")),
+                 **context)
+    db.commit()
+    db.refresh(riga)
+    return IPAddressRead.model_validate(riga)
+
+
+@router.post("/{company_id}/ips/{ip_id}/authorization", response_model=IPAddressRead)
+def set_ip_authorization(ip_id: uuid.UUID, payload: IPAuthorizationUpdate, company: CompanyDep,
+                         db: DbDep, context: RequestContextDep,
+                         current: CurrentUser = Depends(
+                             require_permission(Permission.AUTHORIZATION_WRITE)),
+                         ) -> IPAddressRead:
+    """Autorizza o revoca la scansione attiva su un indirizzo.
+
+    E' la decisione che apre il port scanning su quell'indirizzo: viene
+    registrata nel log di audit con l'identita' di chi l'ha presa, perche'
+    sondare un indirizzo che non appartiene al cliente e' un fatto di cui
+    qualcuno deve rispondere.
+    """
+    riga = db.execute(
+        select(IPAddress).where(IPAddress.id == ip_id,
+                                IPAddress.company_id == company.id)).scalar_one_or_none()
+    if riga is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Indirizzo IP non trovato")
+    if payload.authorized and riga.is_cdn:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"L'indirizzo {riga.address} e' un punto di ingresso condiviso di "
+            f"{riga.cloud_provider or 'un fornitore CDN'}: sondarlo significherebbe sondare "
+            "l'infrastruttura del fornitore, non i sistemi del cliente")
+    riga.ownership_status = (OwnershipStatus.VERIFIED_OWNED.value if payload.authorized
+                             else OwnershipStatus.UNVERIFIED.value)
+    record_audit(db, action=AuditAction.UPDATE.value, tenant_id=company.tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="ip_address", entity_id=str(riga.id),
+                 message=(f"scansione attiva {'autorizzata' if payload.authorized else 'revocata'} "
+                          f"su {riga.address}"),
+                 metadata={"authorized": payload.authorized}, **context)
+    db.commit()
+    db.refresh(riga)
+    return IPAddressRead.model_validate(riga)
+
+
+@router.delete("/{company_id}/ips/{ip_id}", status_code=status.HTTP_204_NO_CONTENT,
+               response_model=None, response_class=Response)
+def delete_ip(ip_id: uuid.UUID, company: CompanyDep, db: DbDep, context: RequestContextDep,
+              current: CurrentUser = Depends(require_permission(Permission.AUTHORIZATION_WRITE)),
+              ) -> None:
+    riga = db.execute(
+        select(IPAddress).where(IPAddress.id == ip_id,
+                                IPAddress.company_id == company.id)).scalar_one_or_none()
+    if riga is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Indirizzo IP non trovato")
+    indirizzo = riga.address
+    db.delete(riga)
+    record_audit(db, action=AuditAction.DELETE.value, tenant_id=company.tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="ip_address", entity_id=str(ip_id),
+                 message=f"indirizzo {indirizzo} rimosso dal perimetro", **context)
+    db.commit()
+
+
+@router.get("/{company_id}/networks", response_model=list[NetworkRangeRead])
+def list_networks(company: CompanyDep, db: DbDep) -> list[NetworkRangeRead]:
+    rows = db.execute(
+        select(NetworkRange).where(NetworkRange.company_id == company.id)
+        .order_by(NetworkRange.cidr)).scalars().all()
+    return [NetworkRangeRead.model_validate(r) for r in rows]
+
+
+@router.post("/{company_id}/networks", response_model=NetworkRangeRead,
+             status_code=status.HTTP_201_CREATED)
+def add_network(payload: NetworkRangeCreate, company: CompanyDep, db: DbDep,
+                context: RequestContextDep,
+                current: CurrentUser = Depends(require_permission(Permission.AUTHORIZATION_WRITE)),
+                ) -> NetworkRangeRead:
+    esistente = db.execute(
+        select(NetworkRange).where(NetworkRange.company_id == company.id,
+                                   NetworkRange.cidr == payload.cidr)).scalar_one_or_none()
+    if esistente is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"La rete {payload.cidr} e' gia' nel perimetro")
+    riga = NetworkRange(
+        tenant_id=company.tenant_id, company_id=company.id, cidr=payload.cidr,
+        description=payload.description,
+        ownership_status=(OwnershipStatus.VERIFIED_OWNED.value if payload.authorized
+                          else OwnershipStatus.UNVERIFIED.value))
+    db.add(riga)
+    db.flush()
+    record_audit(db, action=AuditAction.CREATE.value, tenant_id=company.tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="network_range", entity_id=str(riga.id),
+                 message=f"rete {payload.cidr} aggiunta al perimetro", **context)
+    db.commit()
+    db.refresh(riga)
+    return NetworkRangeRead.model_validate(riga)
+
+
+@router.delete("/{company_id}/networks/{network_id}", status_code=status.HTTP_204_NO_CONTENT,
+               response_model=None, response_class=Response)
+def delete_network(network_id: uuid.UUID, company: CompanyDep, db: DbDep,
+                   context: RequestContextDep,
+                   current: CurrentUser = Depends(
+                       require_permission(Permission.AUTHORIZATION_WRITE)),
+                   ) -> None:
+    riga = db.execute(
+        select(NetworkRange).where(NetworkRange.id == network_id,
+                                   NetworkRange.company_id == company.id)).scalar_one_or_none()
+    if riga is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Rete non trovata")
+    cidr = riga.cidr
+    db.delete(riga)
+    record_audit(db, action=AuditAction.DELETE.value, tenant_id=company.tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="network_range", entity_id=str(network_id),
+                 message=f"rete {cidr} rimossa dal perimetro", **context)
     db.commit()

@@ -92,6 +92,16 @@ export interface DashboardOverview {
   open_remediations: number;
   scope_disclaimer_it: string;
   coverage_gaps: CoverageGap[];
+  ip_perimeter: IPPerimeterSummary;
+}
+
+export interface IPPerimeterSummary {
+  discovered?: number;
+  authorized?: number;
+  candidates?: number;
+  third_party?: number;
+  candidate_addresses?: string[];
+  third_party_addresses?: string[];
 }
 
 export interface PortfolioCard {
@@ -298,6 +308,28 @@ export interface ScopeEntry {
   action: string;
   is_active: boolean;
   note: string | null;
+}
+
+export interface IPAddressEntry {
+  id: string;
+  address: string;
+  version: number;
+  ownership_status: string;
+  authorized: boolean;
+  asn: number | null;
+  asn_org: string | null;
+  is_cdn: boolean;
+  is_shared_hosting: boolean;
+  cloud_provider: string | null;
+  reverse_dns: string | null;
+}
+
+export interface NetworkRangeEntry {
+  id: string;
+  cidr: string;
+  description: string | null;
+  ownership_status: string;
+  asn: number | null;
 }
 
 export interface Authorization {

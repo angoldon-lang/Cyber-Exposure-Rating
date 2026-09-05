@@ -163,6 +163,10 @@ class AdapterContext:
     # Sono separati da `email_addresses`, che contiene quelli dichiarati: la
     # provenienza cambia l'affidabilita' e va conservata.
     discovered_emails: list[str] = field(default_factory=list)
+    # Indirizzi IP raggiunti dai domini in perimetro, con i domini che li
+    # risolvono. Sono il punto di partenza del perimetro IP: senza questa
+    # mappa gli unici bersagli possibili sono quelli digitati a mano.
+    resolved_ips: dict[str, list[str]] = field(default_factory=dict)
     web_targets: list[str] = field(default_factory=list)
     mock_mode: bool = True
     tool_config: dict[str, Any] = field(default_factory=dict)

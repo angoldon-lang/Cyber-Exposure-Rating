@@ -2,7 +2,8 @@
 import type {
   Authorization, AuthorizationPreview, Branding, Company, CompanyInput, DashboardOverview,
   Domain,
-  Finding, Health, Page, PortfolioView, PurgeResult, RemediationItem, Report, Scan, ScanComparison,
+  Finding, Health, IPAddressEntry, NetworkRangeEntry, Page, PortfolioView, PurgeResult,
+  RemediationItem, Report, Scan, ScanComparison,
   ScanDetail, ScanProfile, ScopeEntry, ScopeEntryInput, ScoreDetail, TokenResponse,
   UserProfile, VerificationChallenge, VerificationResult,
 } from './types';
@@ -141,6 +142,24 @@ export const api = {
     request<ScopeEntry>(`/companies/${companyId}/scopes`, { method: 'POST', body: JSON.stringify(body) }),
   deleteScope: (companyId: string, scopeId: string) =>
     request<void>(`/companies/${companyId}/scopes/${scopeId}`, { method: 'DELETE' }),
+
+  // --- perimetro di rete ---------------------------------------------------
+  ips: (companyId: string) => request<IPAddressEntry[]>(`/companies/${companyId}/ips`),
+  addIp: (companyId: string, body: { address: string; authorized?: boolean }) =>
+    request<IPAddressEntry>(`/companies/${companyId}/ips`,
+      { method: 'POST', body: JSON.stringify(body) }),
+  setIpAuthorization: (companyId: string, ipId: string, authorized: boolean) =>
+    request<IPAddressEntry>(`/companies/${companyId}/ips/${ipId}/authorization`,
+      { method: 'POST', body: JSON.stringify({ authorized }) }),
+  deleteIp: (companyId: string, ipId: string) =>
+    request<void>(`/companies/${companyId}/ips/${ipId}`, { method: 'DELETE' }),
+  networks: (companyId: string) =>
+    request<NetworkRangeEntry[]>(`/companies/${companyId}/networks`),
+  addNetwork: (companyId: string, body: { cidr: string; description?: string | null }) =>
+    request<NetworkRangeEntry>(`/companies/${companyId}/networks`,
+      { method: 'POST', body: JSON.stringify(body) }),
+  deleteNetwork: (companyId: string, networkId: string) =>
+    request<void>(`/companies/${companyId}/networks/${networkId}`, { method: 'DELETE' }),
   dashboard: (id: string) => request<DashboardOverview>(`/companies/${id}/dashboard`),
   portfolio: () => request<PortfolioView>('/portfolio'),
 

@@ -21,8 +21,8 @@ profiles:
       - exploitation
       - fuzzing
       - intrusive_checks
-    tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
-            ransomware_live, hibp, credential_exposure, xposedornot,
+    tools: [dns, rdap, certificate_transparency, ip_perimeter, subfinder, spiderfoot,
+            checkdmarc, ransomware_live, hibp, credential_exposure, xposedornot,
             dnstwist_passive, kev, epss]
 
   verified_standard:
@@ -39,8 +39,9 @@ profiles:
       - brute_force
       - data_modification
       - fuzzing
-    tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
-            ransomware_live, hibp, credential_exposure, xposedornot, dnstwist, kev, epss,
+    tools: [dns, rdap, certificate_transparency, ip_perimeter, subfinder, spiderfoot,
+            checkdmarc, ransomware_live, hibp, credential_exposure, xposedornot,
+            dnstwist, kev, epss,
             httpx, testssl, zap_baseline, amass_passive, email_header]
 
   verified_extended:
@@ -64,8 +65,9 @@ profiles:
       - data_modification
       - destructive_exploits
       - third_party_scanning
-    tools: [dns, rdap, certificate_transparency, subfinder, spiderfoot, checkdmarc,
-            ransomware_live, hibp, credential_exposure, xposedornot, dnstwist, kev, epss,
+    tools: [dns, rdap, certificate_transparency, ip_perimeter, subfinder, spiderfoot,
+            checkdmarc, ransomware_live, hibp, credential_exposure, xposedornot,
+            dnstwist, kev, epss,
             httpx, testssl, zap_baseline, amass, email_header,
             naabu, nmap, nuclei]
 
@@ -99,6 +101,24 @@ tools:
     timeout_seconds: 90
     coverage_areas: [attack_surface]
     coverage_weight: 0.9
+
+  ip_perimeter:
+    label: "Perimetro IP pubblico"
+    kind: builtin
+    passive: true
+    phase: 1
+    timeout_seconds: 180
+    coverage_areas: [attack_surface]
+    coverage_weight: 0.9
+    # Reverse DNS e RDAP sono interrogazioni a registri pubblici: nessun
+    # contatto con i sistemi dell'organizzazione, quindi ammesso anche nel
+    # profilo passivo. La classificazione che ne esce non autorizza nulla:
+    # dice solo quali indirizzi ha senso proporre per una scansione attiva.
+    notes: >-
+      Arricchisce gli indirizzi raggiunti dai domini in perimetro con la rete
+      RDAP e il reverse DNS, e distingue l'infrastruttura condivisa di un
+      fornitore (CDN, reverse proxy) dalle istanze dell'organizzazione. Gli
+      indirizzi su rete condivisa non sono mai bersaglio di scansione attiva.
 
   subfinder:
     label: "Subfinder"
