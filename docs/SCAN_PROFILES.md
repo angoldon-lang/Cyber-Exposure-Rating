@@ -115,6 +115,35 @@ nessun indirizzo e' autorizzato, e lo dichiara — «N indirizzi IP pubblici
 individuati, nessuno coperto da un'autorizzazione esplicita» — invece di
 risultare semplicemente senza rilievi.
 
+### Naabu e le architetture arm64
+
+Naabu non pubblica binari per linux/arm64 (usa libpcap tramite CGO): sulle
+macchine Apple Silicon il binario non e' nel worker e il port scanning non
+partiva mai, pur risultando il profilo completo.
+
+`port_scan` fa la stessa cosa senza dipendenze native: una connessione TCP
+completa verso ciascuna coppia indirizzo/porta, nessun raw socket, nessun
+privilegio. Gira **solo quando Naabu non e' presente**, perche' i due
+strumenti fanno lo stesso lavoro e le loro evidenze convergono sulla stessa
+impronta: eseguirli entrambi raddoppierebbe le connessioni verso il cliente
+per ottenere gli stessi rilievi.
+
+## Da dove vengono gli indirizzi e-mail
+
+La verifica sulle violazioni ha bisogno di indirizzi da cercare. Le fonti,
+in ordine di affidabilita':
+
+1. **Dichiarati nel perimetro** — voci di tipo «Indirizzo e-mail» in
+   *Gestione azienda → Perimetro*. Non allargano il perimetro degli host.
+2. **DMARC** — i tag `rua` e `ruf` del record `_dmarc`, quando puntano a una
+   casella del dominio stesso.
+3. **SOA** — il campo RNAME, dove la chiocciola e' scritta come punto.
+4. **SpiderFoot** — i moduli di raccolta, se un'istanza e' configurata.
+
+Le prime tre non richiedono nulla oltre al DNS pubblico. Gli indirizzi su
+domini diversi da quelli in perimetro non vengono raccolti: un `rua` che punta
+a un elaboratore DMARC di terzi e' un indirizzo del fornitore, non del cliente.
+
 ## Gate di autorizzazione
 
 ```mermaid

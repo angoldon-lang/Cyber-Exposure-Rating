@@ -181,6 +181,9 @@ class ScopeEntryType(StrEnum):
     CIDR = "cidr"
     URL = "url"
     EMAIL_DOMAIN = "email_domain"
+    # Indirizzo singolo da verificare sulle fonti di violazione. Non allarga
+    # il perimetro degli host: `_host_matches` ignora i tipi che non conosce.
+    EMAIL_ADDRESS = "email_address"
 
 
 class ScopeAction(StrEnum):

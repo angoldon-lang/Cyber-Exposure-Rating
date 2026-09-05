@@ -159,6 +159,8 @@ export interface Finding {
   asset_display: string | null;
   attributes_json: Record<string, unknown> | null;
   evidence_summary: string | null;
+  remediation_catalog_id: string | null;
+  remediation_title_it: string | null;
 }
 
 export interface Scan {
@@ -323,6 +325,7 @@ export interface Asset {
   is_third_party_hosted: boolean;
   excluded_from_rating: boolean;
   exclusion_reason: string | null;
+  from_mock_scan: boolean;
   first_seen_at: string;
   last_seen_at: string;
   disappeared_at: string | null;
@@ -334,6 +337,7 @@ export interface Asset {
 export interface AssetSummary {
   total: number;
   disappeared: number;
+  synthetic: number;
   by_type: Record<string, number>;
   by_ownership: Record<string, number>;
   by_tool: Record<string, number>;

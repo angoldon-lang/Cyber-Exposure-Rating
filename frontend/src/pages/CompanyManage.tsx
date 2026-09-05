@@ -17,6 +17,7 @@ const TIPI_PERIMETRO: Record<string, string> = {
   cidr: 'Rete (CIDR)',
   url: 'URL',
   email_domain: 'Dominio e-mail',
+  email_address: 'Indirizzo e-mail',
 };
 
 const PROFILI: Record<string, string> = {

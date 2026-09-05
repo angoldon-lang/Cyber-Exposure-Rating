@@ -142,6 +142,7 @@ def assets_summary(company: CompanyDep, db: DbDep) -> AssetSummary:
     return AssetSummary(
         total=len(righe),
         disappeared=sum(1 for r in righe if r.disappeared_at is not None),
+        synthetic=sum(1 for r in righe if r.from_mock_scan),
         by_type=dict(sorted(per_tipo.items(), key=lambda v: -v[1])),
         by_ownership=dict(sorted(per_proprieta.items(), key=lambda v: -v[1])),
         by_tool=dict(sorted(per_strumento.items(), key=lambda v: -v[1])))
@@ -150,7 +151,8 @@ def assets_summary(company: CompanyDep, db: DbDep) -> AssetSummary:
 @router.get("/companies/{company_id}/assets", response_model=Page[AssetRead])
 def list_assets(company: CompanyDep, db: DbDep, current: CurrentUserDep,
                 asset_type: str | None = None, ownership_status: str | None = None,
-                include_disappeared: bool = True, discovered_by: str | None = None,
+                include_disappeared: bool = True, include_synthetic: bool = True,
+                discovered_by: str | None = None,
                 q: str | None = None, page: int = 1,
                 page_size: int = Query(default=100, le=500)) -> Page[AssetRead]:
     unmask = current.has(Permission.PII_UNMASK)
@@ -161,6 +163,8 @@ def list_assets(company: CompanyDep, db: DbDep, current: CurrentUserDep,
         conditions.append(Asset.ownership_status == ownership_status)
     if not include_disappeared:
         conditions.append(Asset.disappeared_at.is_(None))
+    if not include_synthetic:
+        conditions.append(Asset.from_mock_scan.is_(False))
     if q:
         # La ricerca corre su `display_name` e non su `asset_key`: per gli
         # indirizzi e-mail la chiave e' in chiaro e il nome mostrato e'
@@ -311,3 +315,30 @@ def delete_logo(db: DbDep, context: RequestContextDep,
                  entity_type="tenant_branding", entity_id=str(riga.id),
                  message="logo rimosso", **context)
     db.commit()
+
+
+@router.delete("/companies/{company_id}/assets/synthetic")
+def delete_synthetic_assets(company: CompanyDep, db: DbDep, context: RequestContextDep,
+                            current: CurrentUser = Depends(
+                                require_permission(Permission.COMPANY_WRITE)),
+                            ) -> dict[str, int]:
+    """Rimuove gli asset osservati solo in modalita' dimostrativa.
+
+    Servono a provare la piattaforma prima di avere dati reali, e poi
+    restano: dopo la prima scansione vera non hanno piu' ragione di stare
+    nell'inventario. Gli asset osservati anche da una scansione reale non
+    sono toccati, perche' la marcatura viene azzerata alla prima osservazione
+    reale.
+    """
+    righe = db.execute(
+        select(Asset).where(Asset.company_id == company.id,
+                            Asset.from_mock_scan.is_(True))).scalars().all()
+    for riga in righe:
+        db.delete(riga)
+    record_audit(db, action=AuditAction.DELETE.value, tenant_id=company.tenant_id,
+                 actor_user_id=current.id, actor_email=current.email, actor_roles=current.roles,
+                 entity_type="asset", entity_id=str(company.id),
+                 message=f"rimossi {len(righe)} asset osservati solo in modalita' dimostrativa",
+                 metadata={"deleted": len(righe)}, **context)
+    db.commit()
+    return {"deleted": len(righe)}

@@ -142,7 +142,7 @@ class ScanPipeline:
         discovery_adapters = build_adapters(
             discovery_context,
             only=["dns", "rdap", "certificate_transparency", "subfinder", "amass_passive",
-                  "spiderfoot"])
+                  "spiderfoot", "email_discovery"])
         discovery_results = self._execute(discovery_adapters, stage="discovery", base_percent=10)
 
         subdomains = sorted({asset.asset_key for result in discovery_results
@@ -180,7 +180,8 @@ class ScanPipeline:
             web_targets=[f"https://{host}" for host in subdomains[:200]])
         analysis_adapters = build_adapters(
             analysis_context,
-            only=["checkdmarc", "httpx", "testssl", "zap_baseline", "naabu", "nuclei",
+            only=["checkdmarc", "httpx", "testssl", "zap_baseline", "naabu", "port_scan",
+                  "nuclei",
                   "ransomware_live", "hibp", "credential_exposure", "xposedornot",
                   "dnstwist", "email_header"])
         analysis_results = self._execute(analysis_adapters, stage="analysis", base_percent=40)

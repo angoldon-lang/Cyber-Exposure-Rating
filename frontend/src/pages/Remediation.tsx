@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { RemediationItem } from '../api/types';
 import { Banner, Empty, SeverityChip, Spinner } from '../components/ui';
@@ -13,6 +13,7 @@ const EFFORT_LABEL: Record<string, string> = {
 
 export default function Remediation() {
   const { scanId = '' } = useParams();
+  const { hash } = useLocation();
   const [items, setItems] = useState<RemediationItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [quickOnly, setQuickOnly] = useState(false);
@@ -22,6 +23,15 @@ export default function Remediation() {
     api.remediationPlan(scanId, quickOnly).then(setItems)
       .catch((e) => setError(String(e.message ?? e)));
   }, [scanId, quickOnly]);
+
+  // React Router non porta all'ancora da solo, e comunque l'elemento non
+  // esiste finche' il piano non e' caricato: senza questo, il collegamento
+  // che arriva dal rilievo apre il piano in cima e l'intervento va cercato.
+  useEffect(() => {
+    if (!items || !hash) return;
+    document.getElementById(decodeURIComponent(hash.slice(1)))
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [items, hash]);
 
   if (error) return <Banner kind="danger">{error}</Banner>;
   if (!items) return <Spinner />;
@@ -46,7 +56,10 @@ export default function Remediation() {
       {items.length === 0 ? (
         <div className="card"><Empty>Nessun intervento identificato per questa scansione.</Empty></div>
       ) : items.map((item, index) => (
-        <div className="card" key={item.catalog_id} style={{ marginBottom: 12 }}>
+        // `id` e' l'ancora usata dal collegamento che arriva dal rilievo:
+        // senza, il piano si apre in cima e l'intervento va cercato a mano.
+        <div className="card" key={item.catalog_id} id={item.catalog_id}
+             style={{ marginBottom: 12, scrollMarginTop: 16 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
             <strong style={{ fontSize: 15 }}>{index + 1}. {item.title_it}</strong>
             <SeverityChip severity={item.max_severity} />

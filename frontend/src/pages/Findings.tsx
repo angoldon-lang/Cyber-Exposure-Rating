@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
 import type { Finding, ScoreDetail, Severity } from '../api/types';
 import {
@@ -25,12 +25,18 @@ export default function Findings() {
   const [category, setCategory] = useState<string>('');
   const [onlyScoring, setOnlyScoring] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // L'avviso in dashboard rimanda qui gia' filtrato: il criterio di «da
+  // validare» vive nell'API, cosi' l'avviso e questo elenco non possono
+  // descrivere insiemi diversi.
+  const [parametri, setParametri] = useSearchParams();
+  const daValidare = parametri.get('daValidare') === '1';
 
   async function reload() {
     const params: Record<string, string> = {};
     if (severity) params.severity = severity;
     if (category) params.category = category;
     if (onlyScoring) params.only_scoring = 'true';
+    if (daValidare) params.pending_review = 'true';
     const page = await api.findings(scanId, params);
     setFindings(page.items);
   }
@@ -39,7 +45,7 @@ export default function Findings() {
     reload().catch((e) => setError(String(e.message ?? e)));
     api.score(scanId).then(setScore).catch(() => setScore(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanId, severity, category, onlyScoring]);
+  }, [scanId, severity, category, onlyScoring, daValidare]);
 
   const categories = useMemo(
     () => Array.from(new Set(findings.map((f) => f.category))).sort(),
@@ -105,6 +111,16 @@ export default function Findings() {
           <input type="checkbox" checked={onlyScoring}
                  onChange={(e) => setOnlyScoring(e.target.checked)} />
           Solo rilievi che incidono sul rating
+        </label>
+        <label className="small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" checked={daValidare}
+                 onChange={(e) => {
+                   const successivi = new URLSearchParams(parametri);
+                   if (e.target.checked) successivi.set('daValidare', '1');
+                   else successivi.delete('daValidare');
+                   setParametri(successivi, { replace: true });
+                 }} />
+          Solo critici e alti da validare
         </label>
         <span className="muted small" style={{ marginLeft: 'auto' }}>{findings.length} rilievi</span>
       </div>
@@ -203,6 +219,17 @@ export default function Findings() {
                               )}
                               <tr><td>Rilevato da</td><td>{(f.sources_json ?? []).join(', ') || '—'}</td></tr>
                               <tr><td>Stato nel workflow</td><td>{f.workflow_state}</td></tr>
+                              {f.remediation_catalog_id && (
+                                <tr><td>Come si risolve</td>
+                                    <td>
+                                      <Link to={`/scansioni/${scanId}/remediation#${f.remediation_catalog_id}`}>
+                                        {f.remediation_title_it ?? f.remediation_catalog_id}
+                                      </Link>{' '}
+                                      <span className="muted small">
+                                        ({f.remediation_catalog_id})
+                                      </span>
+                                    </td></tr>
+                              )}
                             </tbody>
                           </table>
                         </td>

@@ -101,6 +101,7 @@ def _persist_assets(db: Session, scan: Scan, outcome: ScanOutcome,
     for resolved in outcome.normalization.assets:
         seen.add(resolved.asset_key)
         row = existing.get(resolved.asset_key)
+        nuovo = row is None
         if row is None:
             row = Asset(tenant_id=scan.tenant_id, company_id=scan.company_id,
                         asset_key=resolved.asset_key, asset_type=resolved.asset_type,
@@ -108,6 +109,14 @@ def _persist_assets(db: Session, scan: Scan, outcome: ScanOutcome,
             db.add(row)
         row.display_name = resolved.display_name
         row.asset_type = resolved.asset_type
+        # Un asset osservato da una scansione reale non e' piu' sintetico,
+        # anche se lo era prima. Il contrario non vale: una scansione
+        # dimostrativa non puo' marcare come sintetico un asset gia' visto
+        # davvero, altrimenti una demo cancellerebbe l'inventario reale.
+        if not scan.mock_mode:
+            row.from_mock_scan = False
+        elif nuovo:
+            row.from_mock_scan = True
         row.ownership_status = resolved.ownership.status
         row.ownership_reason = resolved.ownership.reason
         row.ownership_confidence = resolved.ownership.confidence

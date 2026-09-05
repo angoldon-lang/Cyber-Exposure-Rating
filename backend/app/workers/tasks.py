@@ -53,6 +53,7 @@ def run_scan_task(self, scan_id: str, email_header: str | None = None) -> dict: 
             authorized_ips=list(snapshot.get("authorized_ips", [])),
             network_ranges=list(snapshot.get("network_ranges", [])),
             excluded_values=list(snapshot.get("excluded", [])),
+            email_addresses=list(snapshot.get("email_addresses", [])),
             dkim_selectors=list(snapshot.get("dkim_selectors", [])),
             email_header=email_header,
             mock_mode=scan.mock_mode,

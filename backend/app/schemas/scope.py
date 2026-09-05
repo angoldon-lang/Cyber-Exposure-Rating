@@ -101,6 +101,14 @@ class ScopeEntryCreate(BaseModel):
                 return normalize_hostname(value)
             except ScopeViolation as exc:
                 raise ValueError(exc.reason) from exc
+        if entry_type == ScopeEntryType.EMAIL_ADDRESS:
+            locale, _, dominio = value.partition("@")
+            if not locale or not dominio:
+                raise ValueError("indirizzo e-mail non valido: manca la chiocciola")
+            try:
+                return f"{locale.lower()}@{normalize_hostname(dominio)}"
+            except ScopeViolation as exc:
+                raise ValueError(f"dominio dell'indirizzo non valido: {exc.reason}") from exc
         if entry_type == ScopeEntryType.WILDCARD_DOMAIN:
             try:
                 return f"*.{normalize_hostname(value.removeprefix('*.'))}"
@@ -258,6 +266,7 @@ class AssetRead(ORMModel):
     is_third_party_hosted: bool
     excluded_from_rating: bool
     exclusion_reason: str | None
+    from_mock_scan: bool
     first_seen_at: datetime
     last_seen_at: datetime
     disappeared_at: datetime | None
@@ -279,6 +288,7 @@ class AssetSummary(BaseModel):
 
     total: int
     disappeared: int
+    synthetic: int
     by_type: dict[str, int]
     by_ownership: dict[str, int]
     by_tool: dict[str, int]

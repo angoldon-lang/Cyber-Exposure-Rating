@@ -210,6 +210,11 @@ class Asset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_third_party_hosted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     excluded_from_rating: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     exclusion_reason: Mapped[str | None] = mapped_column(Text)
+    # Vero se l'asset e' stato osservato SOLO da scansioni in modalita'
+    # dimostrativa. Gli asset sintetici restano nel database fra una scansione
+    # e l'altra: senza questa distinzione finiscono nell'inventario e nei
+    # report di scansioni reali, dove sembrano dati veri.
+    from_mock_scan: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -136,6 +136,11 @@ class FindingRead(ORMModel):
     asset_display: str | None = None
     attributes_json: dict | None = None
     evidence_summary: str | None = None
+    # Identificativo di catalogo e titolo dell'intervento collegato: senza,
+    # dal rilievo non si raggiunge la remediation e resta al lettore ricordare
+    # quale voce del piano lo riguarda.
+    remediation_catalog_id: str | None = None
+    remediation_title_it: str | None = None
 
 
 class FindingReview(BaseModel):

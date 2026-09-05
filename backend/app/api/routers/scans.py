@@ -19,7 +19,7 @@ from app.api.deps import (
 from app.core.config import settings
 from app.core.rbac import PROFILE_PERMISSION, Permission
 from app.core.redaction import sanitize_text
-from app.models.enums import AuditAction, ScanStatus
+from app.models.enums import AuditAction, ScanStatus, ScopeAction, ScopeEntryType
 from app.models.organization import Company
 from app.models.scanning import Finding, Scan, ToolRun
 from app.models.scope import Authorization, Domain, IPAddress, NetworkRange, Scope
@@ -171,6 +171,9 @@ def start_scan(payload: ScanCreate, company: CompanyDep, db: DbDep, context: Req
                                if i.ownership_status == "verified_owned"],
             "network_ranges": [n.cidr for n in data["networks"]],
             "excluded": [s.value for s in data["scopes"] if s.action == "exclude"],
+            "email_addresses": [s.value for s in data["scopes"]
+                                if s.entry_type == ScopeEntryType.EMAIL_ADDRESS.value
+                                and s.action == ScopeAction.INCLUDE.value and s.is_active],
             "dkim_selectors": payload.dkim_selectors,
             "authorization_id": check.authorization_id,
         })

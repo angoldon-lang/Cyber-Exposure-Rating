@@ -143,6 +143,12 @@ def build_report_context(db: Session, scan: Scan, *, language: str = "it",
 
     asset_rows = list(db.execute(
         select(Asset).where(Asset.company_id == company.id)).scalars().all())
+    if not scan.mock_mode:
+        # Gli asset visti solo in modalita' dimostrativa restano nel database
+        # fra una scansione e l'altra. In un report reale sarebbero
+        # indistinguibili dai dati veri: un indirizzo e-mail inventato
+        # comparirebbe come «proprieta' verificata».
+        asset_rows = [a for a in asset_rows if not a.from_mock_scan]
     exposure = {
         "total_assets": len(asset_rows),
         "verified_assets": sum(1 for a in asset_rows if a.ownership_status == "verified_owned"),

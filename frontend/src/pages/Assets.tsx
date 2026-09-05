@@ -11,7 +11,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Asset, AssetSummary } from '../api/types';
 import {
-  Banner, Chip, Empty, OWNERSHIP_LABEL, Spinner, formatDate,
+  Banner, Chip, ConfirmButton, Empty, OWNERSHIP_LABEL, Spinner, formatDate,
 } from '../components/ui';
 
 const TIPI: Record<string, string> = {
@@ -108,17 +108,22 @@ export default function Assets() {
   const [strumento, setStrumento] = useState('');
   const [ricerca, setRicerca] = useState('');
   const [mostraScomparsi, setMostraScomparsi] = useState(false);
+  const [mostraSintetici, setMostraSintetici] = useState(true);
   const [aperto, setAperto] = useState<string | null>(null);
+  const [avviso, setAvviso] = useState<string | null>(null);
 
-  useEffect(() => {
+  const ricaricaRiepilogo = useCallback(() => {
     api.assetsSummary(companyId).then(setRiepilogo)
       .catch((e) => setErrore(String(e.message ?? e)));
   }, [companyId]);
+
+  useEffect(ricaricaRiepilogo, [ricaricaRiepilogo]);
 
   const carica = useCallback(() => {
     const parametri: Record<string, string> = {
       page: String(pagina), page_size: String(PAGINA),
       include_disappeared: String(mostraScomparsi),
+      include_synthetic: String(mostraSintetici),
     };
     if (tipo) parametri.asset_type = tipo;
     if (proprieta) parametri.ownership_status = proprieta;
@@ -127,7 +132,7 @@ export default function Assets() {
     api.assets(companyId, parametri)
       .then((p) => { setAsset(p.items); setTotale(p.total); })
       .catch((e) => setErrore(String(e.message ?? e)));
-  }, [companyId, pagina, tipo, proprieta, strumento, ricerca, mostraScomparsi]);
+  }, [companyId, pagina, tipo, proprieta, strumento, ricerca, mostraScomparsi, mostraSintetici]);
 
   useEffect(() => {
     const attesa = window.setTimeout(carica, ricerca ? 250 : 0);
@@ -136,7 +141,8 @@ export default function Assets() {
 
   // Un filtro nuovo su una pagina alta mostrerebbe una lista vuota anche con
   // risultati presenti: ogni cambio di filtro riporta alla prima pagina.
-  useEffect(() => { setPagina(1); }, [tipo, proprieta, strumento, ricerca, mostraScomparsi]);
+  useEffect(() => { setPagina(1); },
+    [tipo, proprieta, strumento, ricerca, mostraScomparsi, mostraSintetici]);
 
   const pagine = Math.max(1, Math.ceil(totale / PAGINA));
   const filtrato = useMemo(
@@ -156,6 +162,26 @@ export default function Assets() {
           </p>
         </div>
       </div>
+
+      {avviso && <Banner>{avviso}</Banner>}
+
+      {(riepilogo?.synthetic ?? 0) > 0 && (
+        <Banner kind="warning">
+          <strong>{riepilogo!.synthetic} asset provengono da scansioni dimostrative.</strong>{' '}
+          Sono dati sintetici generati per provare la piattaforma. Restano nell’inventario
+          fra una scansione e l’altra, ma sono esclusi dai report delle scansioni reali.
+          Un asset osservato anche da una scansione reale perde automaticamente questa
+          marcatura.{' '}
+          <ConfirmButton label={`Rimuovi i ${riepilogo!.synthetic} asset sintetici`}
+                         confirmLabel="Confermi la rimozione?"
+                         onConfirm={async () => {
+                           const esito = await api.deleteSyntheticAssets(companyId);
+                           setAvviso(`${esito.deleted} asset sintetici rimossi.`);
+                           ricaricaRiepilogo();
+                           carica();
+                         }} />
+        </Banner>
+      )}
 
       {riepilogo && riepilogo.total > 0 && (
         <div className="card">
@@ -199,6 +225,13 @@ export default function Assets() {
                    onChange={(e) => setMostraScomparsi(e.target.checked)} />
             {' '}mostra anche gli asset scomparsi
           </label>
+          {(riepilogo?.synthetic ?? 0) > 0 && (
+            <label className="small">
+              <input type="checkbox" checked={mostraSintetici}
+                     onChange={(e) => setMostraSintetici(e.target.checked)} />
+              {' '}mostra anche gli asset dimostrativi
+            </label>
+          )}
         </div>
 
         {!asset ? <Spinner /> : asset.length === 0 ? (
@@ -225,6 +258,7 @@ export default function Assets() {
                       <td>
                         <code>{voce.display_name}</code>
                         {voce.disappeared_at && <> <Chip tone="medium">scomparso</Chip></>}
+                        {voce.from_mock_scan && <> <Chip tone="medium">dimostrativo</Chip></>}
                         {voce.excluded_from_rating && <> <Chip tone="info">escluso</Chip></>}
                         {aperto === voce.id && (
                           <div className="muted small" style={{ marginTop: 6 }}>

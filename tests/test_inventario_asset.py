@@ -285,3 +285,97 @@ def test_dalla_scansione_al_report_l_inventario_arriva_intero(client, admin):  #
         assert all(i.ownership_status != "verified_owned" for i in indirizzi)
         assert any(i.is_cdn for i in indirizzi), (
             "i dati sintetici devono includere un indirizzo dietro CDN")
+
+
+# ------------------------------------------------------- dati dimostrativi
+@pytest.mark.slow
+def test_gli_asset_dimostrativi_non_entrano_nei_report_reali(client, admin):  # noqa: F811
+    """Gli asset restano nel database fra una scansione e l'altra.
+
+    Quelli prodotti dai dati sintetici finivano nell'inventario e nei report
+    di scansioni reali, dove un indirizzo e-mail inventato compariva come
+    «proprieta' verificata», indistinguibile da un dato vero.
+    """
+    from app.models.enums import ScanStatus
+    from app.models.scanning import Scan
+    from app.models.scope import Asset
+    from app.services.persistence import persist_outcome
+    from app.services.report_builder import build_report_context
+    from app.workers.pipeline import ScanPipeline, ScanRequest
+
+    azienda = _azienda(client, admin)
+    dominio = "acme-demo.example"
+
+    def esegui(mock: bool) -> uuid.UUID:
+        with client.session_factory() as db:
+            scansione = Scan(
+                tenant_id=uuid.UUID(azienda["tenant_id"]), company_id=uuid.UUID(azienda["id"]),
+                profile_key="verified_standard", status=ScanStatus.RUNNING.value,
+                mock_mode=mock, started_at=datetime.now(UTC),
+                scope_snapshot_json={"domains": [dominio], "verified_domains": [dominio]})
+            db.add(scansione)
+            db.commit()
+            identificativo = scansione.id
+        esito = ScanPipeline(ScanRequest(
+            scan_id=str(identificativo), tenant_id=azienda["tenant_id"],
+            company_id=azienda["id"], company_name=azienda["legal_name"],
+            profile="verified_standard", domains=[dominio], verified_domains=[dominio],
+            mock_mode=mock, connector_config={"synthetic": {"severity_bias": 0.6}})).run()
+        with client.session_factory() as db:
+            persist_outcome(db, db.get(Scan, identificativo), esito)
+            db.commit()
+        return identificativo
+
+    esegui(mock=True)
+    with client.session_factory() as db:
+        sintetici = db.execute(
+            select(Asset).where(Asset.company_id == uuid.UUID(azienda["id"]),
+                                Asset.from_mock_scan.is_(True))).scalars().all()
+        assert sintetici, "la scansione dimostrativa non marca gli asset che produce"
+
+    # Una scansione reale sullo stesso dominio: gli asset che rivede non sono
+    # piu' sintetici, quelli inventati restano marcati e fuori dal report.
+    reale = esegui(mock=False)
+    with client.session_factory() as db:
+        contesto = build_report_context(db, db.get(Scan, reale)).as_dict()
+        nel_report = {v["name"] for g in contesto["asset_inventory"] for v in g["items"]}
+        ancora_sintetici = db.execute(
+            select(Asset).where(Asset.company_id == uuid.UUID(azienda["id"]),
+                                Asset.from_mock_scan.is_(True))).scalars().all()
+        assert ancora_sintetici, "fixture non rappresentativa: nessun residuo sintetico"
+        for riga in ancora_sintetici:
+            assert riga.display_name not in nel_report, (
+                f"l'asset dimostrativo {riga.display_name} compare nel report reale")
+
+
+def test_una_scansione_dimostrativa_non_declassa_gli_asset_reali():
+    """Il contrario romperebbe l'inventario: una demo lanciata dopo una
+    scansione vera marcherebbe come sintetici asset osservati davvero."""
+    import inspect
+
+    from app.services import persistence
+
+    sorgente = inspect.getsource(persistence._persist_assets)
+    assert "elif nuovo:" in sorgente, (
+        "la marcatura sintetica va applicata solo agli asset nuovi")
+
+
+@pytest.mark.slow
+def test_gli_asset_dimostrativi_si_possono_rimuovere(client, admin):  # noqa: F811
+    azienda = _azienda(client, admin)
+    _asset(client, azienda, asset_key="reale.acme.example", asset_type="subdomain",
+           display_name="reale.acme.example", discovered_by_json=["subfinder"])
+    _asset(client, azienda, asset_key="finto.acme.example", asset_type="subdomain",
+           display_name="finto.acme.example", discovered_by_json=["subfinder"],
+           from_mock_scan=True)
+
+    base = f"/api/v1/companies/{azienda['id']}/assets"
+    assert client.get(f"{base}/summary", headers=admin).json()["synthetic"] == 1
+    assert client.get(f"{base}?include_synthetic=false", headers=admin).json()["total"] == 1
+
+    esito = client.delete(f"{base}/synthetic", headers=admin)
+    assert esito.status_code == 200, esito.text
+    assert esito.json() == {"deleted": 1}
+
+    rimasti = client.get(base, headers=admin).json()
+    assert [v["display_name"] for v in rimasti["items"]] == ["reale.acme.example"]

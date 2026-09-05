@@ -9,8 +9,8 @@ from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, CurrentUserDep, DbDep, RequestContextDep, require_permission
 from app.core.rbac import Permission
-from app.models.enums import AuditAction, FindingWorkflowState
-from app.models.scanning import Finding, Scan
+from app.models.enums import AnalystValidation, AuditAction, FindingWorkflowState, Severity
+from app.models.scanning import Finding, Remediation, Scan
 from app.models.scope import Asset
 from app.schemas.common import Page
 from app.schemas.scanning import (
@@ -49,12 +49,22 @@ def _con_asset(db, findings: list[Finding]) -> list[FindingRead]:  # noqa: ANN00
         nomi = {a.id: a.display_name for a in db.execute(
             select(Asset).where(Asset.id.in_(identificativi))).scalars().all()}
 
+    rimedi: dict = {}
+    riferimenti = {f.remediation_id for f in findings if f.remediation_id}
+    if riferimenti:
+        rimedi = {r.id: r for r in db.execute(
+            select(Remediation).where(Remediation.id.in_(riferimenti))).scalars().all()}
+
     letti = []
     for finding in findings:
         letto = FindingRead.model_validate(finding)
         letto.asset_display = nomi.get(finding.asset_id) or finding.detail
         letto.attributes_json = finding.attributes_json or {}
         letto.evidence_summary = evidence_summary(finding)
+        rimedio = rimedi.get(finding.remediation_id)
+        if rimedio is not None:
+            letto.remediation_catalog_id = rimedio.catalog_id
+            letto.remediation_title_it = rimedio.title_it
         letti.append(letto)
     return letti
 
@@ -63,6 +73,7 @@ def _con_asset(db, findings: list[Finding]) -> list[FindingRead]:  # noqa: ANN00
 def list_findings(scan_id: uuid.UUID, db: DbDep, current: CurrentUserDep,
                   severity: str | None = None, category: str | None = None,
                   workflow_state: str | None = None, only_scoring: bool = False,
+                  pending_review: bool = False,
                   page: int = 1, page_size: int = Query(default=100, le=500)) -> Page[FindingRead]:
     scan = _load_scan(db, scan_id, current)
     conditions = [Finding.scan_id == scan.id, Finding.tenant_id == current.tenant_id]
@@ -74,6 +85,13 @@ def list_findings(scan_id: uuid.UUID, db: DbDep, current: CurrentUserDep,
         conditions.append(Finding.workflow_state == workflow_state)
     if only_scoring:
         conditions.append(Finding.applied_deduction > 0)
+    if pending_review:
+        # Gli stessi rilievi che bloccano il report definitivo: critici o alti
+        # non ancora validati da un analista. Il criterio vive qui e non nel
+        # frontend, cosi' l'avviso in dashboard e questo elenco non possono
+        # descrivere insiemi diversi.
+        conditions.append(Finding.severity.in_([Severity.CRITICAL.value, Severity.HIGH.value]))
+        conditions.append(Finding.analyst_validation == AnalystValidation.NOT_REVIEWED.value)
 
     total = db.execute(select(func.count()).select_from(Finding).where(*conditions)).scalar_one()
     rows = db.execute(

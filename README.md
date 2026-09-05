@@ -175,6 +175,15 @@ Gli asset sono classificati come *Verified Owned*, *Likely Owned*, *Unverified*,
 *Third Party*, *Excluded*: solo i primi due influenzano il rating, i secondi con
 regole piu' restrittive.
 
+### Dati dimostrativi
+
+Con `SCAN_MOCK_MODE=true` le scansioni producono dati sintetici, e gli asset
+restano nel database fra una scansione e l'altra. Sono marcati come
+dimostrativi ed **esclusi dai report delle scansioni reali**: senza la
+marcatura un indirizzo e-mail inventato comparirebbe in un report vero come
+«proprieta' verificata». Un asset osservato anche da una scansione reale perde
+la marcatura; la sezione *Asset* permette di rimuovere quelli rimasti.
+
 ### Inventario degli asset
 
 Ogni asset attribuito all'azienda e' consultabile in *Asset* (sotto la scheda

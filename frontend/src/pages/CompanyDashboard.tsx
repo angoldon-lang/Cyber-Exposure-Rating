@@ -103,6 +103,14 @@ export default function CompanyDashboard() {
         <Banner kind="warning">
           {criticalPending} rilievi critici o alti attendono la validazione di un analista.
           Il report definitivo non e’ emettibile finche’ la revisione non e’ completa.
+          {data.last_scan?.id ? (
+            <>
+              {' '}
+              <Link to={`/scansioni/${String(data.last_scan.id)}/rilievi?daValidare=1`}>
+                Apri i {criticalPending} rilievi da validare
+              </Link>.
+            </>
+          ) : null}
         </Banner>
       )}
 

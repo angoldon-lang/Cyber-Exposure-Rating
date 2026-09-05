@@ -168,6 +168,9 @@ export const api = {
     request<Page<Asset>>(`/companies/${companyId}/assets?${new URLSearchParams(params)}`),
   assetsSummary: (companyId: string) =>
     request<AssetSummary>(`/companies/${companyId}/assets/summary`),
+  deleteSyntheticAssets: (companyId: string) =>
+    request<{ deleted: number }>(`/companies/${companyId}/assets/synthetic`,
+      { method: 'DELETE' }),
   portfolio: () => request<PortfolioView>('/portfolio'),
 
   scans: (companyId: string) => request<Page<Scan>>(`/companies/${companyId}/scans`),

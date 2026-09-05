@@ -13,6 +13,7 @@ from adapters.checkdmarc_adapter import CheckDMARCAdapter
 from adapters.ct_adapter import CertificateTransparencyAdapter
 from adapters.dns_adapter import DNSAdapter
 from adapters.credential_exposure_adapter import CredentialExposureAdapter
+from adapters.email_discovery_adapter import EmailDiscoveryAdapter
 from adapters.hibp_adapter import HIBPAdapter
 from adapters.httpx_adapter import HTTPXAdapter
 from adapters.ip_perimeter_adapter import IPPerimeterAdapter
@@ -25,6 +26,7 @@ from adapters.phase2 import (
     NucleiAdapter,
     ZAPBaselineAdapter,
 )
+from adapters.port_scan_adapter import PortScanAdapter
 from adapters.ransomware_live_adapter import RansomwareLiveAdapter
 from adapters.rdap_adapter import RDAPAdapter
 from adapters.spiderfoot_adapter import SpiderFootAdapter
@@ -43,6 +45,7 @@ ADAPTER_CLASSES: dict[str, type[BaseAdapter]] = {
     RDAPAdapter.key: RDAPAdapter,
     CertificateTransparencyAdapter.key: CertificateTransparencyAdapter,
     IPPerimeterAdapter.key: IPPerimeterAdapter,
+    EmailDiscoveryAdapter.key: EmailDiscoveryAdapter,
     SubfinderAdapter.key: SubfinderAdapter,
     SpiderFootAdapter.key: SpiderFootAdapter,
     CheckDMARCAdapter.key: CheckDMARCAdapter,
@@ -58,6 +61,7 @@ ADAPTER_CLASSES: dict[str, type[BaseAdapter]] = {
     ZAPBaselineAdapter.key: ZAPBaselineAdapter,
     NucleiAdapter.key: NucleiAdapter,
     NaabuAdapter.key: NaabuAdapter,
+    PortScanAdapter.key: PortScanAdapter,
     DNSTwistAdapter.key: DNSTwistAdapter,
     EmailHeaderAdapter.key: EmailHeaderAdapter,
     # --- Fase 3 ---

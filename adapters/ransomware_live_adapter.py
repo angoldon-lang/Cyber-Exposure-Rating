@@ -5,6 +5,7 @@ import difflib
 import re
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -24,6 +25,34 @@ _LEGAL_SUFFIXES = re.compile(
     r"corp|corporation|company|co|sa|ag|bv|nv)\b", re.IGNORECASE)
 
 
+class RispostaNonJSON(RuntimeError):
+    """La fonte ha risposto con qualcosa che non e' JSON."""
+
+
+def _json_o_errore(risposta: httpx.Response) -> Any:
+    """Decodifica la risposta dicendo *perche'* non e' utilizzabile.
+
+    Un `JSONDecodeError` nudo non aiuta: la causa tipica e' un endpoint non
+    piu' valido che rimanda alla pagina HTML della documentazione, e va detto,
+    perche' il rimedio e' aggiornare l'indirizzo e non riprovare.
+    """
+    tipo = risposta.headers.get("content-type", "")
+    if "json" not in tipo.lower():
+        raise RispostaNonJSON(
+            f"risposta non JSON ({tipo or 'tipo non dichiarato'}) da {risposta.url}: "
+            "l'endpoint non e' piu' valido oppure e' stato rediretto alla documentazione")
+    return risposta.json()
+
+
+def _motivo(errore: Exception) -> str:
+    """Messaggio d'errore che nomina la causa, non solo la classe."""
+    if isinstance(errore, RispostaNonJSON):
+        return str(errore)
+    if isinstance(errore, httpx.HTTPStatusError):
+        return f"HTTP {errore.response.status_code} da {errore.request.url}"
+    return type(errore).__name__
+
+
 def normalize_company_name(name: str) -> str:
     cleaned = _LEGAL_SUFFIXES.sub(" ", name.lower())
     cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
@@ -39,8 +68,11 @@ class RansomwareLiveAdapter(BaseAdapter):
 
     @property
     def base_url(self) -> str:
+        # La v1 non serve piu' `searchvictims`: l'API risponde 302 e rimanda
+        # alla pagina HTML della documentazione, che poi non e' JSON. Il
+        # prefisso di versione fa parte dell'indirizzo, non e' opzionale.
         return str(self.context.connector_config.get("ransomware_live", {})
-                   .get("base_url", "https://api.ransomware.live")).rstrip("/")
+                   .get("base_url", "https://api.ransomware.live/v2")).rstrip("/")
 
     def check_available(self) -> tuple[bool, str]:
         """Sonda di raggiungibilita'.
@@ -66,12 +98,12 @@ class RansomwareLiveAdapter(BaseAdapter):
                 # L'API risponde con un 302 legittimo: i salti si seguono, ma
                 # ogni destinazione passa dal ScopeGuard.
                 response = get_seguendo_redirect(
-                    client, f"{self.base_url}/searchvictims/{needle.replace(' ', '%20')}")
+                    client, f"{self.base_url}/searchvictims/{quote(needle, safe='')}")
                 response.raise_for_status()
-                candidates = response.json()
+                candidates = _json_o_errore(response)
         except Exception as exc:  # noqa: BLE001
             return AdapterResult(tool=self.key, status=AdapterStatus.FAILED,
-                                 error_message=f"errore Ransomware.live: {type(exc).__name__}",
+                                 error_message=f"errore Ransomware.live: {_motivo(exc)}",
                                  coverage_impact=self.coverage_weight)
         if not isinstance(candidates, list):
             candidates = []

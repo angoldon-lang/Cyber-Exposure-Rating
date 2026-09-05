@@ -33,8 +33,13 @@ class TestSSLAdapter(BaseAdapter):
 
     # ------------------------------------------------------------------
     def execute(self) -> AdapterResult:
+        # I bersagli sono nomi host, non URL: `web_targets` contiene
+        # «https://host» e filtrarlo come hostname lo scartava sempre, cosi'
+        # testssl dichiarava «nessun host in perimetro» a ogni scansione anche
+        # con il perimetro corretto. I sottodomini scoperti stanno in
+        # `known_subdomains`, che e' gia' una lista di nomi.
         targets = self.context.scope_guard.filter_targets(
-            self.context.web_targets or self.context.domains, "hostname")
+            self.context.known_subdomains or self.context.domains, "hostname")
         if not targets:
             return AdapterResult(tool=self.key, status=AdapterStatus.SKIPPED,
                                  error_message="nessun host in perimetro",
