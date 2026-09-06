@@ -358,6 +358,9 @@ export interface ToolStatus {
   areas: string[];
   configured: boolean;
   reason: string | null;
+  /** Da cosa dipende il rimedio: una variabile d'ambiente, l'immagine del
+   *  worker, oppure un dato da fornire all'avvio della scansione. */
+  kind: 'configurazione' | 'immagine' | 'uso';
   requirements: ToolRequirement[];
 }
 

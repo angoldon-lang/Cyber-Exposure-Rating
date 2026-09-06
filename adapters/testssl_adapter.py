@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -18,6 +19,72 @@ ALLOWED_FLAGS = ("--jsonfile-pretty", "--quiet", "--color", "--severity", "--sne
 
 LEGACY_PROTOCOLS = ("SSLv2", "SSLv3", "TLSv1.0", "TLSv1.1")
 CERT_EXPIRY_WARNING_DAYS = 30
+
+# Quando l'host presenta piu' di un certificato (tipico con RSA ed ECDSA
+# insieme) testssl aggiunge « <hostCert#2>» all'identificatore del rilievo.
+# Senza toglierlo, il confronto per uguaglianza fallisce proprio sugli host
+# meglio configurati.
+_POSTFIX_CERTIFICATO = re.compile(r"\s*<hostCert#\d+>\s*$")
+_GIORNI_FRA_PARENTESI = re.compile(r"\((-?\d+)\)")
+_PRIMO_INTERO = re.compile(r"-?\d+")
+
+
+def rilievi_testssl(payload: Any) -> list[dict[str, Any]]:
+    """Appiattisce l'output di testssl in una lista di rilievi.
+
+    Con `--jsonfile-pretty` testssl non scrive una lista piatta: mette ogni
+    host sotto `scanResult` e, dentro l'host, distribuisce i rilievi in una
+    lista per sezione (`protocols`, `ciphers`, `serverDefaults`,
+    `vulnerabilities`, `headerResponse`, ...).
+
+    Il codice precedente iterava direttamente `scanResult`, il cui unico
+    elemento e' l'host e non ha alcun campo `id`: nessun rilievo veniva
+    riconosciuto e testssl restituiva zero evidenze a ogni scansione, pur
+    consumando la maggior parte del tempo dell'analisi.
+
+    Si accetta anche la forma piatta prodotta da `--jsonfile`, cosi' il
+    parser non dipende dall'opzione scelta.
+    """
+    if isinstance(payload, list):
+        voci: list[Any] = payload
+    elif isinstance(payload, dict):
+        voci = payload.get("scanResult") or []
+    else:
+        return []
+
+    rilievi: list[dict[str, Any]] = []
+    for voce in voci:
+        if not isinstance(voce, dict):
+            continue
+        if "id" in voce:                      # forma piatta
+            rilievi.append(voce)
+            continue
+        for sezione in voce.values():         # sezioni dell'host
+            if isinstance(sezione, list):
+                rilievi.extend(r for r in sezione if isinstance(r, dict) and "id" in r)
+    return rilievi
+
+
+def giorni_alla_scadenza(finding: str) -> int | None:
+    """Giorni residui letti da `cert_expirationStatus`.
+
+    testssl usa tre forme, e la seconda e la terza si somigliano abbastanza
+    da confondersi:
+
+        «expired»                 -> certificato gia' scaduto
+        «89 >= 60 days»           -> il residuo e' il primo numero
+        «expires < 30 days (25)»  -> il residuo e' quello fra parentesi;
+                                     il 30 e' la soglia di allarme, e
+                                     leggerlo al suo posto fa credere che il
+                                     certificato duri piu' di quanto duri
+    """
+    if "expired" in finding.lower():
+        return -1
+    fra_parentesi = _GIORNI_FRA_PARENTESI.search(finding)
+    if fra_parentesi:
+        return int(fra_parentesi.group(1))
+    primo = _PRIMO_INTERO.search(finding)
+    return int(primo.group()) if primo else None
 
 
 class TestSSLAdapter(BaseAdapter):
@@ -109,15 +176,10 @@ class TestSSLAdapter(BaseAdapter):
 
     def _analyse_testssl(self, host: str, findings: list[dict[str, Any]] | dict) -> list[NormalizedEvidence]:
         """Traduce l'output nativo di testssl.sh in evidenze normalizzate."""
-        items = findings.get("scanResult", findings) if isinstance(findings, dict) else findings
-        if not isinstance(items, list):
-            return []
         posture: dict[str, Any] = {"protocols": {}, "weak_ciphers": [], "days_to_expiry": None,
                                    "hostname_match": True}
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            identifier = str(item.get("id", ""))
+        for item in rilievi_testssl(findings):
+            identifier = _POSTFIX_CERTIFICATO.sub("", str(item.get("id", "")))
             finding = str(item.get("finding", ""))
             severity = str(item.get("severity", "")).upper()
             if identifier in {"SSLv2", "SSLv3", "TLS1", "TLS1_1", "TLS1_2", "TLS1_3"}:
@@ -127,11 +189,12 @@ class TestSSLAdapter(BaseAdapter):
             if severity in {"HIGH", "CRITICAL", "MEDIUM"} and "cipher" in identifier.lower():
                 posture["weak_ciphers"].append({"name": identifier, "reason": finding[:120]})
             if identifier == "cert_expirationStatus":
-                digits = [int(tok) for tok in finding.replace(">", " ").split() if tok.isdigit()]
-                posture["days_to_expiry"] = -1 if "expired" in finding.lower() else (
-                    digits[0] if digits else None)
-            if identifier == "cert_hostnameMismatch":
-                posture["hostname_match"] = "no" in finding.lower() or "matches" in finding.lower()
+                posture["days_to_expiry"] = giorni_alla_scadenza(finding)
+            # testssl non emette alcun `cert_hostnameMismatch`: il nome che
+            # non corrisponde e' un esito della catena di fiducia.
+            if identifier == "cert_chain_of_trust" and \
+                    "does not match supplied uri" in finding.lower():
+                posture["hostname_match"] = False
         return self._build(host, posture)
 
     # ------------------------------------------------------------------

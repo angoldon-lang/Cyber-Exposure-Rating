@@ -283,7 +283,12 @@ tools:
     # sola supera le quattro ore e la scansione resta in corso senza che nulla
     # sia andato storto. `total_budget_seconds` e' il tetto complessivo dello
     # strumento: superato, gli host rimanenti sono dichiarati non verificati.
-    timeout_seconds: 300
+    # Un host che risponde si analizza in 60-80 s (misurato su scansioni
+    # reali). Chi supera i tre minuti non sta rallentando: non risponde ai
+    # test TLS, e aspettarlo fino a cinque toglie il tempo agli host
+    # successivi. Nell'ultima scansione due host irraggiungibili si sono
+    # presi 600 s dei 900 disponibili, lasciandone fuori altri.
+    timeout_seconds: 180
     total_budget_seconds: 900
     max_targets: 10
     repository: "https://github.com/testssl/testssl.sh"

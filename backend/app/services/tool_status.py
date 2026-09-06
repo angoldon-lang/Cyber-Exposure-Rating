@@ -11,6 +11,7 @@ questa e' una diagnosi di cosa manca, non un magazzino di credenziali.
 """
 from __future__ import annotations
 
+import platform
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -37,11 +38,18 @@ class StatoStrumento:
     configurato: bool = True
     requisiti: list[RequisitoStrumento] = field(default_factory=list)
     motivo: str | None = None
+    # Da cosa dipende il rimedio: `configurazione` (una variabile
+    # d'ambiente), `immagine` (il worker non contiene il binario o il
+    # runtime), `uso` (lo strumento e' pronto ma resta inattivo finche' non
+    # gli si da' qualcosa durante la scansione). Distinguerli evita di
+    # mandare qualcuno a cercare una variabile che non esiste.
+    rimedio: str = "configurazione"
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "key": self.chiave, "label": self.etichetta, "profiles": self.profili,
             "areas": self.aree, "configured": self.configurato, "reason": self.motivo,
+            "kind": self.rimedio,
             "requirements": [
                 {"variable": r.variabile, "present": r.valore_presente,
                  "free": r.gratuito, "where": r.dove, "note": r.nota}
@@ -79,15 +87,53 @@ def _requisiti(chiave: str) -> list[RequisitoStrumento]:
 
 # Strumenti che dipendono da un binario o da un runtime nel worker, non da una
 # variabile: il rimedio e' l'immagine, non la configurazione.
-DIPENDENZE_NEL_WORKER = {
-    "amass_passive": "Il binario `amass` non e' nell'immagine del worker. "
-                     "Subfinder e Certificate Transparency coprono gia' "
-                     "l'enumerazione dei sottodomini.",
-    "zap_baseline": "Richiede un runtime Docker dentro il worker, che per "
-                    "scelta non c'e': il worker non deve poter avviare "
-                    "container. L'analisi web resta coperta da httpx e Nuclei.",
-    "naabu": "Non esistono binari per l'architettura del worker: la "
-             "rilevazione dei servizi e' svolta da `port_scan`, integrato.",
+def _dipendenze_nel_worker() -> dict[str, str]:
+    dipendenze = {
+        # Verificato su amass v4.2.0: il flag `-json` non esiste piu' (era in
+        # v3) e `-oA` scrive solo un file di testo. Metterlo nell'immagine
+        # senza riscrivere l'adapter aggiungerebbe uno strumento che fallisce,
+        # non uno che funziona. Subfinder e Certificate Transparency coprono
+        # gia' l'enumerazione dei sottodomini: nell'ultima scansione hanno
+        # prodotto 53 e 65 nomi.
+        "amass_passive": "Il binario `amass` non e' nell'immagine del worker. "
+                         "Subfinder e Certificate Transparency coprono gia' "
+                         "l'enumerazione dei sottodomini; l'aggiunta di amass "
+                         "richiede di riscrivere l'integrazione, perche' la "
+                         "versione 4 ha rimosso l'output JSON su cui si basa.",
+        "zap_baseline": "Richiede un runtime Docker dentro il worker, che per "
+                        "scelta non c'e': un contenitore che esegue scansioni "
+                        "non deve poter avviare altri contenitori. L'analisi "
+                        "web resta coperta da httpx e Nuclei.",
+    }
+    # naabu non pubblica binari per arm64 (usa libpcap tramite CGO). Su amd64
+    # e' invece presente: dichiararlo mancante ovunque mandava a cercare un
+    # problema che su quella architettura non esiste.
+    if platform.machine().lower() not in {"x86_64", "amd64"}:
+        dipendenze["naabu"] = (
+            f"Non esistono binari di naabu per l'architettura "
+            f"{platform.machine()}: la rilevazione dei servizi e' svolta da "
+            "`port_scan`, integrato nella piattaforma. Nessun intervento "
+            "necessario.")
+    return dipendenze
+
+
+# Strumenti installati e configurati che restano inattivi finche' non ricevono
+# qualcosa durante la scansione. Non sono un guasto e non hanno una variabile
+# da impostare: senza dirlo, si finisce a cercare una configurazione assente.
+AZIONI_DELL_ANALISTA = {
+    "email_header": "Nessuna configurazione. L'analisi richiede l'intestazione "
+                    "completa di un messaggio ricevuto dall'organizzazione, da "
+                    "incollare all'avvio della scansione: senza, non c'e' nulla "
+                    "da esaminare.",
+    "port_scan": "Nessuna configurazione. Sonda gli indirizzi IP pubblici che "
+                 "risolvono da un dominio di cui e' stata verificata la "
+                 "proprieta' e che non stanno su infrastruttura condivisa "
+                 "(CDN, reverse proxy). Se resta saltato, mancano domini "
+                 "verificati in Gestione azienda.",
+    "xposedornot": "Nessuna configurazione: la fonte e' gratuita e senza "
+                   "chiave. Esamina gli indirizzi e-mail dell'organizzazione "
+                   "gia' noti; se non ne e' stato individuato nessuno, non ha "
+                   "bersagli.",
 }
 
 
@@ -102,21 +148,28 @@ def stato_strumenti() -> list[dict[str, Any]]:
         for chiave in definizione.get("tools", []):
             per_strumento.setdefault(chiave, []).append(nome)
 
+    nel_worker = _dipendenze_nel_worker()
     esiti: list[StatoStrumento] = []
     for chiave, definizione in strumenti.items():
         requisiti = _requisiti(chiave)
         mancanti = [r for r in requisiti if not r.valore_presente]
         motivo = None
-        if chiave in DIPENDENZE_NEL_WORKER:
-            motivo = DIPENDENZE_NEL_WORKER[chiave]
+        rimedio = "configurazione"
+        if chiave in nel_worker:
+            motivo, rimedio = nel_worker[chiave], "immagine"
+        elif chiave in AZIONI_DELL_ANALISTA:
+            motivo, rimedio = AZIONI_DELL_ANALISTA[chiave], "uso"
         elif mancanti:
             motivo = "Manca " + ", ".join(r.variabile or "" for r in mancanti) + "."
         esiti.append(StatoStrumento(
             chiave=chiave, etichetta=str(definizione.get("label", chiave)),
             profili=sorted(per_strumento.get(chiave, [])),
             aree=list(definizione.get("coverage_areas", [])),
-            configurato=not mancanti and chiave not in DIPENDENZE_NEL_WORKER,
-            requisiti=requisiti, motivo=motivo))
+            # Uno strumento che aspetta un dato dall'analista e' configurato:
+            # contarlo fra quelli da sistemare gonfierebbe l'elenco di cose
+            # da fare con voci su cui non c'e' nulla da fare.
+            configurato=not mancanti and chiave not in nel_worker,
+            requisiti=requisiti, motivo=motivo, rimedio=rimedio))
 
     # Prima cio' che non funziona: e' l'elenco di cosa c'e' da fare.
     esiti.sort(key=lambda s: (s.configurato, s.etichetta.lower()))

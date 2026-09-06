@@ -1,0 +1,191 @@
+{
+  "clientProblem1": [
+    {
+      "id": "engine_problem",
+      "severity": "WARN",
+      "finding": "No engine or GOST support via engine with your ./testssl/bin/openssl.Linux.x86_64"
+    }
+  ],
+  "Invocation": "testssl.sh --jsonfile-pretty /tmp/claude-0/-home-user-Cyber-Exposure-Rating/460f940f-059a-558c-a3e9-32eb0c9ab9de/scratchpad/ts.json --quiet --color 0 --severity LOW --sneaky example.com",
+  "at": "vm:./testssl/bin/openssl.Linux.x86_64",
+  "version": "3.2.4 ",
+  "openssl": "OpenSSL 1.0.2-bad from Fri Mar 28 16:54:51 2025",
+  "startTime": "1788726494",
+  "scanResult": [
+    {
+      "targetHost": "www.example.it",
+      "ip": "203.0.113.10",
+      "port": "443",
+      "rDNS": "--",
+      "service": "HTTP",
+      "pretest": [],
+      "protocols": [
+        {
+          "id": "SSLv2",
+          "severity": "INFO",
+          "finding": "not offered"
+        },
+        {
+          "id": "TLS1",
+          "severity": "LOW",
+          "finding": "offered (deprecated)"
+        },
+        {
+          "id": "TLS1_1",
+          "severity": "LOW",
+          "finding": "offered (deprecated)"
+        },
+        {
+          "id": "TLS1_2",
+          "severity": "INFO",
+          "finding": "offered"
+        }
+      ],
+      "grease": [],
+      "ciphers": [
+        {
+          "id": "cipherlist_3DES_IDEA",
+          "severity": "MEDIUM",
+          "finding": "offered"
+        }
+      ],
+      "serverPreferences": [],
+      "fs": [
+        {
+          "id": "FS_KEMs",
+          "severity": "LOW",
+          "finding": "No KEMs offered"
+        },
+        {
+          "id": "FS_TLS12_sig_algs",
+          "severity": "LOW",
+          "finding": "RSA-PSS-RSAE+SHA256 RSA+SHA256 RSA-PSS-RSAE+SHA384 RSA+SHA384 RSA-PSS-RSAE+SHA512 RSA+SHA512 RSA+SHA1"
+        }
+      ],
+      "serverDefaults": [
+        {
+          "id": "cert_chain_of_trust <hostCert#2>",
+          "severity": "CRITICAL",
+          "finding": "certificate does not match supplied URI"
+        },
+        {
+          "id": "cert_expirationStatus <hostCert#2>",
+          "severity": "HIGH",
+          "finding": "expires < 30 days (25)"
+        }
+      ],
+      "headerResponse": [
+        {
+          "id": "HSTS",
+          "severity": "LOW",
+          "finding": "not offered"
+        },
+        {
+          "id": "security_headers",
+          "severity": "MEDIUM",
+          "finding": "--"
+        }
+      ],
+      "vulnerabilities": [
+        {
+          "id": "ticketbleed",
+          "severity": "DEBUG",
+          "cve": "CVE-2016-9244",
+          "cwe": "CWE-200",
+          "finding": "test failed, around 17600 (debug info: 48, 5454502F31)"
+        }
+      ],
+      "cipherTests": [],
+      "browserSimulations": [],
+      "rating": [
+        {
+          "id": "overall_grade",
+          "severity": "CRITICAL",
+          "finding": "T"
+        }
+      ]
+    },
+    {
+      "targetHost": "example.com",
+      "ip": "104.20.23.154",
+      "port": "443",
+      "rDNS": "--",
+      "service": "HTTP",
+      "pretest": [],
+      "protocols": [],
+      "grease": [],
+      "ciphers": [],
+      "serverPreferences": [],
+      "fs": [
+        {
+          "id": "FS_KEMs",
+          "severity": "LOW",
+          "finding": "No KEMs offered"
+        },
+        {
+          "id": "FS_TLS12_sig_algs",
+          "severity": "LOW",
+          "finding": "RSA-PSS-RSAE+SHA256 RSA+SHA256 RSA-PSS-RSAE+SHA384 RSA+SHA384 RSA-PSS-RSAE+SHA512 RSA+SHA512 RSA+SHA1"
+        }
+      ],
+      "serverDefaults": [
+        {
+          "id": "cert_chain_of_trust",
+          "severity": "CRITICAL",
+          "finding": "failed (self signed CA in chain)."
+        },
+        {
+          "id": "cert_expirationStatus",
+          "severity": "HIGH",
+          "finding": "expires < 30 days (25)"
+        },
+        {
+          "id": "cert_notAfter",
+          "severity": "HIGH",
+          "finding": "2026-10-02 05:44"
+        },
+        {
+          "id": "cert_revocation",
+          "severity": "HIGH",
+          "finding": "Neither CRL nor OCSP URI provided"
+        },
+        {
+          "id": "DNS_CAArecord",
+          "severity": "LOW",
+          "finding": "--"
+        }
+      ],
+      "headerResponse": [
+        {
+          "id": "HSTS",
+          "severity": "LOW",
+          "finding": "not offered"
+        },
+        {
+          "id": "security_headers",
+          "severity": "MEDIUM",
+          "finding": "--"
+        }
+      ],
+      "vulnerabilities": [
+        {
+          "id": "ticketbleed",
+          "severity": "DEBUG",
+          "cve": "CVE-2016-9244",
+          "cwe": "CWE-200",
+          "finding": "test failed, around 17600 (debug info: 48, 5454502F31)"
+        }
+      ],
+      "cipherTests": [],
+      "browserSimulations": [],
+      "rating": [
+        {
+          "id": "overall_grade",
+          "severity": "CRITICAL",
+          "finding": "T"
+        }
+      ]
+    }
+  ],
+  "scanTime": 127
+}

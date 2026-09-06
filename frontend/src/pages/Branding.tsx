@@ -28,6 +28,9 @@ function SchedaStrumenti() {
   if (!strumenti) return <div className="card"><Spinner /></div>;
 
   const daSistemare = strumenti.filter((s) => !s.configured);
+  // Pronti, ma inattivi finche' non ricevono un dato durante la scansione:
+  // non hanno una variabile da impostare, e cercarla e' tempo perso.
+  const inAttesaDiUnDato = strumenti.filter((s) => s.configured && s.kind === 'uso');
 
   return (
     <div className="card">
@@ -65,10 +68,13 @@ function SchedaStrumenti() {
                   </td>
                   <td className="small muted">{strumento.reason}</td>
                   <td className="small">
-                    {strumento.requirements.length === 0 ? (
+                    {strumento.kind === 'immagine' ? (
                       <span className="muted">
-                        Dipende dall’immagine del worker, non dalla configurazione.
+                        Dipende dall’immagine del worker, non dalla configurazione:
+                        non c’è nulla da impostare qui.
                       </span>
+                    ) : strumento.requirements.length === 0 ? (
+                      <span className="muted">Nessun requisito noto.</span>
                     ) : (
                       <ul style={{ margin: 0, paddingLeft: 16 }}>
                         {strumento.requirements.filter((r) => !r.present).map((r) => (
@@ -96,6 +102,27 @@ function SchedaStrumenti() {
         Dopo aver modificato <code>.env</code> serve <code>docker compose up -d</code>:
         le variabili si leggono all’avvio del container.
       </p>
+
+      {inAttesaDiUnDato.length > 0 && (
+        <>
+          <div className="section-head" style={{ marginTop: 18 }}>
+            <h3 style={{ margin: 0 }}>Pronti, in attesa di un dato</h3>
+          </div>
+          <p className="muted small">
+            Questi strumenti sono installati e non richiedono configurazione:
+            restano inattivi finché non ricevono qualcosa dalla scansione. Se
+            compaiono come «saltati» nel registro, la causa è qui, non nel file
+            <code> .env</code>.
+          </p>
+          <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+            {inAttesaDiUnDato.map((strumento) => (
+              <li key={strumento.key} style={{ marginBottom: 6 }}>
+                <strong>{strumento.label}</strong> — {strumento.reason}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
