@@ -67,6 +67,21 @@ def list_connectors(db: DbDep,
     return [ConnectorRead.model_validate(r) for r in rows]
 
 
+@router.get("/tool-status")
+def tool_status(current: CurrentUserDep) -> list[dict]:
+    """Cosa manca a ciascuno strumento per funzionare.
+
+    Non restituisce segreti: dice quale variabile impostare, se la fonte
+    costi qualcosa e dove procurarsi l'eventuale chiave. Il valore delle
+    chiavi resta nelle variabili d'ambiente, come per il resto della
+    piattaforma.
+    """
+    from app.services.tool_status import stato_strumenti
+
+    del current  # basta un'utenza autenticata: nessun dato riservato
+    return stato_strumenti()
+
+
 @router.get("/coverage-matrix")
 def coverage_matrix(profile: str = "public_passive") -> list[dict]:
     """Matrice di copertura e costi: quali fonti sono gratuite, quali no."""

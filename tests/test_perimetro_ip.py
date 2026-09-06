@@ -194,13 +194,72 @@ def test_le_reti_oltre_la_soglia_sono_rifiutate(client, admin):  # noqa: F811
     assert client.post(base, headers=admin, json={"cidr": "1.0.0.0/8"}).status_code == 422
 
 
-def test_una_scansione_non_autorizza_se_stessa(adapter_context):
-    """Gli indirizzi scoperti entrano come inventario. Se la scansione potesse
-    autorizzarsi da sola, il perimetro non sarebbe piu' una decisione umana."""
+def test_l_autorizzazione_copre_solo_gli_indirizzi_provati():
+    """Non e' la scansione ad autorizzare: e' il documento firmato che abilita
+    il profilo, di cui il perimetro dell'organizzazione fa parte.
+
+    Le condizioni sono due e servono entrambe. La proprieta' del dominio
+    dev'essere **verificata** — una prova, non una deduzione — e l'indirizzo
+    non deve stare su infrastruttura condivisa, dove sondarlo colpirebbe il
+    fornitore invece del cliente. Tutto il resto resta una decisione
+    esplicita dell'analista.
+    """
+    from adapters.base import AdapterResult, AdapterStatus, DiscoveredAsset
+    from app.workers.pipeline import _ip_coperti_dall_autorizzazione
+
+    def asset(indirizzo: str, *, sondabile: bool, verificato: bool) -> DiscoveredAsset:
+        return DiscoveredAsset(
+            asset_key=indirizzo, asset_type="ip_address", display_name=indirizzo,
+            discovered_by="ip_perimeter",
+            attributes={"scannable": sondabile, "from_verified_domain": verificato})
+
+    esito = AdapterResult(tool="ip_perimeter", status=AdapterStatus.SUCCESS, assets=[
+        asset("203.0.113.10", sondabile=True, verificato=True),    # ammesso
+        asset("203.0.113.11", sondabile=True, verificato=False),   # dominio non verificato
+        asset("203.0.113.12", sondabile=False, verificato=True),   # infrastruttura condivisa
+        asset("203.0.113.13", sondabile=False, verificato=False),
+    ])
+    assert _ip_coperti_dall_autorizzazione([esito]) == {"203.0.113.10"}
+
+
+def test_una_scansione_dimostrativa_non_autorizza_nulla(adapter_context):
+    """In mock mode i domini «verificati» sono finti: promuovere i loro
+    indirizzi renderebbe sondabile un perimetro inventato."""
     import inspect
 
     from app.services import persistence
 
     sorgente = inspect.getsource(persistence._persist_ip_inventory)
+    # La promozione avviene solo per gli indirizzi che la pipeline ha
+    # dichiarato coperti, mai per tutti quelli osservati.
+    assert "if asset.asset_key in coperti:" in sorgente
     assert "OwnershipStatus.UNVERIFIED.value" in sorgente
-    assert "VERIFIED_OWNED" not in sorgente
+
+
+def test_gli_indirizzi_coperti_diventano_bersagli_senza_intervento_manuale():
+    """Regressione: gli indirizzi restavano tutti non autorizzati, il port
+    scanning non partiva mai e l'unico rimedio era spuntarli a mano."""
+    import inspect
+
+    from app.workers import pipeline
+
+    sorgente = inspect.getsource(pipeline.ScanPipeline.run)
+    assert "_ip_coperti_dall_autorizzazione" in sorgente
+    assert "ip_autorizzati=sorted(autorizzati)" in sorgente
+
+    costruttore = inspect.getsource(pipeline.ScanPipeline.build_context)
+    assert "self._ownership_context(ip_autorizzati)" in costruttore, (
+        "gli indirizzi coperti devono entrare nel perimetro del ScopeGuard")
+
+
+def test_la_promozione_arriva_fino_al_perimetro_salvato():
+    """Se non finisse anche nel database, l'interfaccia continuerebbe a
+    mostrarli come non autorizzati e la scansione successiva ripartirebbe da
+    zero."""
+    import inspect
+
+    from app.services import persistence
+    from app.workers import pipeline
+
+    assert "ip_authorized_by_scope" in inspect.getsource(pipeline.ScanPipeline.run)
+    assert "ip_authorized_by_scope" in inspect.getsource(persistence._persist_ip_inventory)

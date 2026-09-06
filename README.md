@@ -175,6 +175,21 @@ Gli asset sono classificati come *Verified Owned*, *Likely Owned*, *Unverified*,
 *Third Party*, *Excluded*: solo i primi due influenzano il rating, i secondi con
 regole piu' restrittive.
 
+### Strumenti non configurati
+
+*Personalizzazione → Strumenti* elenca cio' che manca a ciascuno strumento:
+la variabile da impostare, se la fonte costi qualcosa e dove procurarsi
+l'eventuale chiave. Le chiavi restano nel file `.env` — la schermata dice
+cosa manca, non le conserva — e dopo averlo modificato serve
+`docker compose up -d`, perche' le variabili si leggono all'avvio.
+
+Alcuni strumenti non dipendono dalla configurazione ma dall'immagine del
+worker (`amass`, `zap_baseline`, `naabu` su arm64): la schermata lo dichiara,
+invece di suggerire una variabile che non esiste.
+
+Uno strumento non configurato non falsa il rating: riduce l'affidabilita'
+dichiarata e l'area che copriva risulta non verificata.
+
 ### Perche' la sezione dark web resta vuota
 
 La verifica sulle violazioni cerca indirizzi e-mail. Se l'unica fonte

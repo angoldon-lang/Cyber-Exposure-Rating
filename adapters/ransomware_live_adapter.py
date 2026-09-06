@@ -32,6 +32,11 @@ class RispostaNonJSON(RuntimeError):
     """La fonte ha risposto con qualcosa che non e' JSON."""
 
 
+def _senza_errori(risposta: httpx.Response) -> httpx.Response:
+    risposta.raise_for_status()
+    return risposta
+
+
 def _json_o_errore(risposta: httpx.Response) -> Any:
     """Decodifica la risposta dicendo *perche'* non e' utilizzabile.
 
@@ -111,8 +116,12 @@ class RansomwareLiveAdapter(BaseAdapter):
                 # ogni destinazione passa dal ScopeGuard.
                 response = get_seguendo_redirect(
                     client, f"{self.base_url}/searchvictims/{quote(needle, safe='')}")
-                response.raise_for_status()
-                candidates = _json_o_errore(response)
+                # 404 non e' un errore: e' la risposta a «questo nome non
+                # compare fra le vittime», cioe' l'esito che ci si augura.
+                # Trattarlo come guasto dichiarava non verificata un'area che
+                # era stata verificata e risultava pulita.
+                candidates = [] if response.status_code == 404 else _json_o_errore(
+                    _senza_errori(response))
         except Exception as exc:  # noqa: BLE001
             return AdapterResult(tool=self.key, status=AdapterStatus.FAILED,
                                  error_message=f"errore Ransomware.live: {_motivo(exc)}",

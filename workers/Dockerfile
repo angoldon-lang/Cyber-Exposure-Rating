@@ -88,6 +88,15 @@ RUN git clone --depth 1 --branch ${TESTSSL_VERSION} \
 # lo elencasse esplicitamente farebbe fallire la build.
 COPY --from=tools /out/ /usr/local/bin/
 
+# I template di Nuclei non sono nel binario: senza, ogni esecuzione termina
+# con «Could not run nuclei: no templates provided for scan». Vanno messi
+# nell'immagine, perche' il worker gira senza rete verso GitHub garantita e
+# con la cartella home non scrivibile: scaricarli alla prima esecuzione non
+# funziona. La versione e' fissata come per gli altri strumenti.
+ARG NUCLEI_TEMPLATES_VERSION=v10.1.5
+ENV NUCLEI_TEMPLATES_DIR=/opt/nuclei-templates
+RUN git clone --depth 1 --branch ${NUCLEI_TEMPLATES_VERSION}         https://github.com/projectdiscovery/nuclei-templates.git ${NUCLEI_TEMPLATES_DIR}     && rm -rf ${NUCLEI_TEMPLATES_DIR}/.git
+
 WORKDIR /srv
 COPY backend/requirements.txt /srv/backend/requirements.txt
 RUN pip install --no-cache-dir -r /srv/backend/requirements.txt \

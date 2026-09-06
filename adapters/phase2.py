@@ -248,7 +248,13 @@ class NucleiAdapter(BaseAdapter):
         with TemporaryWorkspace("defenix-nuclei-") as workspace:
             list_file = workspace / "targets.txt"
             list_file.write_text("\n".join(urls), encoding="utf-8")
+            # I template vanno indicati esplicitamente: il binario non li
+            # contiene, e senza `-t` nuclei termina con «no templates provided
+            # for scan» anche quando gli identificativi sono corretti. La
+            # cartella e' quella preparata nell'immagine del worker.
+            cartella = str(self.config.get("templates_dir", "/opt/nuclei-templates"))
             args = ["-jsonl", "-silent", "-no-color", "-disable-update-check",
+                    "-t", cartella,
                     "-l", str(list_file), "-id", ",".join(template_ids),
                     "-rate-limit", str(int(self.config.get("rate_limit_per_second", 20))),
                     "-timeout", "20", "-retries", "1"]

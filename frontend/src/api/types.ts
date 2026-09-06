@@ -343,6 +343,24 @@ export interface AssetSummary {
   by_tool: Record<string, number>;
 }
 
+export interface ToolRequirement {
+  variable: string | null;
+  present: boolean;
+  free: boolean;
+  where: string | null;
+  note: string | null;
+}
+
+export interface ToolStatus {
+  key: string;
+  label: string;
+  profiles: string[];
+  areas: string[];
+  configured: boolean;
+  reason: string | null;
+  requirements: ToolRequirement[];
+}
+
 export interface BulkReviewResult {
   applied: number;
   failed: Array<{ finding_id: string; reference_code?: string; reason: string }>;

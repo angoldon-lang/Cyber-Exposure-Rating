@@ -155,6 +155,11 @@ def _persist_ip_inventory(db: Session, scan: Scan, outcome: ScanOutcome) -> None
         for riga in db.execute(
             select(IPAddress).where(IPAddress.company_id == scan.company_id)).scalars().all()
     }
+    # Indirizzi che l'autorizzazione della scansione gia' copre: risolvono da
+    # un dominio verificato e non stanno su infrastruttura condivisa. Non e'
+    # la scansione ad autorizzarli — e' il documento firmato che abilita il
+    # profilo, di cui il perimetro dell'organizzazione fa parte.
+    coperti = set((outcome.stats or {}).get("ip_authorized_by_scope") or [])
     for asset in outcome.normalization.assets:
         if asset.asset_type != "ip_address":
             continue
@@ -178,6 +183,8 @@ def _persist_ip_inventory(db: Session, scan: Scan, outcome: ScanOutcome) -> None
         riga.is_cdn = bool(attributi.get("is_cdn"))
         riga.is_shared_hosting = attributi.get("network_type") == "condivisa"
         riga.cloud_provider = (attributi.get("provider") or "")[:64] or None
+        if asset.asset_key in coperti:
+            riga.ownership_status = OwnershipStatus.VERIFIED_OWNED.value
     db.flush()
 
 

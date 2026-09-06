@@ -441,6 +441,10 @@ tools:
     coverage_areas: [technical_vulnerabilities, web_security]
     coverage_weight: 1.0
     template_allowlist_file: "config/nuclei_allowlist.yaml"
+    # Cartella dei template nell'immagine del worker. Il binario non li
+    # contiene: senza questa indicazione nuclei termina con «no templates
+    # provided for scan» anche con identificativi corretti.
+    templates_dir: "/opt/nuclei-templates"
     excluded_tags: [dos, fuzz, brute-force, intrusive, rce, sqli, file-upload,
                     auth-bypass-active, headless, network-dos, exploit]
 

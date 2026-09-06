@@ -94,6 +94,7 @@ class ScanPipeline:
         self.confidence_engine = confidence_engine or ConfidenceEngine()
         self.profile_definition = profile_definition(request.profile)
         self.ip_perimeter_summary: dict[str, Any] = {}
+        self.ip_autorizzati_di_diritto: set[str] = set()
         # Tempo massimo complessivo della scansione. Era dichiarato nella
         # configurazione e non applicato da nessuna parte: bastava uno
         # strumento lento su molti bersagli — testssl.sh su venticinque host,
@@ -108,8 +109,9 @@ class ScanPipeline:
                       discovered_emails: Sequence[str] = (),
                       resolved_ips: dict[str, list[str]] | None = None,
                       ip_addresses: Sequence[str] | None = None,
+                      ip_autorizzati: Sequence[str] | None = None,
                       extra_tool_config: dict[str, Any] | None = None) -> AdapterContext:
-        ownership = self._ownership_context()
+        ownership = self._ownership_context(ip_autorizzati)
         guard = build_scope_guard_from_ownership(
             ownership,
             require_explicit_whitelist=bool(
@@ -137,12 +139,13 @@ class ScanPipeline:
             tool_config=tool_config,
             connector_config=self.request.connector_config)
 
-    def _ownership_context(self) -> OwnershipContext:
+    def _ownership_context(self, ip_autorizzati: Sequence[str] | None = None
+                           ) -> OwnershipContext:
         return OwnershipContext.build(
             verified_domains=self.request.verified_domains,
             declared_domains=[d for d in self.request.domains
                               if d not in self.request.verified_domains],
-            authorized_ips=self.request.authorized_ips,
+            authorized_ips=list(self.request.authorized_ips) + list(ip_autorizzati or []),
             authorized_networks=self.request.network_ranges,
             excluded_values=self.request.excluded_values)
 
@@ -184,14 +187,22 @@ class ScanPipeline:
                                for asset in result.assets
                                if asset.asset_type == "ip_address"}
                               | set(self.request.ip_addresses))
-        self.ip_perimeter_summary = _riepilogo_perimetro_ip(
-            perimeter_results, set(self.request.authorized_ips))
+        # Indirizzi che l'autorizzazione gia' copre: risolvono da un dominio la
+        # cui proprieta' e' stata verificata e non stanno su infrastruttura
+        # condivisa di terzi. Il documento firmato che abilita il profilo
+        # copre il perimetro dell'organizzazione, e quegli indirizzi ne fanno
+        # parte: chiedere di spuntarli a mano non aggiunge una decisione, ne
+        # rimanda una gia' presa.
+        self.ip_autorizzati_di_diritto = _ip_coperti_dall_autorizzazione(perimeter_results)
+        autorizzati = set(self.request.authorized_ips) | self.ip_autorizzati_di_diritto
+        self.ip_perimeter_summary = _riepilogo_perimetro_ip(perimeter_results, autorizzati)
 
         # --- Fase 2: analisi (posta, web, TLS, dark web) ---
         analysis_context = self.build_context(
             known_subdomains=subdomains,
             discovered_emails=discovered_emails,
             ip_addresses=ip_addresses,
+            ip_autorizzati=sorted(autorizzati),
             web_targets=[f"https://{host}" for host in subdomains[:200]])
         analysis_adapters = build_adapters(
             analysis_context,
@@ -238,6 +249,7 @@ class ScanPipeline:
             raw_outputs={r.tool: r.raw_output for r in all_results if r.raw_output},
             stats={**output.stats,
                    "ip_perimeter": self.ip_perimeter_summary,
+                   "ip_authorized_by_scope": sorted(self.ip_autorizzati_di_diritto),
                    "duration_seconds": (datetime.now(UTC) - started).total_seconds(),
                    "tools_total": len(all_results),
                    "tools_failed": failed,
@@ -386,6 +398,28 @@ def _resolved_ips(results: Sequence[AdapterResult]) -> dict[str, list[str]]:
                 if relazione.get("type") == "resolves_to" and relazione.get("source"):
                     mappa[asset.asset_key].add(str(relazione["source"]).lower())
     return {indirizzo: sorted(domini) for indirizzo, domini in mappa.items()}
+
+
+def _ip_coperti_dall_autorizzazione(results: Sequence[AdapterResult]) -> set[str]:
+    """Indirizzi che l'autorizzazione della scansione gia' copre.
+
+    Due condizioni, entrambe necessarie. La prima e' che l'indirizzo risolva
+    da un dominio di cui e' stata **verificata** la proprieta': non e' una
+    deduzione, e' una prova. La seconda e' che non stia su infrastruttura
+    condivisa — CDN, reverse proxy — dove sondarlo significherebbe sondare il
+    fornitore invece del cliente.
+
+    Fuori da queste condizioni l'autorizzazione resta un atto esplicito
+    dell'analista.
+    """
+    return {
+        asset.asset_key
+        for result in results
+        for asset in result.assets
+        if asset.asset_type == "ip_address"
+        and asset.attributes.get("scannable")
+        and asset.attributes.get("from_verified_domain")
+    }
 
 
 def _riepilogo_perimetro_ip(results: Sequence[AdapterResult],

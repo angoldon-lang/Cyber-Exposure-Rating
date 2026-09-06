@@ -1,13 +1,105 @@
 /** Personalizzazione: marchio, logo, colore e testi inseriti nei report. */
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, api, auth } from '../api/client';
-import type { Branding } from '../api/types';
-import { Banner, ConfirmButton, Field, Spinner } from '../components/ui';
+import type { Branding, ToolStatus } from '../api/types';
+import { Banner, Chip, ConfirmButton, Field, Spinner } from '../components/ui';
 
 function messaggio(errore: unknown): string {
   if (errore instanceof ApiError) return errore.message;
   return String((errore as Error)?.message ?? errore);
 }
+
+/** Cosa manca a ciascuno strumento per funzionare.
+ *
+ *  Il motivo per cui uno strumento resta saltato compariva solo nel log del
+ *  worker. Chi deve porvi rimedio ha bisogno di sapere quale variabile
+ *  impostare, se la fonte costi qualcosa e dove procurarsi la chiave: tre
+ *  cose che non erano scritte da nessuna parte.
+ */
+function SchedaStrumenti() {
+  const [strumenti, setStrumenti] = useState<ToolStatus[] | null>(null);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.toolStatus().then(setStrumenti).catch((e) => setErrore(messaggio(e)));
+  }, []);
+
+  if (errore) return <Banner kind="danger">{errore}</Banner>;
+  if (!strumenti) return <div className="card"><Spinner /></div>;
+
+  const daSistemare = strumenti.filter((s) => !s.configured);
+
+  return (
+    <div className="card">
+      <div className="section-head">
+        <h2>Strumenti</h2>
+        <Chip tone={daSistemare.length ? 'medium' : 'low'}>
+          {strumenti.length - daSistemare.length} su {strumenti.length} pronti
+        </Chip>
+      </div>
+      <p className="muted small">
+        Uno strumento non configurato non falsa il rating: riduce l’affidabilita’
+        dichiarata della rilevazione, e l’area che copriva risulta non verificata.
+        Le chiavi restano nelle variabili d’ambiente del file <code>.env</code>:
+        questa schermata dice cosa manca, non le conserva.
+      </p>
+
+      {daSistemare.length === 0 ? (
+        <p className="muted small" style={{ marginBottom: 0 }}>
+          Tutti gli strumenti disponibili sono configurati.
+        </p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data">
+            <thead>
+              <tr><th>Strumento</th><th>Cosa manca</th><th>Come si risolve</th></tr>
+            </thead>
+            <tbody>
+              {daSistemare.map((strumento) => (
+                <tr key={strumento.key}>
+                  <td>
+                    {strumento.label}
+                    {strumento.requirements.some((r) => !r.free) && (
+                      <> <Chip tone="medium">a pagamento</Chip></>
+                    )}
+                  </td>
+                  <td className="small muted">{strumento.reason}</td>
+                  <td className="small">
+                    {strumento.requirements.length === 0 ? (
+                      <span className="muted">
+                        Dipende dall’immagine del worker, non dalla configurazione.
+                      </span>
+                    ) : (
+                      <ul style={{ margin: 0, paddingLeft: 16 }}>
+                        {strumento.requirements.filter((r) => !r.present).map((r) => (
+                          <li key={r.variable}>
+                            <code>{r.variable}</code>
+                            {r.note && <> — {r.note}</>}
+                            {r.where && (
+                              <> <a href={r.where} target="_blank" rel="noreferrer">
+                                {r.free ? 'documentazione' : 'come ottenere la chiave'}
+                              </a></>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="muted small" style={{ marginBottom: 0, marginTop: 10 }}>
+        Dopo aver modificato <code>.env</code> serve <code>docker compose up -d</code>:
+        le variabili si leggono all’avvio del container.
+      </p>
+    </div>
+  );
+}
+
 
 export default function BrandingPage() {
   const [valori, setValori] = useState<Branding | null>(null);
@@ -158,6 +250,8 @@ export default function BrandingPage() {
           markup non viene interpretato.
         </p>
       </div>
+
+      <SchedaStrumenti />
     </>
   );
 }

@@ -100,10 +100,16 @@ arricchiti con il reverse DNS e con la rete RDAP e classificati:
 | Hosting | l'istanza e' del cliente, la rete e' del fornitore (AWS, Azure, OVH, Aruba...) | ammessa se autorizzata |
 | Rete propria | assegnazione diretta o hosting dedicato | ammessa se autorizzata |
 
-Gli indirizzi entrano nel perimetro come **inventario**, mai come autorizzati:
-una scansione non puo' autorizzare se stessa. L'autorizzazione e' un atto
-esplicito dell'analista, in *Gestione azienda → Perimetro di rete*, registrato
-nel log di audit con l'identita' di chi l'ha compiuto. Il motivo non e'
+Un indirizzo e' sondabile senza ulteriori passaggi quando **entrambe** le
+condizioni valgono: risolve da un dominio di cui e' stata **verificata** la
+proprieta' — una prova, non una deduzione — e non sta su infrastruttura
+condivisa. Non e' la scansione ad autorizzarsi: e' il documento firmato che
+abilita il profilo, di cui il perimetro dell'organizzazione fa parte. La
+promozione e' registrata nel log di audit.
+
+Fuori da quelle condizioni — dominio dichiarato ma non verificato, indirizzo
+inserito a mano, rete condivisa — l'autorizzazione resta un atto esplicito
+dell'analista in *Gestione azienda → Perimetro di rete*. Il motivo non e'
 formale: sondare porte su un indirizzo che non appartiene al cliente e' un
 fatto di cui qualcuno deve rispondere.
 

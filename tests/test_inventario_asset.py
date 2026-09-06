@@ -282,9 +282,11 @@ def test_dalla_scansione_al_report_l_inventario_arriva_intero(client, admin):  #
             select(IPAddress)
             .where(IPAddress.company_id == uuid.UUID(azienda["id"]))).scalars().all()
         assert indirizzi, "gli indirizzi classificati non entrano nel perimetro"
-        assert all(i.ownership_status != "verified_owned" for i in indirizzi)
         assert any(i.is_cdn for i in indirizzi), (
             "i dati sintetici devono includere un indirizzo dietro CDN")
+        # Un indirizzo su infrastruttura condivisa non e' mai autorizzabile,
+        # qualunque cosa dica il resto.
+        assert all(i.ownership_status != "verified_owned" for i in indirizzi if i.is_cdn)
 
 
 # ------------------------------------------------------- dati dimostrativi

@@ -206,9 +206,14 @@ def run_command(
     # arrivavano come «riuscito, zero risultati». Il codice di uscita e la
     # prima riga di stderr vanno registrati, altrimenti un guasto resta
     # invisibile finche' qualcuno non nota che quell'area e' sempre vuota.
-    if processo.returncode not in (0, None) and not stdout_grezzo:
+    if processo.returncode not in (0, None):
+        # Anche stdout: diversi strumenti scrivono li' l'errore di
+        # interpretazione degli argomenti, e senza quella riga il guasto
+        # resta senza causa. E' la situazione in cui si trova httpx, che esce
+        # con codice 1 senza scrivere nulla su stderr.
         logger.warning("tool_failed", binary=binary, exit_code=processo.returncode,
-                       stderr=prima_riga(stderr_grezzo))
+                       stderr=prima_riga(stderr_grezzo),
+                       stdout=prima_riga(stdout_grezzo))
 
     duration = time.monotonic() - started
     stdout = completed.stdout or b""

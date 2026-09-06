@@ -134,6 +134,7 @@ class EmailHarvestAdapter(BaseAdapter):
 
         da_visitare = self._pagine_iniziali()
         visitate: list[str] = []
+        radici_esplorate: set[str] = set()
         indirizzi: dict[str, set[str]] = {}
         raw: dict[str, Any] = {}
         errori = 0
@@ -152,6 +153,14 @@ class EmailHarvestAdapter(BaseAdapter):
                     continue
                 if risposta.status_code >= 400:
                     continue
+                # Dopo i redirect l'indirizzo finale puo' essere gia' stato
+                # letto: `/privacy-policy`, `/privacy-policy/` e `/privacy`
+                # arrivano tutti sulla stessa pagina, e senza questo controllo
+                # la si scarica tre volte.
+                finale = str(risposta.url)
+                if finale in visitate and finale != url:
+                    continue
+                visitate.append(finale)
                 if "html" not in risposta.headers.get("content-type", "").lower():
                     continue
                 pagina = risposta.text[:massimo_byte]
@@ -164,11 +173,18 @@ class EmailHarvestAdapter(BaseAdapter):
                 # Dalla pagina iniziale si aggiungono le pagine tipiche dei
                 # contatti e i collegamenti interni, in quest'ordine: sono
                 # quelle che pagano di piu' entro il numero massimo.
-                if len(visitate) <= len(self._pagine_iniziali()):
+                # I percorsi tipici si provano una volta sola per sito, e
+                # solo quelli che la pagina iniziale non collega gia': su un
+                # sito che li ha nel menu, riprovarli e' una serie di 404.
+                if radici_esplorate.isdisjoint({urlsplit(url).netloc}):
                     origine = urlsplit(url)
+                    radici_esplorate.add(origine.netloc)
                     radice = f"{origine.scheme}://{origine.netloc}"
-                    da_visitare = ([f"{radice}{p}" for p in PERCORSI_TIPICI]
-                                   + collegamenti_interni(pagina, url) + da_visitare)
+                    interni = collegamenti_interni(pagina, url)
+                    gia_collegati = {urlsplit(u).path.rstrip("/") for u in interni}
+                    tipici = [f"{radice}{p}" for p in PERCORSI_TIPICI
+                              if p.rstrip("/") not in gia_collegati]
+                    da_visitare = interni + tipici + da_visitare
 
         assets = [
             DiscoveredAsset(
