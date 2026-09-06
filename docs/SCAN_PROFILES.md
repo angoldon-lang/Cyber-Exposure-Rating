@@ -161,6 +161,24 @@ da soli consumerebbero tutto il tempo disponibile. testssl.sh e' il caso
 tipico: prova centinaia di combinazioni di cifrari e protocolli, un host alla
 volta, e su venticinque host supera le quattro ore.
 
+### Scansioni rimaste aperte
+
+Il tetto di tempo garantisce che la *pipeline* finisca, non che finisca il
+processo che la ospita. Se il worker viene riavviato a meta' scansione, la
+riga resta in uno stato non terminale e nessuno la chiude piu': l'azienda
+resta bloccata e il messaggio riaccodato dal broker si ferma trovando lo
+stato «in corso».
+
+Una scansione e' considerata abbandonata quando la sua riga non cambia da
+piu' del limite di tempo del task Celery, con un margine di dieci minuti.
+Oltre quel limite Celery avrebbe comunque terminato il processo: se la riga
+non e' cambiata, nessuno la sta eseguendo. Il margine evita di dichiarare
+morta una scansione viva ma lenta, che aggiorna la riga solo al termine di
+ogni strumento.
+
+Viene chiusa come **fallita**, non annullata: nessuno l'ha interrotta, e' il
+processo che se n'e' andato, e la distinzione conta nello storico.
+
 ## Gate di autorizzazione
 
 ```mermaid

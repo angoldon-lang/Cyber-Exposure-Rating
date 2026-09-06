@@ -47,6 +47,7 @@ from app.services.diff import (
     diff_assets,
     diff_findings,
 )
+from app.services.scan_recovery import STATI_IN_CORSO, recupera_orfane
 
 router = APIRouter(tags=["scans"])
 
@@ -148,13 +149,26 @@ def start_scan(payload: ScanCreate, company: CompanyDep, db: DbDep, context: Req
                            Scan.status.in_([ScanStatus.COMPLETED.value, ScanStatus.PARTIAL.value]))
         .order_by(desc(Scan.finished_at)).limit(1)).scalar_one_or_none()
 
+    # Una scansione il cui processo e' morto resta «in corso» per sempre e
+    # blocca l'azienda a tempo indeterminato. Va chiusa qui, prima di
+    # rifiutare la nuova: altrimenti l'unico rimedio sarebbe intervenire sul
+    # database.
+    for orfana in recupera_orfane(db, company_id=company.id):
+        record_audit(db, action=AuditAction.UPDATE.value, tenant_id=company.tenant_id,
+                     actor_user_id=current.id, actor_email=current.email,
+                     entity_type="scan", entity_id=str(orfana.id),
+                     message="scansione chiusa: il processo che la eseguiva non e' piu' attivo",
+                     **context)
+
     running = db.execute(
         select(Scan).where(Scan.company_id == company.id,
-                           Scan.status.in_([ScanStatus.PENDING.value, ScanStatus.QUEUED.value,
-                                            ScanStatus.RUNNING.value]))).scalars().first()
+                           Scan.status.in_(STATI_IN_CORSO))).scalars().first()
     if running is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT,
-                            "Una scansione e' gia' in corso per questa azienda")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Una scansione e' gia' in corso per questa azienda (avanzamento "
+            f"{running.progress_percent}%, fase «{running.current_stage or 'n/d'}»). "
+            "Attendere il termine oppure annullarla dalla sezione Scansioni.")
 
     verified = [d.name for d in data["domains"] if d.verification_status == "verified"]
     scan = Scan(

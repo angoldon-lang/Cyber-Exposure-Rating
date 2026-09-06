@@ -175,6 +175,24 @@ Gli asset sono classificati come *Verified Owned*, *Likely Owned*, *Unverified*,
 *Third Party*, *Excluded*: solo i primi due influenzano il rating, i secondi con
 regole piu' restrittive.
 
+### Se una scansione resta «in corso»
+
+Una scansione viene chiusa dal processo che la esegue. Se quel processo se ne
+va — container riavviato, macchina sospesa, limite di tempo raggiunto — la
+riga resta in corso e **blocca l'azienda**: non se ne puo' avviare un'altra.
+
+Il recupero e' automatico oltre la soglia di abbandono (limite del task Celery
+piu' dieci minuti): il primo avvio successivo chiude l'orfana e procede. Per
+non aspettare:
+
+```bash
+make scan-stato       # cosa e' rimasto aperto, da quanto, e se e' orfano
+make scan-sblocca     # chiude tutto cio' che non e' concluso
+```
+
+Gli strumenti gia' partiti proseguono nel worker fino al proprio tempo
+massimo. Per fermarli subito: `docker compose restart worker`.
+
 ### Dati dimostrativi
 
 Con `SCAN_MOCK_MODE=true` le scansioni producono dati sintetici, e gli asset

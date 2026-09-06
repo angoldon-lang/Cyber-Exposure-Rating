@@ -146,6 +146,16 @@ compose-migrate: require-env ## Applica le migrazioni nel container API
 	@# sezione [alembic].
 	$(COMPOSE) run --rm -w /srv/backend api alembic upgrade head
 
+.PHONY: scan-stato
+scan-stato: require-env ## Elenca le scansioni non concluse
+	$(COMPOSE) run --rm api python -m app.cli scansioni
+
+.PHONY: scan-sblocca
+scan-sblocca: require-env ## Chiude le scansioni rimaste in corso (sblocca l'azienda)
+	@# Gli strumenti gia' partiti proseguono nel worker: per fermarli
+	@# subito serve anche `docker compose restart worker`.
+	$(COMPOSE) run --rm api python -m app.cli scansioni --chiudi
+
 .PHONY: compose-seed
 compose-seed: require-env ## Crea i dati dimostrativi nel container API
 	$(COMPOSE) exec api python -m app.cli seed

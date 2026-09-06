@@ -31,6 +31,7 @@ def run_scan_task(self, scan_id: str, email_header: str | None = None) -> dict: 
     """
     from app.services.audit import record_audit
     from app.services.persistence import persist_outcome
+    from app.services.scan_recovery import e_orfana, recupera
 
     with session_scope() as db:
         scan = db.get(Scan, uuid.UUID(scan_id))
@@ -38,6 +39,15 @@ def run_scan_task(self, scan_id: str, email_header: str | None = None) -> dict: 
             logger.error("scan_not_found", scan_id=scan_id)
             return {"status": "not_found", "scan_id": scan_id}
         if scan.status not in {ScanStatus.QUEUED.value, ScanStatus.PENDING.value}:
+            # Il broker riaccoda il messaggio se il processo che lo teneva se
+            # n'e' andato. Trovare la scansione «in corso» significa allora una
+            # di due cose: e' davvero in esecuzione altrove, e non va toccata;
+            # oppure nessuno la sta eseguendo, e arrendersi la lascerebbe in
+            # quello stato per sempre, bloccando l'azienda.
+            if e_orfana(scan):
+                recupera(db, scan)
+                return {"status": "recovered", "scan_id": scan_id,
+                        "reason": "processo precedente non piu' attivo"}
             logger.warning("scan_not_runnable", scan_id=scan_id, status=scan.status)
             return {"status": "skipped", "reason": f"stato {scan.status}"}
 

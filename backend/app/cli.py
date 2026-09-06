@@ -494,6 +494,43 @@ def show_credentials() -> None:
     print(CREDENTIALS_FILE.read_text(encoding="utf-8"))
 
 
+def scansioni(chiudi: bool = False) -> dict:
+    """Elenca le scansioni non concluse e, su richiesta, chiude quelle ferme.
+
+    Serve quando una scansione resta «in corso» dopo che il processo che la
+    eseguiva se n'e' andato: l'azienda non puo' piu' essere scansionata e
+    l'unico rimedio, senza questo comando, sarebbe intervenire sul database.
+
+    `--chiudi` non aspetta la soglia di abbandono: e' una decisione
+    dell'operatore, che sa se il worker sta lavorando o no.
+    """
+    from app.models.scanning import Scan
+    from app.services.scan_recovery import STATI_IN_CORSO, e_orfana, recupera
+
+    righe: list[dict] = []
+    with session_scope() as db:
+        aperte = db.execute(
+            select(Scan).where(Scan.status.in_(STATI_IN_CORSO))
+            .order_by(Scan.created_at)).scalars().all()
+        for scan in aperte:
+            orfana = e_orfana(scan)
+            righe.append({
+                "scan_id": str(scan.id),
+                "company": scan.company.legal_name if scan.company else "n/d",
+                "profile": scan.profile_key,
+                "status": scan.status,
+                "stage": scan.current_stage,
+                "progress": scan.progress_percent,
+                "updated_at": scan.updated_at.isoformat() if scan.updated_at else None,
+                "orphan": orfana,
+                "closed": bool(chiudi),
+            })
+            if chiudi:
+                recupera(db, scan)
+    return {"scans": righe, "closed": sum(1 for r in righe if r["closed"]),
+            "orphans": sum(1 for r in righe if r["orphan"])}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="defenix", description="CLI Defenix Exposure Rating")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -507,6 +544,11 @@ def main() -> None:
     run_parser = subparsers.add_parser(
         "run-queued", help="esegue subito le scansioni in coda, senza Celery")
     run_parser.add_argument("--scan-id", default=None, help="una sola scansione")
+    scansioni_parser = subparsers.add_parser(
+        "scansioni", help="elenca le scansioni non concluse e sblocca quelle ferme")
+    scansioni_parser.add_argument(
+        "--chiudi", action="store_true",
+        help="chiude tutte le scansioni non concluse, senza attendere la soglia")
 
     args = parser.parse_args()
     if args.command == "init-db":
@@ -525,6 +567,8 @@ def main() -> None:
         print(json.dumps(demo_scan(args.company, args.profile), indent=2, ensure_ascii=False))
     elif args.command == "run-queued":
         print(json.dumps(run_queued(args.scan_id), indent=2, ensure_ascii=False))
+    elif args.command == "scansioni":
+        print(json.dumps(scansioni(chiudi=args.chiudi), indent=2, ensure_ascii=False))
     elif args.command == "show-credentials":
         show_credentials()
 
