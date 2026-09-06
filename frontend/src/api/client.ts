@@ -1,6 +1,6 @@
 /** Client HTTP tipizzato verso l'API Defenix. */
 import type {
-  Asset, AssetSummary,
+  Asset, AssetSummary, BulkReviewResult,
   Authorization, AuthorizationPreview, Branding, Company, CompanyInput, DashboardOverview,
   Domain,
   Finding, Health, IPAddressEntry, NetworkRangeEntry, Page, PortfolioView, PurgeResult,
@@ -187,6 +187,10 @@ export const api = {
     const query = new URLSearchParams({ page_size: '300', ...params }).toString();
     return request<Page<Finding>>(`/scans/${scanId}/findings?${query}`);
   },
+  bulkReviewFindings: (scanId: string, body: {
+    finding_ids: string[]; action: string; reason?: string;
+  }) => request<BulkReviewResult>(`/scans/${scanId}/findings/bulk-review`,
+    { method: 'POST', body: JSON.stringify(body) }),
   reviewFinding: (findingId: string, body: {
     action: string; reason?: string; new_severity?: string; new_confidence?: string;
   }) => request<Finding>(`/findings/${findingId}/review`, { method: 'POST', body: JSON.stringify(body) }),

@@ -157,7 +157,7 @@ class ScanPipeline:
         discovery_adapters = build_adapters(
             discovery_context,
             only=["dns", "rdap", "certificate_transparency", "subfinder", "amass_passive",
-                  "spiderfoot", "email_discovery"])
+                  "spiderfoot", "email_discovery", "email_harvest"])
         discovery_results = self._execute(discovery_adapters, stage="discovery", base_percent=10)
 
         subdomains = sorted({asset.asset_key for result in discovery_results

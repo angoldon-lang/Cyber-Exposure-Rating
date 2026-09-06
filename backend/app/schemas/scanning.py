@@ -151,6 +151,24 @@ class FindingReview(BaseModel):
     new_confidence: Literal["confirmed", "probable", "inferred", "informational"] | None = None
 
 
+class FindingBulkReview(FindingReview):
+    """Stessa azione su piu' rilievi scelti dall'analista.
+
+    Eredita da `FindingReview` di proposito: le regole sull'azione — quali
+    richiedono una motivazione, quali transizioni sono ammesse — devono
+    essere le stesse. Una revisione massiva con controlli propri diventerebbe
+    la scorciatoia per aggirarli.
+    """
+
+    finding_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+
+
+class FindingBulkResult(BaseModel):
+    applied: int
+    failed: list[dict[str, Any]] = []
+    progress: "ReviewProgress"
+
+
 class ReviewProgress(BaseModel):
     total: int
     reviewed: int

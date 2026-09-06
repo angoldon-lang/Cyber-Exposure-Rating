@@ -104,6 +104,14 @@ def _child_limits(memory_mb: int, cpu_seconds: int) -> None:  # pragma: no cover
 ATTESA_TERMINAZIONE_SECONDI = 5
 
 
+def prima_riga(dati: bytes, massimo: int = 300) -> str:
+    """Prima riga non vuota di stderr: quella che dice cosa e' andato storto."""
+    for riga in (dati or b"").decode("utf-8", errors="replace").splitlines():
+        if riga.strip():
+            return riga.strip()[:massimo]
+    return ""
+
+
 def _termina_gruppo(processo: subprocess.Popen) -> tuple[bytes, bytes]:
     """Termina il processo e tutti i suoi discendenti, poi raccoglie l'output.
 
@@ -192,6 +200,15 @@ def run_command(
 
     completed = subprocess.CompletedProcess(
         command, processo.returncode, stdout_grezzo, stderr_grezzo)
+
+    # Uno strumento che esce male senza produrre nulla e' indistinguibile, nei
+    # log, da uno che ha funzionato e non ha trovato niente: entrambi
+    # arrivavano come «riuscito, zero risultati». Il codice di uscita e la
+    # prima riga di stderr vanno registrati, altrimenti un guasto resta
+    # invisibile finche' qualcuno non nota che quell'area e' sempre vuota.
+    if processo.returncode not in (0, None) and not stdout_grezzo:
+        logger.warning("tool_failed", binary=binary, exit_code=processo.returncode,
+                       stderr=prima_riga(stderr_grezzo))
 
     duration = time.monotonic() - started
     stdout = completed.stdout or b""

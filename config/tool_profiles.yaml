@@ -42,7 +42,7 @@ profiles:
     tools: [dns, rdap, certificate_transparency, ip_perimeter, email_discovery,
             subfinder, spiderfoot, checkdmarc, ransomware_live, hibp,
             credential_exposure, xposedornot, dnstwist, kev, epss,
-            httpx, testssl, zap_baseline, amass_passive, email_header]
+            httpx, testssl, zap_baseline, amass_passive, email_header, email_harvest]
 
   verified_extended:
     label_it: "Verified Extended Check"
@@ -68,7 +68,7 @@ profiles:
     tools: [dns, rdap, certificate_transparency, ip_perimeter, email_discovery,
             subfinder, spiderfoot, checkdmarc, ransomware_live, hibp,
             credential_exposure, xposedornot, dnstwist, kev, epss,
-            httpx, testssl, zap_baseline, amass, email_header,
+            httpx, testssl, zap_baseline, amass, email_header, email_harvest,
             naabu, port_scan, nmap, nuclei]
 
 # ------------------------------------------------------------------
@@ -116,6 +116,24 @@ tools:
       perimetro. Alimenta la verifica sulle violazioni, che senza indirizzi non
       ha nulla da cercare. Gli indirizzi su domini di terzi (elaboratori DMARC,
       registrar) non vengono raccolti.
+
+  email_harvest:
+    label: "Indirizzi e-mail dal sito"
+    kind: builtin
+    passive: false
+    phase: 1
+    timeout_seconds: 180
+    max_pages: 24
+    max_page_bytes: 1000000
+    coverage_areas: [darkweb_breach]
+    coverage_weight: 1.0
+    notes: >-
+      Legge le pagine pubbliche dell'organizzazione — contatti, chi siamo,
+      privacy — e ne estrae gli indirizzi e-mail. Sono quelli che compaiono
+      nelle violazioni: le fonti DNS danno solo caselle tecniche, che nessuno
+      usa per registrarsi da qualche parte. Non esplora il sito in profondita'
+      e non segue link esterni. E' una richiesta ai sistemi
+      dell'organizzazione, quindi fuori dal profilo passivo.
 
   ip_perimeter:
     label: "Perimetro IP pubblico"

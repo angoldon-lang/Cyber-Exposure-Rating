@@ -133,16 +133,27 @@ per ottenere gli stessi rilievi.
 La verifica sulle violazioni ha bisogno di indirizzi da cercare. Le fonti,
 in ordine di affidabilita':
 
-1. **Dichiarati nel perimetro** — voci di tipo «Indirizzo e-mail» in
+1. **Il sito dell'organizzazione** (`email_harvest`) — pagine contatti, chi
+   siamo, privacy. E' la fonte che conta: sono gli indirizzi delle persone, e
+   sono quelli che finiscono nelle violazioni. Non e' ammessa nel profilo
+   passivo, perche' interroga i sistemi dell'organizzazione.
+2. **Dichiarati nel perimetro** — voci di tipo «Indirizzo e-mail» in
    *Gestione azienda → Perimetro*. Non allargano il perimetro degli host.
-2. **DMARC** — i tag `rua` e `ruf` del record `_dmarc`, quando puntano a una
+3. **DMARC** — i tag `rua` e `ruf` del record `_dmarc`, quando puntano a una
    casella del dominio stesso.
-3. **SOA** — il campo RNAME, dove la chiocciola e' scritta come punto.
-4. **SpiderFoot** — i moduli di raccolta, se un'istanza e' configurata.
+4. **SOA** — il campo RNAME, dove la chiocciola e' scritta come punto.
+5. **SpiderFoot** — i moduli di raccolta, se un'istanza e' configurata.
 
-Le prime tre non richiedono nulla oltre al DNS pubblico. Gli indirizzi su
-domini diversi da quelli in perimetro non vengono raccolti: un `rua` che punta
-a un elaboratore DMARC di terzi e' un indirizzo del fornitore, non del cliente.
+Le fonti DNS (3 e 4) danno solo caselle **tecniche**: i destinatari dei
+rapporti DMARC e il responsabile della zona. In una violazione non compaiono
+praticamente mai, perche' nessuno le usa per registrarsi da qualche parte.
+Sono utili come conferma del dominio, non come misura dell'esposizione: senza
+la fonte 1 la verifica gira, non trova nulla, e sembra dire che
+l'organizzazione non e' esposta.
+
+Gli indirizzi su domini diversi da quelli in perimetro non vengono raccolti in
+nessuna delle fonti: un `rua` che punta a un elaboratore DMARC di terzi, o il
+consulente che cura il sito, sono indirizzi altrui.
 
 ## Quanto puo' durare una scansione
 

@@ -343,6 +343,12 @@ export interface AssetSummary {
   by_tool: Record<string, number>;
 }
 
+export interface BulkReviewResult {
+  applied: number;
+  failed: Array<{ finding_id: string; reference_code?: string; reason: string }>;
+  progress: Record<string, number | boolean>;
+}
+
 export interface IPAddressEntry {
   id: string;
   address: string;

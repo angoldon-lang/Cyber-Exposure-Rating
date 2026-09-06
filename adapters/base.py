@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+from adapters.runner import prima_riga
 from app.core.redaction import sanitize_structure, sanitize_text
 from app.models.enums import ConfidenceClass, OwnershipStatus, ScoreCategoryKey, Severity, ToolRunStatus
 from app.services.scope_guard import ScopeGuard
@@ -263,3 +264,28 @@ class BaseAdapter(ABC):
 
     def category(self, key: ScoreCategoryKey | str) -> str:
         return key.value if isinstance(key, ScoreCategoryKey) else key
+
+    def esito_del_comando(self, result: Any, *, prodotto: int,
+                          ) -> tuple[AdapterStatus, str | None, float]:
+        """Traduce l'esito di un comando esterno in stato, motivo e copertura.
+
+        Uno strumento uscito in errore senza produrre nulla non e' «riuscito
+        con zero risultati»: e' fallito, e va detto. Senza questa distinzione
+        un binario rotto e un'area davvero pulita producono lo stesso esito, e
+        il rating resta alto per il motivo sbagliato.
+
+        Un codice di uscita diverso da zero con dei risultati e' invece
+        normale per diversi strumenti, che lo usano per segnalare «ho trovato
+        qualcosa»: li' l'esito e' parziale, non fallito.
+        """
+        if result.timed_out:
+            return (AdapterStatus.PARTIAL if prodotto else AdapterStatus.FAILED,
+                    "tempo massimo dello strumento raggiunto",
+                    self.coverage_weight * (0.4 if prodotto else 1.0))
+        if result.exit_code not in (0, None):
+            motivo = (f"uscito con codice {result.exit_code}"
+                      + (f": {prima_riga(result.stderr)}" if result.stderr else ""))
+            if not prodotto:
+                return AdapterStatus.FAILED, motivo, self.coverage_weight
+            return AdapterStatus.PARTIAL, motivo, self.coverage_weight * 0.3
+        return AdapterStatus.SUCCESS, None, 0.0

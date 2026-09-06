@@ -78,12 +78,14 @@ class HTTPXAdapter(BaseAdapter):
                     continue
 
         evidences, assets = self._analyse_records(records)
-        status = AdapterStatus.SUCCESS if not result.timed_out else AdapterStatus.PARTIAL
+        # Zero risultati non e' di per se' un guasto: puo' voler dire che
+        # nessun host risponde. Ma se il binario e' uscito in errore, dirlo
+        # «riuscito» nasconde il guasto dietro un'area vuota.
+        status, motivo, impatto = self.esito_del_comando(result, prodotto=len(records))
         return AdapterResult(tool=self.key, status=status, evidences=evidences, assets=assets,
                              tool_version=version, target_count=len(targets), raw_output=raw,
-                             exit_code=result.exit_code,
-                             coverage_impact=0.0 if status is AdapterStatus.SUCCESS
-                             else self.coverage_weight * 0.4)
+                             exit_code=result.exit_code, error_message=motivo,
+                             coverage_impact=impatto)
 
     def _analyse_records(self, records: list[dict[str, Any]]) -> tuple[list[NormalizedEvidence],
                                                                        list[DiscoveredAsset]]:

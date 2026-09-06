@@ -175,6 +175,22 @@ Gli asset sono classificati come *Verified Owned*, *Likely Owned*, *Unverified*,
 *Third Party*, *Excluded*: solo i primi due influenzano il rating, i secondi con
 regole piu' restrittive.
 
+### Perche' la sezione dark web resta vuota
+
+La verifica sulle violazioni cerca indirizzi e-mail. Se l'unica fonte
+disponibile e' il DNS, gli unici indirizzi noti sono quelli **tecnici** — i
+destinatari dei rapporti DMARC, il responsabile della zona — che in una
+violazione non compaiono praticamente mai.
+
+Gli indirizzi che contano sono quelli delle persone, e stanno sulle pagine
+pubbliche dell'organizzazione. Li raccoglie `email_harvest`, che pero' **non
+e' ammesso nel profilo passivo**: legge il sito del cliente, e questo lo
+colloca fra i controlli che richiedono verifica e autorizzazione.
+
+In pratica: con il **Public Passive Check** la sezione dark web resta quasi
+sempre vuota, ed e' corretto che sia cosi'. Serve almeno il **Verified
+Standard Check**.
+
 ### Se una scansione resta «in corso»
 
 Una scansione viene chiusa dal processo che la esegue. Se quel processo se ne

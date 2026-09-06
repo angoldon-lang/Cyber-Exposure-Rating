@@ -262,9 +262,12 @@ class NucleiAdapter(BaseAdapter):
                 return AdapterResult(tool=self.key, status=AdapterStatus.FAILED,
                                      error_message=str(exc), coverage_impact=self.coverage_weight)
         evidences = self._parse(result.stdout)
-        return AdapterResult(tool=self.key, status=AdapterStatus.SUCCESS, evidences=evidences,
+        stato, motivo, impatto = self.esito_del_comando(result, prodotto=len(evidences))
+        return AdapterResult(tool=self.key, status=stato, evidences=evidences,
                              tool_version=tool_version(self.BINARY, "-version"),
                              target_count=len(urls), raw_output=result.stdout,
+                             error_message=motivo, coverage_impact=impatto,
+                             exit_code=result.exit_code,
                              config_snapshot={"templates": template_ids})
 
     def _parse(self, payload: bytes) -> list[NormalizedEvidence]:
@@ -334,7 +337,11 @@ class NaabuAdapter(BaseAdapter):
         if self.context.profile != "verified_extended":
             return False, "il port scanning e' ammesso solo nel profilo Verified Extended Check"
         if not is_available(self.BINARY):
-            return False, f"binario '{self.BINARY}' non presente nel worker"
+            # Su linux/arm64 Naabu non esiste, e la rilevazione dei servizi la
+            # fa `port_scan`. Dire solo «binario non presente» farebbe pensare
+            # a una lacuna che invece e' coperta.
+            return False, (f"binario '{self.BINARY}' non presente per questa architettura: "
+                           "la rilevazione dei servizi e' svolta da port_scan")
         return True, "disponibile"
 
     def execute(self) -> AdapterResult:
@@ -378,9 +385,12 @@ class NaabuAdapter(BaseAdapter):
             records.append({"ip": record.get("ip") or record.get("host"),
                             "port": int(record.get("port", 0)), "service": None, "product": None})
         evidences, assets = self._build(records)
-        return AdapterResult(tool=self.key, status=AdapterStatus.SUCCESS, evidences=evidences,
+        stato, motivo, impatto = self.esito_del_comando(result, prodotto=len(records))
+        return AdapterResult(tool=self.key, status=stato, evidences=evidences,
                              assets=assets, tool_version=tool_version(self.BINARY, "-version"),
-                             target_count=len(ips), raw_output=result.stdout)
+                             target_count=len(ips), raw_output=result.stdout,
+                             error_message=motivo, coverage_impact=impatto,
+                             exit_code=result.exit_code)
 
     def _build(self, records: list[dict[str, Any]]) -> tuple[list[NormalizedEvidence],
                                                               list[DiscoveredAsset]]:

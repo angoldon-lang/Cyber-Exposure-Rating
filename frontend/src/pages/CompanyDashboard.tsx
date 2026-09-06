@@ -230,7 +230,16 @@ export default function CompanyDashboard() {
                   <tr key={lacuna.tool_key}>
                     <td>{lacuna.tool_label}</td>
                     <td className="small">{lacuna.areas_it.join(', ') || '—'}</td>
-                    <td className="small muted">{lacuna.reason}</td>
+                    <td className="small muted">
+                      {lacuna.reason}
+                      {/* Un messaggio che dice cosa fare senza portarci
+                          costringe a cercare la schermata a mano. */}
+                      {lacuna.reason.includes('autorizzazione esplicita') && (
+                        <> <Link to={`/aziende/${companyId}/gestione`}>
+                          Apri il perimetro di rete
+                        </Link></>
+                      )}
+                    </td>
                     <td>
                       <Chip tone={lacuna.status === 'failed' ? 'high' : 'medium'}>
                         {lacuna.status === 'failed' ? 'non riuscito' : 'non eseguito'}

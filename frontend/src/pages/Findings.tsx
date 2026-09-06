@@ -30,6 +30,8 @@ export default function Findings() {
   // descrivere insiemi diversi.
   const [parametri, setParametri] = useSearchParams();
   const daValidare = parametri.get('daValidare') === '1';
+  const [selezionati, setSelezionati] = useState<Set<string>>(new Set());
+  const [azioneMassiva, setAzioneMassiva] = useState('');
 
   async function reload() {
     const params: Record<string, string> = {};
@@ -50,6 +52,38 @@ export default function Findings() {
   const categories = useMemo(
     () => Array.from(new Set(findings.map((f) => f.category))).sort(),
     [findings]);
+
+  function commuta(id: string) {
+    setSelezionati((corrente) => {
+      const successivo = new Set(corrente);
+      if (successivo.has(id)) successivo.delete(id); else successivo.add(id);
+      return successivo;
+    });
+  }
+
+  async function revisioneMassiva(action: string) {
+    const definizione = REVIEW_ACTIONS.find((a) => a.value === action);
+    let reason: string | undefined;
+    if (definizione?.needsReason) {
+      reason = window.prompt(
+        `Motivazione per ${selezionati.size} rilievi (obbligatoria e registrata `
+        + 'nell’audit log, la stessa per tutti):') ?? undefined;
+      if (!reason) return;
+    }
+    try {
+      const esito = await api.bulkReviewFindings(scanId, {
+        finding_ids: [...selezionati], action, reason,
+      });
+      const nonRiusciti = esito.failed.length
+        ? ` ${esito.failed.length} non applicati: `
+          + esito.failed.map((f) => `${f.reference_code ?? f.finding_id} (${f.reason})`).join('; ')
+        : '';
+      setNotice(`Azione «${definizione?.label}» applicata a ${esito.applied} rilievi.${nonRiusciti}`);
+      await reload();
+    } catch (exc) {
+      setNotice(exc instanceof ApiError ? exc.message : 'Revisione massiva non riuscita');
+    }
+  }
 
   async function review(finding: Finding, action: string) {
     const definition = REVIEW_ACTIONS.find((a) => a.value === action);
@@ -125,12 +159,50 @@ export default function Findings() {
         <span className="muted small" style={{ marginLeft: 'auto' }}>{findings.length} rilievi</span>
       </div>
 
+      {selezionati.size > 0 && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="toolbar" style={{ marginBottom: 0 }}>
+            <strong>{selezionati.size} rilievi selezionati</strong>
+            <select value={azioneMassiva} aria-label="Azione sui rilievi selezionati"
+                    onChange={(e) => {
+                      const scelta = e.target.value;
+                      e.target.value = '';
+                      setAzioneMassiva('');
+                      if (scelta) revisioneMassiva(scelta);
+                    }}>
+              <option value="">Applica a tutti i selezionati…</option>
+              {REVIEW_ACTIONS.map((a) => (
+                <option key={a.value} value={a.value}>{a.label}</option>
+              ))}
+            </select>
+            <button className="btn btn--ghost" onClick={() => setSelezionati(new Set())}>
+              Annulla la selezione
+            </button>
+            <span className="muted small">
+              Ogni rilievo passa dagli stessi controlli della revisione singola e
+              produce la propria voce di audit.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         {findings.length === 0 ? <Empty>Nessun rilievo corrisponde ai filtri selezionati.</Empty> : (
           <div style={{ overflowX: 'auto' }}>
             <table className="data">
               <thead>
                 <tr>
+                  <th style={{ width: 28 }}>
+                    <input type="checkbox"
+                           aria-label="Seleziona tutti i rilievi mostrati"
+                           checked={findings.length > 0 && selezionati.size === findings.length}
+                           ref={(el) => {
+                             if (el) el.indeterminate = selezionati.size > 0
+                               && selezionati.size < findings.length;
+                           }}
+                           onChange={(e) => setSelezionati(
+                             e.target.checked ? new Set(findings.map((f) => f.id)) : new Set())} />
+                  </th>
                   <th>Rif.</th><th>Severita’</th><th>Rilievo</th><th>Asset interessato</th>
                   <th>Area</th><th>Attendibilita’</th><th className="num">Detrazione</th>
                   <th>Revisione</th><th>Azioni</th>
@@ -140,6 +212,11 @@ export default function Findings() {
                 {findings.map((f) => (
                   <>
                     <tr key={f.id}>
+                      <td>
+                        <input type="checkbox" checked={selezionati.has(f.id)}
+                               aria-label={`Seleziona ${f.reference_code}`}
+                               onChange={() => commuta(f.id)} />
+                      </td>
                       <td className="tabular">{f.reference_code}</td>
                       <td><SeverityChip severity={f.severity} /></td>
                       <td>
@@ -176,7 +253,7 @@ export default function Findings() {
                     </tr>
                     {expanded === f.id && (
                       <tr key={`${f.id}-detail`}>
-                        <td colSpan={9} style={{ background: 'var(--surface-2)' }}>
+                        <td colSpan={10} style={{ background: 'var(--surface-2)' }}>
                           <p style={{ marginTop: 0 }}>{f.description}</p>
                           <table className="data" style={{ maxWidth: 720 }}>
                             <tbody>

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -14,6 +15,8 @@ from app.models.scanning import Finding, Remediation, Scan
 from app.models.scope import Asset
 from app.schemas.common import Page
 from app.schemas.scanning import (
+    FindingBulkResult,
+    FindingBulkReview,
     FindingRead,
     FindingReview,
     RemediationItemRead,
@@ -112,18 +115,15 @@ def get_finding(finding_id: uuid.UUID, db: DbDep, current: CurrentUserDep) -> Fi
     return _con_asset(db, [finding])[0]
 
 
-@router.post("/findings/{finding_id}/review", response_model=FindingRead)
-def review_finding(finding_id: uuid.UUID, payload: FindingReview, db: DbDep,
-                   context: RequestContextDep,
-                   current: CurrentUser = Depends(require_permission(Permission.FINDING_REVIEW)),
-                   ) -> FindingRead:
-    """Applica un'azione di revisione. Ogni modifica manuale finisce in audit."""
-    finding = db.execute(
-        select(Finding).where(Finding.id == finding_id, Finding.tenant_id == current.tenant_id)
-    ).scalar_one_or_none()
-    if finding is None or not current.company_allowed(finding.company_id):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Finding non trovato")
+def _applica_revisione(db, finding: Finding, payload: FindingReview,  # noqa: ANN001
+                       current: CurrentUser, context: dict) -> None:
+    """Applica un'azione di revisione a un rilievo e la registra in audit.
 
+    Condivisa fra la revisione singola e quella massiva: se la massiva avesse
+    un percorso proprio, i controlli di transizione e la registrazione in
+    audit finirebbero per divergere, e la scorciatoia sarebbe proprio quella
+    che salta i controlli.
+    """
     if payload.action == "confirm" and not current.has(Permission.FINDING_APPROVE):
         raise HTTPException(status.HTTP_403_FORBIDDEN,
                             "La conferma definitiva richiede il permesso finding:approve")
@@ -174,6 +174,21 @@ def review_finding(finding_id: uuid.UUID, payload: FindingReview, db: DbDep,
                                      "confidence_class": finding.confidence_class,
                                      "excluded_from_rating": finding.excluded_from_rating}},
                  **context)
+
+
+@router.post("/findings/{finding_id}/review", response_model=FindingRead)
+def review_finding(finding_id: uuid.UUID, payload: FindingReview, db: DbDep,
+                   context: RequestContextDep,
+                   current: CurrentUser = Depends(require_permission(Permission.FINDING_REVIEW)),
+                   ) -> FindingRead:
+    """Applica un'azione di revisione. Ogni modifica manuale finisce in audit."""
+    finding = db.execute(
+        select(Finding).where(Finding.id == finding_id, Finding.tenant_id == current.tenant_id)
+    ).scalar_one_or_none()
+    if finding is None or not current.company_allowed(finding.company_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Finding non trovato")
+
+    _applica_revisione(db, finding, payload, current, context)
     db.commit()
     db.refresh(finding)
     return FindingRead.model_validate(finding)
@@ -203,6 +218,57 @@ def remediation_plan(scan_id: uuid.UUID, db: DbDep, current: CurrentUserDep,
          "applied_rules": r.applied_rules_json or []} for r in rows])
     selected = quick_wins(plan) if only_quick_wins else plan
     return [RemediationItemRead(**item.as_dict()) for item in selected]
+
+
+@router.post("/scans/{scan_id}/findings/bulk-review", response_model=FindingBulkResult)
+def bulk_review(scan_id: uuid.UUID, payload: FindingBulkReview, db: DbDep,
+                context: RequestContextDep,
+                current: CurrentUser = Depends(require_permission(Permission.FINDING_REVIEW)),
+                ) -> FindingBulkResult:
+    """Applica la stessa azione ai rilievi selezionati.
+
+    Ogni rilievo passa dagli stessi controlli della revisione singola e
+    produce la propria voce di audit: una revisione massiva non e' un modo
+    per registrarne una sola. I rilievi che non accettano l'azione — per lo
+    stato in cui si trovano — sono elencati nel risultato invece di far
+    fallire l'intera operazione: su cinquanta selezionati, due in stato
+    sbagliato non devono annullare gli altri quarantotto.
+    """
+    scan = _load_scan(db, scan_id, current)
+    righe = {
+        riga.id: riga
+        for riga in db.execute(
+            select(Finding).where(Finding.scan_id == scan.id,
+                                  Finding.id.in_(payload.finding_ids))).scalars().all()
+    }
+
+    applicati = 0
+    falliti: list[dict[str, Any]] = []
+    for identificativo in payload.finding_ids:
+        finding = righe.get(identificativo)
+        if finding is None:
+            falliti.append({"finding_id": str(identificativo),
+                            "reason": "rilievo non appartenente a questa scansione"})
+            continue
+        try:
+            _applica_revisione(db, finding, payload, current, context)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_403_FORBIDDEN:
+                raise
+            falliti.append({"finding_id": str(identificativo),
+                            "reference_code": finding.reference_code,
+                            "reason": str(exc.detail)})
+            continue
+        applicati += 1
+
+    db.commit()
+    righe_totali = db.execute(select(Finding).where(Finding.scan_id == scan.id)).scalars().all()
+    progresso = review_progress([
+        {"severity": r.severity, "analyst_validation": r.analyst_validation,
+         "excluded_from_rating": r.excluded_from_rating} for r in righe_totali])
+    return FindingBulkResult(
+        applied=applicati, failed=falliti,
+        progress=ReviewProgress(**{k: v for k, v in progresso.items() if k != "computed_at"}))
 
 
 @router.post("/scans/{scan_id}/findings/bulk-approve", response_model=ReviewProgress)

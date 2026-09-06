@@ -14,6 +14,7 @@ from adapters.ct_adapter import CertificateTransparencyAdapter
 from adapters.dns_adapter import DNSAdapter
 from adapters.credential_exposure_adapter import CredentialExposureAdapter
 from adapters.email_discovery_adapter import EmailDiscoveryAdapter
+from adapters.email_harvest_adapter import EmailHarvestAdapter
 from adapters.hibp_adapter import HIBPAdapter
 from adapters.httpx_adapter import HTTPXAdapter
 from adapters.ip_perimeter_adapter import IPPerimeterAdapter
@@ -46,6 +47,7 @@ ADAPTER_CLASSES: dict[str, type[BaseAdapter]] = {
     CertificateTransparencyAdapter.key: CertificateTransparencyAdapter,
     IPPerimeterAdapter.key: IPPerimeterAdapter,
     EmailDiscoveryAdapter.key: EmailDiscoveryAdapter,
+    EmailHarvestAdapter.key: EmailHarvestAdapter,
     SubfinderAdapter.key: SubfinderAdapter,
     SpiderFootAdapter.key: SpiderFootAdapter,
     CheckDMARCAdapter.key: CheckDMARCAdapter,
