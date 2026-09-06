@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Health, Scan, ScanDetail } from '../api/types';
-import { Banner, Empty, Spinner, formatDateTime } from '../components/ui';
+import { Banner, ConfirmButton, Empty, Spinner, formatDateTime } from '../components/ui';
 
 const RUNNING = new Set(['pending', 'queued', 'running', 'normalizing', 'scoring']);
 
@@ -92,6 +92,24 @@ export default function Scans() {
             <span style={{ display: 'block', height: '100%', width: `${detail.progress_percent}%`,
                            background: 'var(--series-1)', borderRadius: 4 }} />
           </div>
+          <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
+            <ConfirmButton label="Annulla la scansione"
+                           confirmLabel="Confermi l’annullamento?"
+                           onConfirm={async () => {
+                             await api.cancelScan(detail.id);
+                             setDetail(null);
+                             // Il polling si ferma quando nessuna scansione
+                             // risulta in corso: l'elenco va ricaricato qui,
+                             // altrimenti resterebbe quello di prima.
+                             setScans((await api.scans(companyId)).items);
+                           }} />
+            <span className="muted small">
+              Una scansione in corso impedisce di avviarne un’altra sulla stessa azienda.
+              Gli strumenti gia’ partiti proseguono fino al proprio tempo massimo: per
+              fermarli subito, <code>docker compose restart worker</code>.
+            </span>
+          </div>
+
           {detail.tool_runs.length > 0 && (
             <table className="data" style={{ marginTop: 12 }}>
               <thead><tr><th>Strumento</th><th>Esito</th><th className="num">Evidenze</th><th>Note</th></tr></thead>

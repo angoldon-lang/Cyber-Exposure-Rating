@@ -260,8 +260,14 @@ tools:
     binary: testssl.sh
     passive: false
     phase: 1
-    timeout_seconds: 600
-    max_targets: 25
+    # testssl.sh prova centinaia di combinazioni di cifrari e protocolli, un
+    # host alla volta. Con venticinque host da dieci minuti l'analisi TLS da
+    # sola supera le quattro ore e la scansione resta in corso senza che nulla
+    # sia andato storto. `total_budget_seconds` e' il tetto complessivo dello
+    # strumento: superato, gli host rimanenti sono dichiarati non verificati.
+    timeout_seconds: 300
+    total_budget_seconds: 900
+    max_targets: 10
     repository: "https://github.com/testssl/testssl.sh"
     license: "GPL-2.0"
     license_risk: >-

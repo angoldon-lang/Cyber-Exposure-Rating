@@ -20,6 +20,9 @@ CATEGORY = ScoreCategoryKey.DARKWEB_BREACH.value
 STRONG_MATCH_RATIO = 0.92
 WEAK_MATCH_RATIO = 0.80
 
+# Un segmento finale come «v1» o «v2» e' gia' un prefisso di versione.
+_VERSIONE_API = re.compile(r"v\d+")
+
 _LEGAL_SUFFIXES = re.compile(
     r"\b(s\.?p\.?a\.?|s\.?r\.?l\.?s?\.?|s\.?n\.?c\.?|s\.?a\.?s\.?|gmbh|ltd|llc|inc|plc|"
     r"corp|corporation|company|co|sa|ag|bv|nv)\b", re.IGNORECASE)
@@ -68,11 +71,20 @@ class RansomwareLiveAdapter(BaseAdapter):
 
     @property
     def base_url(self) -> str:
-        # La v1 non serve piu' `searchvictims`: l'API risponde 302 e rimanda
-        # alla pagina HTML della documentazione, che poi non e' JSON. Il
-        # prefisso di versione fa parte dell'indirizzo, non e' opzionale.
-        return str(self.context.connector_config.get("ransomware_live", {})
-                   .get("base_url", "https://api.ransomware.live/v2")).rstrip("/")
+        """Indirizzo dell'API, con il prefisso di versione garantito.
+
+        La v1 non serve piu' `searchvictims`: risponde 302 e rimanda alla
+        pagina HTML della documentazione, che poi non e' JSON. Il prefisso non
+        e' opzionale — ma correggere solo il valore predefinito non basta,
+        perche' un'installazione esistente ha gia' `RANSOMWARE_LIVE_URL` nel
+        proprio `.env` e quel valore vince. Se manca, il prefisso viene
+        aggiunto: cosi' la correzione arriva anche a chi non tocca la
+        configurazione.
+        """
+        configurato = str(self.context.connector_config.get("ransomware_live", {})
+                          .get("base_url") or "https://api.ransomware.live").rstrip("/")
+        ultimo = configurato.rsplit("/", 1)[-1]
+        return configurato if _VERSIONE_API.fullmatch(ultimo) else f"{configurato}/v2"
 
     def check_available(self) -> tuple[bool, str]:
         """Sonda di raggiungibilita'.

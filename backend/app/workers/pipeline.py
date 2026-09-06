@@ -9,6 +9,7 @@ Riduce la copertura e quindi il confidence score.
 from __future__ import annotations
 
 import hashlib
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -17,7 +18,13 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from adapters.base import AdapterContext, AdapterResult, AdapterStatus
-from adapters.registry import build_adapters, build_tool_config, coverage_matrix, profile_definition
+from adapters.registry import (
+    build_adapters,
+    build_tool_config,
+    coverage_matrix,
+    global_limits,
+    profile_definition,
+)
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.enums import ScanStatus
@@ -87,6 +94,13 @@ class ScanPipeline:
         self.confidence_engine = confidence_engine or ConfidenceEngine()
         self.profile_definition = profile_definition(request.profile)
         self.ip_perimeter_summary: dict[str, Any] = {}
+        # Tempo massimo complessivo della scansione. Era dichiarato nella
+        # configurazione e non applicato da nessuna parte: bastava uno
+        # strumento lento su molti bersagli — testssl.sh su venticinque host,
+        # dieci minuti ciascuno — perche' la scansione restasse in corso per
+        # ore, ferma sulla stessa percentuale.
+        self.budget_secondi = float(global_limits().get("max_wall_clock_seconds", 3600))
+        self._scadenza: float | None = None
 
     # ------------------------------------------------------------------
     def build_context(self, *, known_subdomains: Sequence[str] = (),
@@ -135,6 +149,7 @@ class ScanPipeline:
     # ------------------------------------------------------------------
     def run(self) -> ScanOutcome:
         started = datetime.now(UTC)
+        self._scadenza = time.monotonic() + self.budget_secondi
         self.progress(ScanStatus.RUNNING.value, 5)
 
         # --- Fase 1: discovery (adapter di enumerazione) ---
@@ -245,12 +260,42 @@ class ScanPipeline:
         max_workers = max(1, min(settings.scan_max_concurrent_tools, len(adapters)))
         results: list[AdapterResult] = []
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            for index, result in enumerate(pool.map(lambda a: a.run(), adapters), start=1):
+            for index, result in enumerate(pool.map(self._esegui_entro_il_budget, adapters),
+                                           start=1):
                 results.append(result)
                 logger.info("tool_run_finished", stage=stage, **result.summary())
                 self.progress(f"{stage}:{result.tool}",
                               base_percent + int(25 * index / len(adapters)))
         return results
+
+    def tempo_residuo(self) -> float:
+        """Secondi ancora disponibili per la scansione."""
+        if self._scadenza is None:
+            return self.budget_secondi
+        return self._scadenza - time.monotonic()
+
+    def _esegui_entro_il_budget(self, adapter: Any) -> AdapterResult:
+        """Esegue lo strumento, oppure lo dichiara saltato se il tempo e' finito.
+
+        Uno strumento gia' avviato non viene interrotto: ha il proprio timeout.
+        Quelli non ancora partiti diventano lacune di copertura dichiarate, che
+        e' l'esito corretto — la scansione finisce e il report dice cosa non e'
+        stato controllato, invece di restare in corso indefinitamente.
+        """
+        if self.tempo_residuo() <= 0:
+            logger.warning("scan_budget_exhausted", tool=adapter.key,
+                           budget_seconds=self.budget_secondi)
+            return AdapterResult(
+                tool=adapter.key, status=AdapterStatus.SKIPPED,
+                error_message=(
+                    f"tempo massimo della scansione ({int(self.budget_secondi)} s) esaurito "
+                    "prima dell'esecuzione: l'area resta non verificata"),
+                coverage_impact=adapter.coverage_weight)
+        # Lo strumento riceve il tempo che resta, se e' meno del suo.
+        adapter.config = dict(adapter.config)
+        proprio = float(adapter.config.get("timeout_seconds", adapter.default_timeout))
+        adapter.config["timeout_seconds"] = int(max(30.0, min(proprio, self.tempo_residuo())))
+        return adapter.run()
 
     def _to_scorable(self, finding: CorrelatedFinding) -> ScorableFinding:
         return ScorableFinding(

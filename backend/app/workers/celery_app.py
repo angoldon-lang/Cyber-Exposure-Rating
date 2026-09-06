@@ -29,6 +29,15 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,      # una scansione per worker alla volta
     worker_max_tasks_per_child=20,     # riciclo del processo: nessuna perdita di risorse
     broker_connection_retry_on_startup=True,
+    # Redis riconsegna un messaggio non confermato dopo il proprio tempo di
+    # visibilita' (un'ora per impostazione predefinita). Una scansione lunga
+    # veniva cosi' riaccodata mentre era ancora in corso: la seconda copia
+    # trovava la scansione in stato `running` e si fermava, ma il messaggio
+    # continuava a girare. Il tempo di visibilita' deve superare il limite
+    # massimo del task, non essere piu' corto.
+    broker_transport_options={
+        "visibility_timeout": settings.celery_task_time_limit + 600,
+    },
     result_expires=86400,
     task_routes={
         "defenix.scan.run": {"queue": "scans"},

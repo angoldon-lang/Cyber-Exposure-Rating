@@ -179,6 +179,8 @@ export const api = {
     request<AuthorizationPreview>(`/companies/${companyId}/scans/authorization-preview?profile=${profile}`),
   startScan: (companyId: string, profile: ScanProfile) =>
     request<Scan>(`/companies/${companyId}/scans`, { method: 'POST', body: JSON.stringify({ profile }) }),
+  cancelScan: (scanId: string) =>
+    request<Scan>(`/scans/${scanId}/cancel`, { method: 'POST' }),
 
   score: (scanId: string) => request<ScoreDetail>(`/scans/${scanId}/score`),
   findings: (scanId: string, params: Record<string, string> = {}) => {

@@ -14,6 +14,7 @@ import os
 import re
 import resource
 import shutil
+import signal
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -95,7 +96,40 @@ def _child_limits(memory_mb: int, cpu_seconds: int) -> None:  # pragma: no cover
     resource.setrlimit(resource.RLIMIT_NPROC, (256, 256))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     resource.setrlimit(resource.RLIMIT_FSIZE, (DEFAULT_MAX_OUTPUT_BYTES,) * 2)
-    os.setsid()
+    # La sessione separata la crea `start_new_session=True`, che agisce prima
+    # di questa funzione: chiamare `os.setsid()` qui fallirebbe con EPERM,
+    # perche' il processo e' gia' leader della propria sessione.
+
+
+ATTESA_TERMINAZIONE_SECONDI = 5
+
+
+def _termina_gruppo(processo: subprocess.Popen) -> tuple[bytes, bytes]:
+    """Termina il processo e tutti i suoi discendenti, poi raccoglie l'output.
+
+    Prima un SIGTERM al gruppo, per dare al tool la possibilita' di chiudere
+    i file che sta scrivendo; se non basta, SIGKILL. La raccolta finale ha a
+    sua volta un tempo massimo: se qualcosa tenesse ancora aperte le pipe,
+    l'output parziale si perde, ma la scansione prosegue. E' il compromesso
+    giusto: un output incompleto vale piu' di una scansione bloccata.
+    """
+    for segnale in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(os.getpgid(processo.pid), segnale)
+        except (ProcessLookupError, PermissionError):
+            break
+        try:
+            processo.wait(timeout=ATTESA_TERMINAZIONE_SECONDI)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+
+    try:
+        return processo.communicate(timeout=ATTESA_TERMINAZIONE_SECONDI)
+    except subprocess.TimeoutExpired:
+        logger.warning("tool_output_perso", pid=processo.pid)
+        processo.kill()
+        return b"", b""
 
 
 def run_command(
@@ -120,28 +154,44 @@ def run_command(
 
     logger.info("tool_exec", binary=binary, arg_count=len(command) - 1, timeout=effective_timeout)
     started = time.monotonic()
+    # `subprocess.run(timeout=...)` non basta. Alla scadenza uccide il figlio
+    # diretto e poi rilegge le pipe fino alla fine del flusso: un tool che
+    # lancia altri processi — testssl.sh lancia `openssl` — lascia i nipoti
+    # vivi con le pipe aperte, e quella lettura non finisce mai. Un timeout di
+    # dieci minuti e' arrivato cosi' a durarne oltre duecento.
+    #
+    # Il processo parte quindi in una sessione propria, e alla scadenza si
+    # termina l'intero gruppo: nessun discendente resta a tenere aperte le
+    # pipe.
+    processo = subprocess.Popen(  # noqa: S603 - shell=False, argv validato
+        command,
+        stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=str(cwd) if cwd else None,
+        env=env,
+        shell=False,
+        start_new_session=True,
+        preexec_fn=lambda: _child_limits(memory_limit_mb, cpu_seconds),
+    )
     try:
-        completed = subprocess.run(  # noqa: S603 - shell=False, argv validato
-            command,
-            input=stdin_data,
-            capture_output=True,
-            timeout=effective_timeout,
-            cwd=str(cwd) if cwd else None,
-            env=env,
-            shell=False,
-            check=False,
-            preexec_fn=lambda: _child_limits(memory_limit_mb, cpu_seconds),
-        )
-    except subprocess.TimeoutExpired as exc:
-        duration = time.monotonic() - started
-        logger.warning("tool_timeout", binary=binary, timeout=effective_timeout)
+        stdout_grezzo, stderr_grezzo = processo.communicate(
+            input=stdin_data, timeout=effective_timeout)
+    except subprocess.TimeoutExpired:
+        stdout_grezzo, stderr_grezzo = _termina_gruppo(processo)
+        durata = time.monotonic() - started
+        logger.warning("tool_timeout", binary=binary, timeout=effective_timeout,
+                       duration=round(durata, 1))
         return CommandResult(
             exit_code=-1,
-            stdout=(exc.stdout or b"")[:max_output_bytes],
-            stderr=(exc.stderr or b"")[:65536],
+            stdout=stdout_grezzo[:max_output_bytes],
+            stderr=stderr_grezzo[:65536],
             timed_out=True,
-            duration_seconds=duration,
+            duration_seconds=durata,
         )
+
+    completed = subprocess.CompletedProcess(
+        command, processo.returncode, stdout_grezzo, stderr_grezzo)
 
     duration = time.monotonic() - started
     stdout = completed.stdout or b""

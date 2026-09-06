@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -46,17 +47,33 @@ class TestSSLAdapter(BaseAdapter):
                                  coverage_impact=self.coverage_weight)
         targets = targets[: int(self.config.get("max_targets", 25))]
 
+        # testssl.sh e' lento per costruzione: prova centinaia di combinazioni
+        # di cifrari e protocolli, un host alla volta. Con il solo timeout per
+        # host, venticinque host da dieci minuti fanno oltre quattro ore, e la
+        # scansione resta in corso senza che nulla sia andato storto. Il tetto
+        # complessivo interrompe l'analisi e dichiara quanti host sono rimasti
+        # fuori: una copertura parziale e dichiarata vale piu' di una completa
+        # che non arriva mai.
+        budget = float(self.config.get("total_budget_seconds", 900))
+        scadenza = time.monotonic() + budget
+        per_host = int(self.config.get("timeout_seconds", self.default_timeout))
+
         evidences: list[NormalizedEvidence] = []
         raw: dict[str, Any] = {}
         failures = 0
+        analizzati = 0
         for host in targets:
+            residuo = scadenza - time.monotonic()
+            if residuo <= 0:
+                break
+            analizzati += 1
             with TemporaryWorkspace("defenix-testssl-") as workspace:
                 outfile = workspace / "result.json"
                 args = ["--jsonfile-pretty", str(outfile), "--quiet", "--color", "0",
                         "--severity", "LOW", "--sneaky", host]
                 try:
                     result = run_command(BINARY, args, allow_flags=ALLOWED_FLAGS,
-                                         timeout=self.config.get("timeout_seconds", self.default_timeout),
+                                         timeout=max(30, int(min(per_host, residuo))),
                                          cwd=workspace)
                 except (FileNotFoundError, UnsafeCommandError) as exc:
                     failures += 1
@@ -73,12 +90,22 @@ class TestSSLAdapter(BaseAdapter):
             raw[host] = findings
             evidences.extend(self._analyse_testssl(host, findings))
 
-        status = (AdapterStatus.SUCCESS if failures == 0
-                  else AdapterStatus.PARTIAL if failures < len(targets) else AdapterStatus.FAILED)
+        non_analizzati = len(targets) - analizzati
+        status = (AdapterStatus.SUCCESS if failures == 0 and not non_analizzati
+                  else AdapterStatus.PARTIAL if failures < analizzati or non_analizzati
+                  else AdapterStatus.FAILED)
+        motivo = None
+        if non_analizzati:
+            motivo = (f"tempo massimo dello strumento ({int(budget)} s) esaurito: "
+                      f"{non_analizzati} host su {len(targets)} non sono stati verificati")
         return AdapterResult(tool=self.key, status=status, evidences=evidences,
-                             target_count=len(targets), raw_output=self.dump_json(raw),
-                             coverage_impact=0.0 if failures == 0
-                             else self.coverage_weight * (failures / len(targets)))
+                             target_count=analizzati, error_message=motivo,
+                             raw_output=self.dump_json(raw),
+                             # Gli host non analizzati pesano sulla copertura
+                             # quanto quelli falliti: in entrambi i casi il
+                             # TLS di quell'host non e' stato verificato.
+                             coverage_impact=self.coverage_weight
+                             * ((failures + non_analizzati) / len(targets)))
 
     def _analyse_testssl(self, host: str, findings: list[dict[str, Any]] | dict) -> list[NormalizedEvidence]:
         """Traduce l'output nativo di testssl.sh in evidenze normalizzate."""

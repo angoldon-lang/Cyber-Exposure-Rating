@@ -181,3 +181,25 @@ def test_il_conteggio_dell_avviso_e_l_elenco_coincidono(client, admin):  # noqa:
     assert elenco["total"] == attesi
     assert all(v["severity"] in {"critical", "high"} for v in elenco["items"])
     assert all(v["analyst_validation"] == "not_reviewed" for v in elenco["items"])
+
+
+def test_l_indirizzo_configurato_riceve_il_prefisso_di_versione(adapter_context):
+    """Correggere il valore predefinito non basta: un'installazione esistente
+    ha gia' `RANSOMWARE_LIVE_URL` nel proprio `.env`, e quel valore vince.
+    Senza normalizzazione la correzione non arriva a chi non tocca la
+    configurazione — che e' esattamente chi non sa di doverlo fare."""
+    for configurato, atteso in (
+        (None, "https://api.ransomware.live/v2"),
+        ("https://api.ransomware.live", "https://api.ransomware.live/v2"),
+        ("https://api.ransomware.live/", "https://api.ransomware.live/v2"),
+        ("https://api.ransomware.live/v2", "https://api.ransomware.live/v2"),
+        ("https://interno.example/v3", "https://interno.example/v3"),
+    ):
+        adapter_context.connector_config = {"ransomware_live": {"base_url": configurato}}
+        assert RansomwareLiveAdapter(adapter_context).base_url == atteso, configurato
+
+
+def test_l_impostazione_predefinita_e_gia_corretta():
+    from app.core.config import Settings
+
+    assert Settings.model_fields["ransomware_live_url"].default.endswith("/v2")

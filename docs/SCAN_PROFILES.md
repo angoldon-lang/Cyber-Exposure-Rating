@@ -144,6 +144,23 @@ Le prime tre non richiedono nulla oltre al DNS pubblico. Gli indirizzi su
 domini diversi da quelli in perimetro non vengono raccolti: un `rua` che punta
 a un elaboratore DMARC di terzi e' un indirizzo del fornitore, non del cliente.
 
+## Quanto puo' durare una scansione
+
+`global_limits.max_wall_clock_seconds` in `config/tool_profiles.yaml` e' il
+tetto complessivo. Superato, gli strumenti **non ancora avviati** non partono
+piu': diventano lacune di copertura dichiarate, con il motivo scritto, e la
+scansione si chiude. Uno strumento gia' in esecuzione non viene interrotto —
+ha il proprio timeout — ma riceve al massimo il tempo che resta.
+
+E' l'esito corretto: una copertura parziale e dichiarata vale piu' di una
+completa che non arriva mai, e il confidence score tiene gia' conto delle
+lacune.
+
+Alcuni strumenti hanno anche un tetto proprio (`total_budget_seconds`), perche'
+da soli consumerebbero tutto il tempo disponibile. testssl.sh e' il caso
+tipico: prova centinaia di combinazioni di cifrari e protocolli, un host alla
+volta, e su venticinque host supera le quattro ore.
+
 ## Gate di autorizzazione
 
 ```mermaid

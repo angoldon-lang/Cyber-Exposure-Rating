@@ -85,6 +85,11 @@ def load_profiles() -> dict:
     return load_yaml_config("tool_profiles")
 
 
+def global_limits() -> dict:
+    """Limiti che valgono per qualsiasi scansione, indipendenti dal profilo."""
+    return load_profiles().get("global_limits", {})
+
+
 def profile_definition(profile_key: str) -> dict:
     profiles = load_profiles().get("profiles", {})
     if profile_key not in profiles:
