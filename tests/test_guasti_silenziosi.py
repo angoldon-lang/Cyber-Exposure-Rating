@@ -119,3 +119,34 @@ def test_il_comando_registra_il_guasto_nel_log(tmp_path, capsys):
     assert "tool_failed" in registrato
     assert "exit_code=3" in registrato
     assert "rotto" in registrato, "senza lo stderr il guasto resta senza causa"
+
+
+def test_causa_su_stdout_quando_stderr_e_muto(adapter_context):
+    """Alcuni strumenti scrivono l'errore su stdout, non su stderr.
+
+    Senza questo recupero il motivo si fermava a «uscito con codice 1», e la
+    diagnosi richiedeva un altro giro di scansione per leggere il log del
+    worker.
+    """
+    strumento = _Strumento(adapter_context)
+    stato, motivo, _ = strumento.esito_del_comando(
+        _esito(exit_code=1, stdout=b"flag provided but not defined: -tls-grab\n"),
+        prodotto=0)
+
+    assert stato is AdapterStatus.FAILED
+    assert "flag provided but not defined" in motivo
+
+
+def test_stdout_non_diventa_una_causa_quando_ci_sono_risultati(adapter_context):
+    """Con dei risultati, la prima riga di stdout e' un'evidenza.
+
+    Presentarla come causa del guasto mostrerebbe all'analista il contenuto
+    di un rilievo al posto di una diagnosi.
+    """
+    strumento = _Strumento(adapter_context)
+    _, motivo, _ = strumento.esito_del_comando(
+        _esito(exit_code=1, stdout=b'{"url":"https://intranet.example.it","status_code":200}\n'),
+        prodotto=1)
+
+    assert motivo == "uscito con codice 1"
+    assert "intranet" not in motivo

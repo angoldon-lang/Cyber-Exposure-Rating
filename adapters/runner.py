@@ -89,6 +89,44 @@ def build_command(binary: str, args: Sequence[str], *, allow_flags: Sequence[str
     return command
 
 
+# Spazio di indirizzamento minimo per il processo figlio.
+#
+# Un binario Go non riesce nemmeno a partire se lo spazio virtuale e' troppo
+# stretto: il runtime riserva in anticipo le proprie arene, molto oltre la
+# memoria che occupera' davvero. Misurato su httpx 1.6.9: con RLIMIT_AS a
+# 512 MB muore prima di eseguire una riga di codice
+# («fatal error: failed to reserve page summary memory», uscita 2); da
+# 1024 MB in su parte regolarmente. Il limite resta configurabile, ma non
+# sotto questa soglia: abbassarlo non renderebbe la scansione piu' sicura —
+# il contenitore ha gia' il proprio limite di memoria — la renderebbe solo
+# muta, con ogni strumento Go che fallisce senza una causa leggibile.
+MINIMO_SPAZIO_INDIRIZZI_MB = 1024
+
+
+def limiti_del_processo(memoria_mb: int | None = None,
+                        cpu_secondi: int | None = None) -> tuple[int, int]:
+    """Limiti di memoria e CPU da imporre al processo figlio.
+
+    Quando non sono indicati esplicitamente si leggono dai limiti globali di
+    `config/tool_profiles.yaml`, che finora erano dichiarati e mai applicati.
+    """
+    if memoria_mb is None or cpu_secondi is None:
+        # Import ritardato: `registry` importa tutti gli adapter, che a loro
+        # volta importano questo modulo.
+        from adapters.registry import global_limits
+
+        limiti = global_limits()
+        if memoria_mb is None:
+            memoria_mb = int(limiti.get("process_memory_limit_mb") or 2048)
+        if cpu_secondi is None:
+            cpu_secondi = int(limiti.get("process_cpu_seconds") or 3000)
+    if memoria_mb < MINIMO_SPAZIO_INDIRIZZI_MB:
+        logger.warning("memory_limit_raised", requested_mb=memoria_mb,
+                       applied_mb=MINIMO_SPAZIO_INDIRIZZI_MB)
+        memoria_mb = MINIMO_SPAZIO_INDIRIZZI_MB
+    return memoria_mb, max(int(cpu_secondi), 1)
+
+
 def _child_limits(memory_mb: int, cpu_seconds: int) -> None:  # pragma: no cover - eseguito nel figlio
     """Applica i limiti di risorse nel processo figlio prima dell'exec."""
     resource.setrlimit(resource.RLIMIT_AS, (memory_mb * 1024 * 1024,) * 2)
@@ -148,8 +186,8 @@ def run_command(
     timeout: int | None = None,
     cwd: Path | None = None,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
-    memory_limit_mb: int = 2048,
-    cpu_seconds: int = 3000,
+    memory_limit_mb: int | None = None,
+    cpu_seconds: int | None = None,
     stdin_data: bytes | None = None,
 ) -> CommandResult:
     """Esegue un tool esterno con tutte le protezioni attive."""
@@ -159,6 +197,7 @@ def run_command(
     env = {key: os.environ[key] for key in _ALLOWED_ENV_KEYS if key in os.environ}
     env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
     effective_timeout = timeout or settings.scan_default_timeout
+    memory_limit_mb, cpu_seconds = limiti_del_processo(memory_limit_mb, cpu_seconds)
 
     logger.info("tool_exec", binary=binary, arg_count=len(command) - 1, timeout=effective_timeout)
     started = time.monotonic()
@@ -209,8 +248,7 @@ def run_command(
     if processo.returncode not in (0, None):
         # Anche stdout: diversi strumenti scrivono li' l'errore di
         # interpretazione degli argomenti, e senza quella riga il guasto
-        # resta senza causa. E' la situazione in cui si trova httpx, che esce
-        # con codice 1 senza scrivere nulla su stderr.
+        # resta senza causa.
         logger.warning("tool_failed", binary=binary, exit_code=processo.returncode,
                        stderr=prima_riga(stderr_grezzo),
                        stdout=prima_riga(stdout_grezzo))

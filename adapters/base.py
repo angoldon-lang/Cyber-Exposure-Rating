@@ -283,8 +283,15 @@ class BaseAdapter(ABC):
                     "tempo massimo dello strumento raggiunto",
                     self.coverage_weight * (0.4 if prodotto else 1.0))
         if result.exit_code not in (0, None):
+            causa = prima_riga(result.stderr)
+            if not causa and not prodotto:
+                # Alcuni strumenti scrivono l'errore su stdout. Ci si guarda
+                # soltanto quando non hanno prodotto nulla: se dei risultati
+                # ci sono, la prima riga di stdout e' un'evidenza, non una
+                # diagnosi, e finirebbe nell'interfaccia spacciata per causa.
+                causa = prima_riga(result.stdout)
             motivo = (f"uscito con codice {result.exit_code}"
-                      + (f": {prima_riga(result.stderr)}" if result.stderr else ""))
+                      + (f": {causa}" if causa else ""))
             if not prodotto:
                 return AdapterStatus.FAILED, motivo, self.coverage_weight
             return AdapterStatus.PARTIAL, motivo, self.coverage_weight * 0.3
