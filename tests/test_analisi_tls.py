@@ -81,3 +81,28 @@ def test_output_interrotto_non_produce_evidenze_inventate():
     Qui si verifica solo che una struttura senza rilievi non generi nulla."""
     assert rilievi_testssl({"scanResult": [], "scanTime": "Scan interrupted"}) == []
     assert rilievi_testssl(None) == []
+
+
+def test_i_nomi_che_non_risolvono_non_vengono_provati(adapter_context, monkeypatch):
+    """Dai log di Certificate Transparency arrivano nomi di host dismessi.
+
+    testssl ci esce con codice 247 dopo aver comunque atteso il DNS: nel
+    registro dell'ultima scansione erano la maggior parte dei fallimenti, e
+    facevano risultare non verificato un TLS che non esiste.
+    """
+    from adapters import testssl_adapter
+
+    monkeypatch.setattr(testssl_adapter, "_risolve", lambda host: False)
+    strumento = testssl_adapter.TestSSLAdapter(adapter_context)
+    monkeypatch.setattr(strumento.context.scope_guard, "filter_targets",
+                        lambda valori, tipo: ["dismesso.example.it"])
+    monkeypatch.setattr(testssl_adapter, "run_command", _run_command_vietato)
+
+    esito = strumento.execute()
+
+    assert esito.status.value == "skipped"
+    assert "risolve" in (esito.error_message or "")
+
+
+def _run_command_vietato(*args, **kwargs):  # noqa: ANN002, ANN003
+    raise AssertionError("testssl non deve essere eseguito su un nome inesistente")

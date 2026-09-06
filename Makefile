@@ -213,3 +213,17 @@ up-oidc: require-env ## Avvia lo stack con Keycloak (profilo oidc)
 		|| (echo "KEYCLOAK_ADMIN_PASSWORD non impostata in .env: richiesta dal profilo oidc." \
 		    && echo "  openssl rand -base64 32" && exit 1)
 	$(COMPOSE) --profile oidc up -d
+
+.PHONY: aggiorna
+aggiorna: require-env ## Aggiorna tutto: codice, immagini, database
+	@# Ricostruire un solo servizio lascia gli altri alla versione precedente,
+	@# e la differenza non si vede: il frontend e' compilato dentro la sua
+	@# immagine, gli strumenti di scansione stanno in quella del worker. Una
+	@# modifica all'interfaccia richiede la ricostruzione del frontend tanto
+	@# quanto una nuova versione di nuclei richiede quella del worker.
+	git pull --ff-only
+	$(COMPOSE) build
+	$(COMPOSE) up -d
+	$(COMPOSE) run --rm -w /srv/backend api alembic upgrade head
+	@echo
+	@echo "Aggiornato. Interfaccia su http://localhost:$${FRONTEND_PORT:-8080}"

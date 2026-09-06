@@ -74,6 +74,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git curl libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
+# Gli strumenti di scansione NON vanno in /usr/local/bin.
+#
+# `pip install` mette li' i propri script eseguibili, e fra le dipendenze
+# c'e' `httpx` (il client HTTP di Python), che ne installa uno con lo stesso
+# nome del binario di ProjectDiscovery. Il pip successivo sovrascriveva il
+# nostro httpx, e a ogni scansione partiva lo script Python:
+#
+#   exit 1, stderr vuoto, su stdout «The httpx command line client could not
+#   run because the required dependencies were not installed.»
+#
+# Con una cartella dedicata in testa a PATH la collisione non puo' ripetersi,
+# nemmeno aggiungendo domani un pacchetto che si chiama come uno strumento.
+ENV DEFENIX_TOOLS=/opt/defenix/bin
+ENV PATH=/opt/defenix/bin:$PATH
+RUN mkdir -p ${DEFENIX_TOOLS}
+
 # testssl.sh: usato come strumento esterno invocato via subprocess (GPL-2.0),
 # non linkato nel prodotto e non ridistribuito in forma modificata.
 # Il tag upstream ha il prefisso `v` (`v3.2.4`, non `3.2.4`): senza, il clone
@@ -81,12 +97,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG TESTSSL_VERSION=v3.2.4
 RUN git clone --depth 1 --branch ${TESTSSL_VERSION} \
         https://github.com/testssl/testssl.sh.git /opt/testssl \
-    && ln -s /opt/testssl/testssl.sh /usr/local/bin/testssl.sh \
+    && ln -s /opt/testssl/testssl.sh ${DEFENIX_TOOLS}/testssl.sh \
     && /opt/testssl/testssl.sh --version >/dev/null
 
 # Copia dell'intera cartella: su arm64 naabu non e' presente e un COPY che
 # lo elencasse esplicitamente farebbe fallire la build.
-COPY --from=tools /out/ /usr/local/bin/
+COPY --from=tools /out/ /opt/defenix/bin/
 
 # I template di Nuclei non sono nel binario: senza, ogni esecuzione termina
 # con «Could not run nuclei: no templates provided for scan». Vanno messi
@@ -119,6 +135,19 @@ COPY --chown=scanner:scanner reporting/ /srv/reporting/
 COPY --chown=scanner:scanner config/ /srv/config/
 
 ENV PYTHONPATH=/srv:/srv/backend
+
+# Il binario che risponde deve essere il nostro. Se un pacchetto Python
+# tornasse a installare uno script con lo stesso nome, la build si ferma qui
+# invece di consegnare un'immagine in cui httpx fallisce a ogni scansione.
+RUN set -eu; \
+    for strumento in subfinder httpx nuclei testssl.sh; do \
+        percorso="$(command -v "${strumento}")"; \
+        case "${percorso}" in \
+            /opt/defenix/bin/*) ;; \
+            *) echo "ERRORE: ${strumento} risolve in ${percorso}, non in /opt/defenix/bin" >&2; exit 1 ;; \
+        esac; \
+    done
+
 USER scanner
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \

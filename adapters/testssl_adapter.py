@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import socket
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -87,6 +88,20 @@ def giorni_alla_scadenza(finding: str) -> int | None:
     return int(primo.group()) if primo else None
 
 
+def _risolve(host: str) -> bool:
+    """Vero se il nome ha almeno un indirizzo IP.
+
+    Serve solo a non sprecare il budget su nomi che non esistono piu': la
+    decisione su cosa sia in perimetro resta dello ScopeGuard, che ha gia'
+    filtrato l'elenco.
+    """
+    try:
+        socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return False
+    return True
+
+
 class TestSSLAdapter(BaseAdapter):
     key = "testssl"
     display_name = "testssl.sh"
@@ -113,6 +128,20 @@ class TestSSLAdapter(BaseAdapter):
                                  error_message="nessun host in perimetro",
                                  coverage_impact=self.coverage_weight)
         targets = targets[: int(self.config.get("max_targets", 25))]
+
+        # I nomi arrivano anche dai log di Certificate Transparency, dove
+        # restano quelli di certificati emessi per host poi dismessi. Su
+        # quelli testssl esce con codice 247 («No IPv4/IPv6 address(es)
+        # available») dopo aver comunque atteso il DNS: nell'ultima scansione
+        # erano la maggior parte dei fallimenti. Un nome che non risolve non
+        # e' un TLS non verificato: non e' un host.
+        risolti = [h for h in targets if _risolve(h)]
+        non_risolti = len(targets) - len(risolti)
+        targets = risolti
+        if not targets:
+            return AdapterResult(tool=self.key, status=AdapterStatus.SKIPPED,
+                                 error_message="nessun host del perimetro risolve in un indirizzo",
+                                 coverage_impact=self.coverage_weight)
 
         # testssl.sh e' lento per costruzione: prova centinaia di combinazioni
         # di cifrari e protocolli, un host alla volta. Con il solo timeout per
@@ -165,6 +194,10 @@ class TestSSLAdapter(BaseAdapter):
         if non_analizzati:
             motivo = (f"tempo massimo dello strumento ({int(budget)} s) esaurito: "
                       f"{non_analizzati} host su {len(targets)} non sono stati verificati")
+        if non_risolti:
+            nota = (f"{non_risolti} nomi del perimetro non risolvono in un indirizzo "
+                    "e non sono stati provati")
+            motivo = f"{motivo}; {nota}" if motivo else nota
         return AdapterResult(tool=self.key, status=status, evidences=evidences,
                              target_count=analizzati, error_message=motivo,
                              raw_output=self.dump_json(raw),
