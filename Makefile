@@ -138,7 +138,13 @@ logs: ## Segue i log dello stack
 
 .PHONY: compose-migrate
 compose-migrate: require-env ## Applica le migrazioni nel container API
-	$(COMPOSE) exec api sh -lc 'cd /srv/backend && alembic upgrade head'
+	@# `run` e non `exec`: le migrazioni servono anche quando l'API non e'
+	@# ancora avviata, e con `exec` il comando fallisce dicendo che il
+	@# container non esiste, il che non aiuta a capire cosa fare.
+	@# La directory di lavoro e' obbligatoria: alembic.ini sta in
+	@# /srv/backend, e da /srv alembic dichiara di non trovare la
+	@# sezione [alembic].
+	$(COMPOSE) run --rm -w /srv/backend api alembic upgrade head
 
 .PHONY: compose-seed
 compose-seed: require-env ## Crea i dati dimostrativi nel container API

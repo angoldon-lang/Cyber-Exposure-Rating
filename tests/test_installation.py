@@ -163,6 +163,34 @@ def test_readme_non_usa_sed_in_place():
     assert "sed -i" not in readme, "istruzione `sed -i` non portabile nel README"
 
 
+def test_le_migrazioni_girano_dove_sta_alembic_ini():
+    """`alembic.ini` sta in `backend/`, che nell'immagine e' `/srv/backend`.
+
+    Lanciato dalla directory sbagliata, alembic non fallisce dicendo che il
+    file manca: dice «No config file 'alembic.ini' found, or file has no
+    '[alembic]' section», che sembra un file corrotto e manda a cercare nel
+    posto sbagliato. Il comando deve quindi dichiarare la directory di lavoro.
+    """
+    assert (REPO_ROOT / "backend" / "alembic.ini").exists()
+
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    bersaglio = makefile.split("compose-migrate: require-env", 1)[1].split("\n.PHONY", 1)[0]
+    comando = [r for r in bersaglio.splitlines() if "alembic" in r and not r.strip().startswith("@#")]
+    assert comando, "il target compose-migrate non esegue alembic"
+    assert any("/srv/backend" in r for r in comando), (
+        "il comando di migrazione non dichiara la directory di alembic.ini")
+
+
+def test_le_migrazioni_non_richiedono_l_api_gia_avviata():
+    """Con `exec` il comando fallisce quando l'API non e' su, dicendo che il
+    container non esiste: un messaggio che non suggerisce cosa fare."""
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    bersaglio = makefile.split("compose-migrate: require-env", 1)[1].split("\n.PHONY", 1)[0]
+    comando = " ".join(r for r in bersaglio.splitlines() if "alembic" in r)
+    assert "run --rm" in comando
+    assert "exec" not in comando
+
+
 # --------------------------------------------------------------------------
 # Contesto di build delle immagini
 # --------------------------------------------------------------------------
