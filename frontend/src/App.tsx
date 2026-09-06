@@ -105,6 +105,10 @@ function Shell({ profile, companies, onLogout }:
             Valutazione dell’esposizione osservabile dall’esterno. Non e’ un
             penetration test ne’ una certificazione di sicurezza.
           </p>
+          <p style={{ marginTop: 8, marginBottom: 0, opacity: .6 }}
+             title="Se dopo un aggiornamento questa data non cambia, il browser sta servendo una copia in cache: ricaricare con Ctrl+Shift+R.">
+            Interfaccia compilata il {new Date(__COMPILATO_IL__).toLocaleString('it-IT')}
+          </p>
         </div>
       </aside>
 

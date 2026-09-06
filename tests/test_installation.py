@@ -336,3 +336,45 @@ def test_il_compose_indirizza_le_credenziali_su_un_volume_scrivibile():
     montaggi = [m.split(":")[1] for m in compose["services"]["api"]["volumes"]]
     assert any(percorso.startswith(f"{m}/") for m in montaggi), (
         f"{percorso} non e' sotto uno dei volumi dell'API: {montaggi}")
+
+
+NGINX_CONF = (REPO_ROOT / "frontend" / "nginx.conf").read_text(encoding="utf-8")
+
+
+def test_index_html_non_viene_messo_in_cache():
+    """Senza questa regola un aggiornamento non arriva mai al browser.
+
+    `index.html` e' l'unico file con un nome fisso: contiene i riferimenti ai
+    bundle, che hanno nel nome l'impronta del contenuto. Se il browser lo
+    conserva, continua a chiedere i bundle della versione precedente e li
+    trova nella propria cache, dichiarati `immutable` per trenta giorni.
+
+    Il risultato e' un'interfaccia vecchia che nessuna ricostruzione delle
+    immagini corregge, senza un errore da nessuna parte.
+    """
+    blocco = re.search(r"location = /index\.html \{(.*?)\}", NGINX_CONF, re.DOTALL)
+
+    assert blocco, "manca la regola per index.html: la cache del browser lo congela"
+    assert re.search(r"expires\s+-1\s*;", blocco.group(1)), (
+        "index.html va servito con `expires -1`, che impone la riconvalida")
+
+
+def test_la_regola_su_index_html_non_azzera_gli_header_di_sicurezza():
+    """`add_header` in un blocco annidato azzera quelli del livello
+    superiore: usato qui, la pagina perderebbe la Content-Security-Policy."""
+    blocco = re.search(r"location = /index\.html \{(.*?)\}", NGINX_CONF, re.DOTALL)
+
+    assert blocco and "add_header" not in blocco.group(1), (
+        "un add_header qui toglierebbe CSP, X-Frame-Options e gli altri "
+        "header dichiarati a livello di server")
+
+
+def test_la_cache_lunga_vale_solo_per_i_file_con_impronta_nel_nome():
+    """`immutable` su un nome fisso sarebbe una trappola: e' ammesso solo
+    sugli asset, che cambiano nome a ogni contenuto diverso."""
+    for blocco in re.findall(r"location ([^\{]+)\{(.*?)\}", NGINX_CONF, re.DOTALL):
+        selettore, corpo = blocco
+        if "immutable" in corpo:
+            assert "js|css" in selettore, (
+                f"cache immutabile su {selettore.strip()}: se il nome non "
+                "cambia con il contenuto, l'aggiornamento non arriva")

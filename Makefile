@@ -227,3 +227,10 @@ aggiorna: require-env ## Aggiorna tutto: codice, immagini, database
 	$(COMPOSE) run --rm -w /srv/backend api alembic upgrade head
 	@echo
 	@echo "Aggiornato. Interfaccia su http://localhost:$${FRONTEND_PORT:-8080}"
+	@echo
+	@echo "La prima volta dopo questo aggiornamento serve una ricarica forzata"
+	@echo "del browser (Cmd+Shift+R su macOS, Ctrl+Shift+R altrove): la copia"
+	@echo "di index.html gia' in cache non ha ancora la regola che la fa"
+	@echo "riconvalidare. Dalle volte successive non serve piu'."
+	@echo "In fondo alla barra laterale c'e' la data di compilazione: se non"
+	@echo "cambia, si sta ancora guardando una copia in cache."
