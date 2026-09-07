@@ -201,12 +201,22 @@
 <ul>{% for limit in limits %}<li>{{ limit }}</li>{% endfor %}</ul>
 
 <h3>Copertura degli strumenti impiegati</h3>
+<p class="small">
+  «Non attivo» non indica un guasto: lo strumento richiede una configurazione,
+  un abbonamento a una fonte commerciale o un dato che non e&rsquo; stato fornito.
+  L&rsquo;area che copriva risulta non verificata, e la confidenza dichiarata in
+  copertina ne tiene gia&rsquo; conto. Un guasto vero e&rsquo; indicato come «non riuscito».
+</p>
 <table>
-  <thead><tr><th style="width:45mm">Strumento</th><th style="width:24mm">Esito</th>
+  <thead><tr><th style="width:45mm">Strumento</th><th style="width:28mm">Esito</th>
     <th>Note</th></tr></thead>
   <tbody>
   {% for entry in coverage_matrix %}
-    <tr><td>{{ entry.tool }}</td><td>{{ entry.status }}</td>
+    <tr><td>{{ entry.tool }}</td>
+      <td>{{ {'success': 'eseguito',
+              'partial': 'parziale',
+              'skipped': 'non attivo',
+              'failed': 'non riuscito'}.get(entry.status, entry.status) }}</td>
       <td class="small">{{ entry.note_it }}</td></tr>
   {% endfor %}
   </tbody>

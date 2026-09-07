@@ -16,7 +16,8 @@ from app.models.enums import ConfidenceClass, ScoreCategoryKey, Severity
 BINARY = "testssl.sh"
 CATEGORY = ScoreCategoryKey.WEB_SECURITY.value
 ALLOWED_FLAGS = ("--jsonfile-pretty", "--quiet", "--color", "--severity", "--sneaky",
-                 "--warnings", "--openssl-timeout", "--connect-timeout")
+                 "--warnings", "--openssl-timeout", "--connect-timeout",
+                 "--protocols", "--categories", "--server-defaults")
 
 LEGACY_PROTOCOLS = ("SSLv2", "SSLv3", "TLSv1.0", "TLSv1.1")
 CERT_EXPIRY_WARNING_DAYS = 30
@@ -165,8 +166,23 @@ class TestSSLAdapter(BaseAdapter):
             analizzati += 1
             with TemporaryWorkspace("defenix-testssl-") as workspace:
                 outfile = workspace / "result.json"
+                # Si chiedono solo i tre gruppi di test che vengono poi letti:
+                # protocolli, categorie di cifrari e impostazioni predefinite
+                # del server (dove sta il certificato). Il comportamento
+                # normale di testssl e' eseguirli tutti — simulazioni dei
+                # browser, cifrario per cifrario, vulnerabilita' storiche —
+                # e nell'ultima scansione cinque host su sette hanno superato
+                # i tre minuti senza che di quel lavoro si usasse nulla.
+                # Misurato: 127 s con il comportamento normale, 52 s cosi'.
+                #
+                # I due timeout interni evitano che un singolo host che non
+                # risponde tenga occupato il proprio tempo per intero: sono
+                # attese sul socket, non sul test.
                 args = ["--jsonfile-pretty", str(outfile), "--quiet", "--color", "0",
-                        "--severity", "LOW", "--sneaky", host]
+                        "--severity", "LOW", "--sneaky",
+                        "--protocols", "--categories", "--server-defaults",
+                        "--connect-timeout", "10", "--openssl-timeout", "10",
+                        host]
                 try:
                     result = run_command(BINARY, args, allow_flags=ALLOWED_FLAGS,
                                          timeout=max(30, int(min(per_host, residuo))),

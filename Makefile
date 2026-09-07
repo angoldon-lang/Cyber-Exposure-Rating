@@ -234,3 +234,26 @@ aggiorna: require-env ## Aggiorna tutto: codice, immagini, database
 	@echo "riconvalidare. Dalle volte successive non serve piu'."
 	@echo "In fondo alla barra laterale c'e' la data di compilazione: se non"
 	@echo "cambia, si sta ancora guardando una copia in cache."
+
+.PHONY: diagnosi
+diagnosi: ## Dice cosa sta davvero girando: versioni, schede, binari
+	@echo "== interfaccia: come viene servita =="
+	@curl -sfI http://localhost:$${FRONTEND_PORT:-8080}/ 2>/dev/null \
+		| grep -i "^cache-control" \
+		|| echo "  NESSUN Cache-Control -> immagine del frontend non aggiornata"
+	@echo
+	@echo "== interfaccia: le schede sono nel bundle? =="
+	@$(COMPOSE) exec -T frontend sh -c \
+		"grep -ql 'Perimetro di rete' /usr/share/nginx/html/assets/*.js" \
+		&& echo "  Perimetro di rete (Gestione azienda): presente" \
+		|| echo "  Perimetro di rete: ASSENTE -> ricostruire il frontend"
+	@$(COMPOSE) exec -T frontend sh -c \
+		"grep -ql 'Dopo aver modificato' /usr/share/nginx/html/assets/*.js" \
+		&& echo "  Strumenti (Personalizzazione):      presente" \
+		|| echo "  Strumenti: ASSENTE -> ricostruire il frontend"
+	@echo
+	@echo "== worker: quale binario risponde =="
+	@$(COMPOSE) exec -T worker sh -c \
+		'for t in subfinder httpx nuclei testssl.sh; do printf "  %-12s %s\n" "$$t" "$$(command -v $$t || echo ASSENTE)"; done'
+	@echo
+	@echo "Se una riga dice ASSENTE o manca il Cache-Control: make aggiorna"
