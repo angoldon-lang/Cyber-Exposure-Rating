@@ -106,8 +106,10 @@ function Shell({ profile, companies, onLogout }:
             penetration test ne’ una certificazione di sicurezza.
           </p>
           <p style={{ marginTop: 8, marginBottom: 0, opacity: .6 }}
-             title="Se dopo un aggiornamento questa data non cambia, il browser sta servendo una copia in cache: ricaricare con Ctrl+Shift+R.">
-            Interfaccia compilata il {new Date(__COMPILATO_IL__).toLocaleString('it-IT')}
+             title={`Interfaccia compilata il ${new Date(__COMPILATO_IL__).toLocaleString('it-IT')}. Se dopo un aggiornamento questa data non cambia, il browser sta servendo una copia in cache: ricaricare con Ctrl+Shift+R.`}>
+            Versione {__VERSIONE__}
+            <br />
+            build {new Date(__COMPILATO_IL__).toLocaleString('it-IT')}
           </p>
         </div>
       </aside>

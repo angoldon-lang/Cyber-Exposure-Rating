@@ -237,6 +237,18 @@ aggiorna: require-env ## Aggiorna tutto: codice, immagini, database
 
 .PHONY: diagnosi
 diagnosi: ## Dice cosa sta davvero girando: versioni, schede, binari
+	@echo "== versione attesa (questo repository) =="
+	@printf "  VERSION                %s\n" "$$(cat VERSION)"
+	@echo
+	@echo "== versione che sta girando =="
+	@printf "  api                    %s\n" \
+		"$$($(COMPOSE) exec -T api sh -c 'cat /srv/VERSION 2>/dev/null' || echo sconosciuta)"
+	@printf "  worker                 %s\n" \
+		"$$($(COMPOSE) exec -T worker sh -c 'cat /srv/VERSION 2>/dev/null' || echo sconosciuta)"
+	@$(COMPOSE) exec -T frontend sh -c "grep -ql '$$(cat VERSION)' /usr/share/nginx/html/assets/*.js" \
+		&& printf "  frontend (nel bundle)  %s\n" "$$(cat VERSION)" \
+		|| printf "  frontend (nel bundle)  diversa da %s -> ricostruire\n" "$$(cat VERSION)"
+	@echo
 	@echo "== interfaccia: come viene servita =="
 	@curl -sfI http://localhost:$${FRONTEND_PORT:-8080}/ 2>/dev/null \
 		| grep -i "^cache-control" \

@@ -133,6 +133,9 @@ COPY --chown=scanner:scanner backend/ /srv/backend/
 COPY --chown=scanner:scanner adapters/ /srv/adapters/
 COPY --chown=scanner:scanner reporting/ /srv/reporting/
 COPY --chown=scanner:scanner config/ /srv/config/
+# Il repository non c'e' nell'immagine: il numero di versione
+# viene letto da qui.
+COPY --chown=scanner:scanner VERSION /srv/VERSION
 
 ENV PYTHONPATH=/srv:/srv/backend
 

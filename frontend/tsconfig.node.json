@@ -8,9 +8,11 @@
     "strict": true,
     "emitDeclarationOnly": true,
     "declaration": true,
-    "outDir": "./.tsbuild"
+    "outDir": "./.tsbuild",
+    "resolveJsonModule": true
   },
   "include": [
-    "vite.config.ts"
+    "vite.config.ts",
+    "package.json"
   ]
 }

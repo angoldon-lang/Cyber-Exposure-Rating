@@ -42,6 +42,9 @@ COPY --chown=defenix:defenix backend/ /srv/backend/
 COPY --chown=defenix:defenix adapters/ /srv/adapters/
 COPY --chown=defenix:defenix reporting/ /srv/reporting/
 COPY --chown=defenix:defenix config/ /srv/config/
+# Il repository non c'e' nell'immagine: il numero di versione
+# viene letto da qui.
+COPY --chown=defenix:defenix VERSION /srv/VERSION
 
 ENV PYTHONPATH=/srv:/srv/backend
 USER defenix

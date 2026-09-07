@@ -112,7 +112,13 @@ class ReportContext:
     limits: list[str] = field(default_factory=lambda: list(LIMITS_IT))
 
     def as_dict(self) -> dict[str, Any]:
+        from app.core.config import settings
+
         return {
+            # Un report circola per mesi: senza sapere con quale versione della
+            # piattaforma e' stato prodotto, un risultato diverso da una
+            # rilevazione successiva non e' spiegabile.
+            "platform_version": settings.app_version,
             "company_name": self.company_name, "company_vat": self.company_vat,
             "generated_at": self.generated_at, "language": self.language,
             "profile_key": self.profile_key, "profile_label": self.profile_label,

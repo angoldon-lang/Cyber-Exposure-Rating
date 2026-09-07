@@ -1,6 +1,16 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+import pacchetto from './package.json';
+
+// Numero di versione. La sorgente e' il file `VERSION` alla radice del
+// repository, che il backend legge direttamente; qui si usa il valore di
+// package.json, che npm pretende comunque di avere. Non e' una seconda
+// sorgente per svista: `tests/test_versione.py` fallisce se i due divergono,
+// ed e' il modo di tenerli uguali senza aggiungere `@types/node` solo per
+// leggere un file di sei caratteri.
+const VERSIONE = pacchetto.version;
+
 // Momento della compilazione, inserito nel bundle.
 //
 // L'interfaccia e' compilata dentro la propria immagine: quando qualcuno
@@ -11,7 +21,10 @@ import react from '@vitejs/plugin-react';
 const COMPILATO_IL = new Date().toISOString();
 
 export default defineConfig({
-  define: { __COMPILATO_IL__: JSON.stringify(COMPILATO_IL) },
+  define: {
+    __COMPILATO_IL__: JSON.stringify(COMPILATO_IL),
+    __VERSIONE__: JSON.stringify(VERSIONE),
+  },
   plugins: [react()],
   server: {
     port: 5173,

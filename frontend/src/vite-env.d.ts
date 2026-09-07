@@ -2,3 +2,6 @@
 
 /** Inserito da Vite al momento della compilazione. */
 declare const __COMPILATO_IL__: string;
+
+/** Numero di versione della piattaforma, dal file VERSION. */
+declare const __VERSIONE__: string;

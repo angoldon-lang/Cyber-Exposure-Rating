@@ -13,12 +13,29 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG_DIR = REPO_ROOT / "config"
 
 
+def versione_della_piattaforma() -> str:
+    """Numero di versione, letto dal file `VERSION` alla radice del repository.
+
+    Unica sorgente: il numero compariva sia qui sia in `frontend/package.json`,
+    due copie destinate a divergere alla prima modifica di una sola delle due.
+    Il file viene copiato nelle immagini accanto al codice.
+    """
+    for candidato in (REPO_ROOT / "VERSION", Path("/srv/VERSION")):
+        try:
+            testo = candidato.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if testo:
+            return testo
+    return "0.0.0-sconosciuta"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- Applicazione ---
     app_name: str = "Defenix Exposure Rating"
-    app_version: str = "0.1.0"
+    app_version: str = Field(default_factory=versione_della_piattaforma)
     environment: Literal["development", "staging", "production"] = "development"
     debug: bool = False
     api_prefix: str = "/api/v1"
