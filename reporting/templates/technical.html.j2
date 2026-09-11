@@ -17,6 +17,62 @@
   e non incidono sul punteggio.
 </div>
 
+{# ------------------------- 3. Perimetro verificato ------------------------- #}
+<h3>Perimetro della valutazione</h3>
+<table>
+  <tr><th style="width:45mm">Profilo di scansione</th><td>{{ profile_label }}</td></tr>
+  <tr><th>Domini analizzati</th><td>{{ (scope.domains or [])|join(', ') or 'nessuno' }}</td></tr>
+  <tr><th>Domini verificati</th>
+      <td>{{ (scope.verified_domains or [])|join(', ') or 'nessun dominio verificato' }}</td></tr>
+  {% if scope.ip_addresses %}
+  <tr><th>Indirizzi IP autorizzati</th><td>{{ scope.ip_addresses|join(', ') }}</td></tr>{% endif %}
+  {% if scope.network_ranges %}
+  <tr><th>Reti autorizzate</th><td>{{ scope.network_ranges|join(', ') }}</td></tr>{% endif %}
+  {% if scope.excluded %}
+  <tr><th>Esclusioni</th><td>{{ scope.excluded|join(', ') }}</td></tr>{% endif %}
+</table>
+
+{# ------------------------- 6. Esposizione osservata ------------------------ #}
+<h3>Esposizione osservata</h3>
+<table>
+  <tr><th style="width:60mm">Asset individuati</th><td>{{ exposure_summary.total_assets }}
+    (di cui {{ exposure_summary.verified_assets }} di proprieta' verificata)</td></tr>
+  <tr><th>Domini e sottodomini</th><td>{{ exposure_summary.domains }}</td></tr>
+  <tr><th>Servizi web attivi</th><td>{{ exposure_summary.web_services }}</td></tr>
+  <tr><th>Indirizzi IP</th><td>{{ exposure_summary.ip_addresses }}</td></tr>
+  {% if exposure_summary.open_ports is defined %}
+  <tr><th>Servizi di rete esposti</th><td>{{ exposure_summary.open_ports }}</td></tr>{% endif %}
+  <tr><th>Rilievi totali</th><td>{{ exposure_summary.findings_total }}
+    ({{ exposure_summary.critical }} critici, {{ exposure_summary.high }} alti)</td></tr>
+  <tr><th>Asset di terzi esclusi dal rating</th><td>{{ exposure_summary.third_party }}</td></tr>
+</table>
+
+{# ------------------- 9. Limiti della valutazione e disclaimer -------------- #}
+<h3>Limiti della valutazione</h3>
+<ul>{% for limit in limits %}<li>{{ limit }}</li>{% endfor %}</ul>
+
+<h3>Copertura degli strumenti impiegati</h3>
+<p class="small">
+  «Non attivo» non indica un guasto: lo strumento richiede una configurazione,
+  un abbonamento a una fonte commerciale o un dato che non e&rsquo; stato fornito.
+  L&rsquo;area che copriva risulta non verificata, e la confidenza dichiarata in
+  copertina ne tiene gia&rsquo; conto. Un guasto vero e&rsquo; indicato come «non riuscito».
+</p>
+<table>
+  <thead><tr><th style="width:45mm">Strumento</th><th style="width:28mm">Esito</th>
+    <th>Note</th></tr></thead>
+  <tbody>
+  {% for entry in coverage_matrix %}
+    <tr><td>{{ entry.tool }}</td>
+      <td>{{ {'success': 'eseguito',
+              'partial': 'parziale',
+              'skipped': 'non attivo',
+              'failed': 'non riuscito'}.get(entry.status, entry.status) }}</td>
+      <td class="small">{{ entry.note_it }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
 {# ------------------------ Riepilogo per severita' ------------------------- #}
 <h3>Riepilogo dei rilievi</h3>
 <table>

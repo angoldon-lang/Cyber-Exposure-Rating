@@ -34,7 +34,13 @@
         ({{ confidence_label }})</p>
     </div>
   </div>
-  <p class="footer-note">{{ disclaimer }}<br><br>
+  {# In copertina va la sintesi della limitazione, non il disclaimer per
+     intero: quel testo occupava mezza pagina, spingeva il resto sul foglio
+     successivo e compare comunque per esteso nel corpo del documento. #}
+  <p class="footer-note">
+    Valutazione dell&rsquo;esposizione osservabile dall&rsquo;esterno. Non e&rsquo; un
+    penetration test ne&rsquo; una certificazione di sicurezza; i limiti della
+    rilevazione sono riportati per esteso nel documento.<br><br>
     {% if footer_text %}{{ footer_text }}<br><br>{% endif %}
     Documento riservato prodotto da {{ brand.owner }}. Distribuzione limitata al destinatario.<br>
     Piattaforma Defenix Exposure Rating {{ platform_version }}.</p>
@@ -68,23 +74,16 @@
 </div>
 {% endif %}
 
-{# ------------------------- 3. Perimetro verificato ------------------------- #}
-<h2>Perimetro della valutazione</h2>
-<table>
-  <tr><th style="width:45mm">Profilo di scansione</th><td>{{ profile_label }}</td></tr>
-  <tr><th>Domini analizzati</th><td>{{ (scope.domains or [])|join(', ') or 'nessuno' }}</td></tr>
-  <tr><th>Domini verificati</th>
-      <td>{{ (scope.verified_domains or [])|join(', ') or 'nessun dominio verificato' }}</td></tr>
-  {% if scope.ip_addresses %}
-  <tr><th>Indirizzi IP autorizzati</th><td>{{ scope.ip_addresses|join(', ') }}</td></tr>{% endif %}
-  {% if scope.network_ranges %}
-  <tr><th>Reti autorizzate</th><td>{{ scope.network_ranges|join(', ') }}</td></tr>{% endif %}
-  {% if scope.excluded %}
-  <tr><th>Esclusioni</th><td>{{ scope.excluded|join(', ') }}</td></tr>{% endif %}
-</table>
-
 {# --------------------------- 4. Rating tematici ---------------------------- #}
 <h2>Rating per area tematica</h2>
+{% if radar_svg %}
+<div class="radar-blocco">{{ radar_svg|safe }}</div>
+<p class="small muted" style="margin-top:-2mm">
+  Piu&rsquo; il profilo si avvicina al centro, piu&rsquo; l&rsquo;area e&rsquo; esposta.
+  Il punteggio di ciascuna area e&rsquo; su cento; il peso con cui concorre al
+  risultato complessivo e&rsquo; nella tabella che segue.
+</p>
+{% endif %}
 <table>
   <thead><tr><th style="width:62mm">Area</th><th style="width:16mm">Peso</th>
     <th style="width:18mm">Punteggio</th><th>Andamento</th>
@@ -130,21 +129,6 @@
   rilievi non costituisce prova di sicurezza.</p>
 {% endif %}
 
-{# ------------------------- 6. Esposizione osservata ------------------------ #}
-<h2>Esposizione osservata</h2>
-<table>
-  <tr><th style="width:60mm">Asset individuati</th><td>{{ exposure_summary.total_assets }}
-    (di cui {{ exposure_summary.verified_assets }} di proprieta' verificata)</td></tr>
-  <tr><th>Domini e sottodomini</th><td>{{ exposure_summary.domains }}</td></tr>
-  <tr><th>Servizi web attivi</th><td>{{ exposure_summary.web_services }}</td></tr>
-  <tr><th>Indirizzi IP</th><td>{{ exposure_summary.ip_addresses }}</td></tr>
-  {% if exposure_summary.open_ports is defined %}
-  <tr><th>Servizi di rete esposti</th><td>{{ exposure_summary.open_ports }}</td></tr>{% endif %}
-  <tr><th>Rilievi totali</th><td>{{ exposure_summary.findings_total }}
-    ({{ exposure_summary.critical }} critici, {{ exposure_summary.high }} alti)</td></tr>
-  <tr><th>Asset di terzi esclusi dal rating</th><td>{{ exposure_summary.third_party }}</td></tr>
-</table>
-
 {# --------------------------- 7. Priorita' e quick win --------------------- #}
 <h2>Priorita' di intervento</h2>
 {% if remediation_plan %}
@@ -152,7 +136,7 @@
   <thead><tr><th style="width:10mm">#</th><th>Intervento</th><th style="width:22mm">Priorita'</th>
     <th style="width:22mm">Impegno</th><th style="width:20mm">Rilievi</th></tr></thead>
   <tbody>
-  {% for item in remediation_plan[:10] %}
+  {% for item in remediation_plan[:5] %}
     <tr><td>{{ loop.index }}</td>
       <td><strong>{{ item.title_it }}</strong><br>
         <span class="small muted">{{ item.risk_mitigated_it }}</span></td>
@@ -197,35 +181,15 @@
   con scansioni precedenti.</p>
 {% endif %}
 
-{# ------------------- 9. Limiti della valutazione e disclaimer -------------- #}
-<h2>Limiti della valutazione</h2>
-<ul>{% for limit in limits %}<li>{{ limit }}</li>{% endfor %}</ul>
-
-<h3>Copertura degli strumenti impiegati</h3>
-<p class="small">
-  «Non attivo» non indica un guasto: lo strumento richiede una configurazione,
-  un abbonamento a una fonte commerciale o un dato che non e&rsquo; stato fornito.
-  L&rsquo;area che copriva risulta non verificata, e la confidenza dichiarata in
-  copertina ne tiene gia&rsquo; conto. Un guasto vero e&rsquo; indicato come «non riuscito».
-</p>
-<table>
-  <thead><tr><th style="width:45mm">Strumento</th><th style="width:28mm">Esito</th>
-    <th>Note</th></tr></thead>
-  <tbody>
-  {% for entry in coverage_matrix %}
-    <tr><td>{{ entry.tool }}</td>
-      <td>{{ {'success': 'eseguito',
-              'partial': 'parziale',
-              'skipped': 'non attivo',
-              'failed': 'non riuscito'}.get(entry.status, entry.status) }}</td>
-      <td class="small">{{ entry.note_it }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-
 <div class="callout">
   <strong>Disclaimer.</strong> {{ disclaimer }}
 </div>
+
+<p class="small muted">
+  Perimetro analizzato, inventario degli asset, copertura degli strumenti, elenco
+  integrale dei rilievi e piano di rimedio completo sono riportati nell&rsquo;allegato
+  tecnico, documento separato.
+</p>
 
 {% if contact_block %}
 <section class="contatti">

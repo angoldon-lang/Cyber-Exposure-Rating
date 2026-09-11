@@ -114,11 +114,17 @@ class ReportContext:
     def as_dict(self) -> dict[str, Any]:
         from app.core.config import settings
 
+        from reporting.radar import grafico_radar
+
         return {
             # Un report circola per mesi: senza sapere con quale versione della
             # piattaforma e' stato prodotto, un risultato diverso da una
             # rilevazione successiva non e' spiegabile.
             "platform_version": settings.app_version,
+            # Il radar arriva al modello gia' disegnato: SVG calcolato, non
+            # un'immagine da risolvere durante la generazione del PDF.
+            "radar_svg": grafico_radar(
+                self.categories, colore=self.brand.get("color") or "#1f4e79"),
             "company_name": self.company_name, "company_vat": self.company_vat,
             "generated_at": self.generated_at, "language": self.language,
             "profile_key": self.profile_key, "profile_label": self.profile_label,

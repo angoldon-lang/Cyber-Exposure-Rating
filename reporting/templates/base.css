@@ -22,7 +22,16 @@
    pagina denominata e non a `:first`: i due documenti (esecutivo e allegato)
    vengono renderizzati separatamente e le pagine concatenate, quindi `:first`
    colpiva anche la prima pagina dell'allegato, che finiva contro il bordo. */
-@page copertina { margin: 0; }
+@page copertina {
+  margin: 0;
+  /* Lo sfondo sta sulla PAGINA, non sul blocco: cosi' copre il foglio fino
+     ai bordi qualunque sia l'altezza del contenuto. Sul blocco lasciava una
+     striscia bianca in fondo ogni volta che il contenuto era piu' corto. */
+  background: linear-gradient(160deg, #0f3d5c 0%, #123a52 55%, #0b2436 100%);
+  @top-center { content: none; }
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
 .cover { page: copertina; }
 
 :root {
@@ -47,12 +56,22 @@ body {
 /* ---------- copertina ---------- */
 .cover {
   page-break-after: always;
-  height: 297mm; padding: 32mm 22mm;
-  background: linear-gradient(160deg, #0f3d5c 0%, #123a52 55%, #0b2436 100%);
+  /* La copertina deve stare in UNA pagina.
+     Era alta 297 mm, quanto un A4 intero, e sbordava: l'ultimo blocco
+     finiva su un secondo foglio quasi vuoto ma con lo sfondo pieno, in un
+     documento che ne ha cinque in tutto.
+     L'altezza utile misurata e' fra 270 e 285 mm — `@page copertina
+     { margin: 0 }` non libera l'intera pagina come ci si aspetterebbe —
+     quindi si sta sotto con un margine di sicurezza. Il numero e' empirico
+     e va trattato come tale: a garantirlo e'
+     `test_la_copertina_sta_in_una_pagina`, non questo commento.
+     `overflow: hidden` protegge dai testi personalizzati piu' lunghi del
+     previsto: meglio una nota accorciata che una pagina sprecata. */
+  height: 265mm; padding: 24mm 22mm; overflow: hidden;
   color: #fff; display: flex; flex-direction: column; justify-content: space-between;
 }
 .cover h1 { font-size: 30pt; margin: 0 0 4mm; letter-spacing: -0.4pt; }
-.cover .subtitle { font-size: 12pt; color: #b9d4e6; margin: 0 0 16mm; }
+.cover .subtitle { font-size: 12pt; color: #b9d4e6; margin: 0 0 10mm; }
 .cover .company { font-size: 19pt; font-weight: 700; margin: 0 0 2mm; }
 .cover .meta { font-size: 10pt; color: #c8dcea; }
 .cover .rating-block {
@@ -62,7 +81,7 @@ body {
 .cover .score { font-size: 46pt; font-weight: 700; line-height: 1; }
 .cover .class { font-size: 16pt; margin-top: 2mm; }
 .cover .confidence { font-size: 10pt; color: #c8dcea; margin-top: 4mm; }
-.cover .footer-note { font-size: 8pt; color: #9fbdd2; line-height: 1.45; }
+.cover .footer-note { font-size: 7.5pt; color: #9fbdd2; line-height: 1.4; }
 
 /* ---------- struttura ---------- */
 h2 {
@@ -126,3 +145,12 @@ li { margin-bottom: 1mm; }
 .intro { font-size: 10.5pt; border-left: 3px solid #ccc; padding-left: 10px; margin-bottom: 14px; }
 .contatti { margin-top: 24px; }
 .contatti p { white-space: pre-line; }
+
+/* Radar delle aree tematiche. Il blocco e' centrato e non si spezza fra due
+   pagine: un grafico tagliato a meta' non si legge. */
+.radar-blocco {
+  text-align: center;
+  margin: 2mm 0 1mm;
+  page-break-inside: avoid;
+}
+.radar-blocco svg { max-width: 132mm; height: auto; }
