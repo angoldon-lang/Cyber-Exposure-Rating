@@ -344,11 +344,24 @@ export interface AssetSummary {
 }
 
 export interface ToolRequirement {
-  variable: string | null;
+  variable: string;
   present: boolean;
   free: boolean;
   where: string | null;
   note: string | null;
+  /** Cosa scrivere nel campo. */
+  label: string | null;
+  /** Se vero il valore e' un segreto: campo mascherato, mai restituito. */
+  secret: boolean;
+  /** Da dove arriva il valore gia' presente: 'interfaccia' o 'ambiente'. */
+  source: string | null;
+}
+
+export interface ToolStatusResponse {
+  tools: ToolStatus[];
+  /** Falso se manca il materiale per cifrare: i valori non si possono salvare. */
+  can_store: boolean;
+  storage_reason: string | null;
 }
 
 export interface ToolStatus {

@@ -1,7 +1,7 @@
 /** Personalizzazione: marchio, logo, colore e testi inseriti nei report. */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api, auth } from '../api/client';
-import type { Branding, ToolStatus } from '../api/types';
+import type { Branding, ToolRequirement, ToolStatusResponse } from '../api/types';
 import { Banner, Chip, ConfirmButton, Field, Spinner } from '../components/ui';
 
 function messaggio(errore: unknown): string {
@@ -16,20 +16,95 @@ function messaggio(errore: unknown): string {
  *  impostare, se la fonte costi qualcosa e dove procurarsi la chiave: tre
  *  cose che non erano scritte da nessuna parte.
  */
-function SchedaStrumenti() {
-  const [strumenti, setStrumenti] = useState<ToolStatus[] | null>(null);
+/** Un requisito, con il campo per soddisfarlo.
+ *
+ *  La versione precedente descriveva soltanto cosa serviva: per impostarlo
+ *  bisognava comunque accedere al server e modificare `.env`. Chi usa la
+ *  piattaforma non ha necessariamente quell'accesso.
+ */
+function CampoRequisito({ requisito, salvabile, onFatto }: {
+  requisito: ToolRequirement;
+  salvabile: boolean;
+  onFatto: () => void;
+}) {
+  const [valore, setValore] = useState('');
+  const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
 
-  useEffect(() => {
-    api.toolStatus().then(setStrumenti).catch((e) => setErrore(messaggio(e)));
+  async function esegui(azione: () => Promise<unknown>) {
+    setInCorso(true); setErrore(null);
+    try { await azione(); setValore(''); onFatto(); }
+    catch (e) { setErrore(messaggio(e)); }
+    finally { setInCorso(false); }
+  }
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label className="small" style={{ display: 'block', marginBottom: 3 }}>
+        {requisito.label ?? requisito.variable}
+        {!requisito.free && <> <Chip tone="medium">a pagamento</Chip></>}
+        {requisito.present && (
+          <> <Chip tone="low">
+            {requisito.source === 'ambiente' ? 'impostata nel file .env' : 'impostata'}
+          </Chip></>
+        )}
+      </label>
+      {requisito.note && <p className="muted small" style={{ margin: '0 0 5px' }}>
+        {requisito.note}
+        {requisito.where && (
+          <> <a href={requisito.where} target="_blank" rel="noreferrer">
+            {requisito.free ? 'documentazione' : 'come ottenere la chiave'}
+          </a></>
+        )}
+      </p>}
+      <div className="toolbar" style={{ marginBottom: 0 }}>
+        <input
+          type={requisito.secret ? 'password' : 'text'}
+          value={valore}
+          onChange={(e) => setValore(e.target.value)}
+          autoComplete="off"
+          placeholder={requisito.present
+            ? (requisito.secret ? 'valore conservato — scriverne uno nuovo per sostituirlo'
+                                : 'valore conservato — scriverne uno nuovo per sostituirlo')
+            : requisito.variable}
+          style={{ minWidth: 320, flex: 1 }} />
+        <button className="btn" disabled={!valore.trim() || inCorso || !salvabile}
+                onClick={() => esegui(() => api.setToolSetting(requisito.variable, valore.trim()))}>
+          Salva
+        </button>
+        {requisito.present && requisito.source === 'interfaccia' && (
+          <ConfirmButton label="Rimuovi" confirmLabel="Rimuovo"
+                         onConfirm={() => esegui(() => api.clearToolSetting(requisito.variable))} />
+        )}
+      </div>
+      {errore && <p className="small" style={{ color: 'var(--danger, #b42318)', margin: '4px 0 0' }}>
+        {errore}
+      </p>}
+      {requisito.secret && (
+        <p className="muted small" style={{ margin: '4px 0 0' }}>
+          Il valore viene cifrato e non e&rsquo; piu&rsquo; leggibile
+          dall&rsquo;interfaccia: per cambiarlo si sostituisce.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Cosa manca a ciascuno strumento, e il modo di fornirlo. */
+function SchedaStrumenti() {
+  const [stato, setStato] = useState<ToolStatusResponse | null>(null);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  const carica = useCallback(() => {
+    api.toolStatus().then(setStato).catch((e) => setErrore(messaggio(e)));
   }, []);
+  useEffect(carica, [carica]);
 
   if (errore) return <Banner kind="danger">{errore}</Banner>;
-  if (!strumenti) return <div className="card"><Spinner /></div>;
+  if (!stato) return <div className="card"><Spinner /></div>;
 
+  const strumenti = stato.tools;
   const daSistemare = strumenti.filter((s) => !s.configured);
-  // Pronti, ma inattivi finche' non ricevono un dato durante la scansione:
-  // non hanno una variabile da impostare, e cercarla e' tempo perso.
   const inAttesaDiUnDato = strumenti.filter((s) => s.configured && s.kind === 'uso');
 
   return (
@@ -41,66 +116,44 @@ function SchedaStrumenti() {
         </Chip>
       </div>
       <p className="muted small">
-        Uno strumento non configurato non falsa il rating: riduce l’affidabilita’
-        dichiarata della rilevazione, e l’area che copriva risulta non verificata.
-        Le chiavi restano nelle variabili d’ambiente del file <code>.env</code>:
-        questa schermata dice cosa manca, non le conserva.
+        Uno strumento non configurato non falsa il rating: riduce
+        l&rsquo;affidabilita&rsquo; dichiarata della rilevazione, e l&rsquo;area che
+        copriva risulta non verificata.
       </p>
+
+      {!stato.can_store && (
+        <Banner kind="danger">
+          {stato.storage_reason ?? 'I valori non possono essere conservati.'}
+        </Banner>
+      )}
 
       {daSistemare.length === 0 ? (
         <p className="muted small" style={{ marginBottom: 0 }}>
           Tutti gli strumenti disponibili sono configurati.
         </p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data">
-            <thead>
-              <tr><th>Strumento</th><th>Cosa manca</th><th>Come si risolve</th></tr>
-            </thead>
-            <tbody>
-              {daSistemare.map((strumento) => (
-                <tr key={strumento.key}>
-                  <td>
-                    {strumento.label}
-                    {strumento.requirements.some((r) => !r.free) && (
-                      <> <Chip tone="medium">a pagamento</Chip></>
-                    )}
-                  </td>
-                  <td className="small muted">{strumento.reason}</td>
-                  <td className="small">
-                    {strumento.kind === 'immagine' ? (
-                      <span className="muted">
-                        Dipende dall’immagine del worker, non dalla configurazione:
-                        non c’è nulla da impostare qui.
-                      </span>
-                    ) : strumento.requirements.length === 0 ? (
-                      <span className="muted">Nessun requisito noto.</span>
-                    ) : (
-                      <ul style={{ margin: 0, paddingLeft: 16 }}>
-                        {strumento.requirements.filter((r) => !r.present).map((r) => (
-                          <li key={r.variable}>
-                            <code>{r.variable}</code>
-                            {r.note && <> — {r.note}</>}
-                            {r.where && (
-                              <> <a href={r.where} target="_blank" rel="noreferrer">
-                                {r.free ? 'documentazione' : 'come ottenere la chiave'}
-                              </a></>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        daSistemare.map((strumento) => (
+          <div key={strumento.key} style={{ borderTop: '1px solid var(--line)', paddingTop: 12,
+                                            marginTop: 12 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 14 }}>{strumento.label}</h3>
+            {strumento.kind === 'immagine' ? (
+              <p className="muted small" style={{ margin: 0 }}>{strumento.reason}</p>
+            ) : strumento.requirements.length === 0 ? (
+              <p className="muted small" style={{ margin: 0 }}>{strumento.reason}</p>
+            ) : (
+              strumento.requirements.map((requisito) => (
+                <CampoRequisito key={requisito.variable} requisito={requisito}
+                                salvabile={stato.can_store} onFatto={carica} />
+              ))
+            )}
+          </div>
+        ))
       )}
 
-      <p className="muted small" style={{ marginBottom: 0, marginTop: 10 }}>
-        Dopo aver modificato <code>.env</code> serve <code>docker compose up -d</code>:
-        le variabili si leggono all’avvio del container.
+      <p className="muted small" style={{ marginBottom: 0, marginTop: 12 }}>
+        I valori salvati qui hanno la precedenza su quelli del file
+        <code> .env</code> e valgono dalla scansione successiva, senza riavviare
+        nulla. Quelli marcati «impostata nel file .env» si cambiano sul server.
       </p>
 
       {inAttesaDiUnDato.length > 0 && (
@@ -109,10 +162,9 @@ function SchedaStrumenti() {
             <h3 style={{ margin: 0 }}>Pronti, in attesa di un dato</h3>
           </div>
           <p className="muted small">
-            Questi strumenti sono installati e non richiedono configurazione:
-            restano inattivi finché non ricevono qualcosa dalla scansione. Se
-            compaiono come «saltati» nel registro, la causa è qui, non nel file
-            <code> .env</code>.
+            Installati e senza configurazione: restano inattivi finche&rsquo; non
+            ricevono qualcosa dalla scansione. Se compaiono come «saltati» nel
+            registro, la causa e&rsquo; qui, non nel file <code>.env</code>.
           </p>
           <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
             {inAttesaDiUnDato.map((strumento) => (

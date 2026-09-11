@@ -248,3 +248,6 @@ class AuditAction(StrEnum):
     AUTHORIZATION_REVOKE = "authorization_revoke"
     VERIFICATION_ATTEMPT = "verification_attempt"
     SCOPE_VIOLATION = "scope_violation"
+    # Configurazione di uno strumento impostata o rimossa. Nel registro
+    # finisce il nome della variabile, mai il valore.
+    TOOL_CONFIGURED = "tool_configured"

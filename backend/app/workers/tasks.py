@@ -112,17 +112,28 @@ def run_scan_task(self, scan_id: str, email_header: str | None = None) -> dict: 
 
 
 def _connector_config() -> dict:
-    """Configurazione dei connettori esterni, letta dai settings (mai hardcoded)."""
+    """Configurazione dei connettori esterni (mai hardcoded).
+
+    I valori impostati dall'interfaccia hanno la precedenza su quelli di
+    `.env`: chi salva una chiave nella schermata «Strumenti» si aspetta che
+    valga, e se prevalesse l'ambiente la schermata direbbe «impostata»
+    mentre lo strumento userebbe un'altra chiave.
+    """
+    from app.services.tool_config import valori_effettivi
+
+    with session_scope() as db:
+        impostate = valori_effettivi(db)
+
     return {
-        "hibp": {"api_key": settings.hibp_api_key,
+        "hibp": {"api_key": impostate.get("HIBP_API_KEY"),
                  "base_url": "https://haveibeenpwned.com/api/v3"},
-        "credential_exposure": {"api_key": settings.credential_exposure_api_key,
-                                "base_url": settings.credential_exposure_url,
+        "credential_exposure": {"api_key": impostate.get("CREDENTIAL_EXPOSURE_API_KEY"),
+                                "base_url": impostate.get("CREDENTIAL_EXPOSURE_URL"),
                                 # In modalita' simulata il connettore produce dati
                                 # sintetici: senza, l'area dark web resterebbe vuota
                                 # nella dimostrazione.
                                 "mock_enabled": settings.scan_mock_mode},
-        "spiderfoot": {"base_url": settings.spiderfoot_url},
+        "spiderfoot": {"base_url": impostate.get("SPIDERFOOT_URL")},
         "ransomware_live": {"base_url": settings.ransomware_live_url},
         "kev": {"url": settings.kev_feed_url},
         "epss": {"base_url": settings.epss_api_url},

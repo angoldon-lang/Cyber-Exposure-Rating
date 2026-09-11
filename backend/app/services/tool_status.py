@@ -15,7 +15,7 @@ import platform
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.config import load_yaml_config, settings
+from app.core.config import load_yaml_config
 
 
 @dataclass
@@ -27,6 +27,10 @@ class RequisitoStrumento:
     gratuito: bool = True
     dove: str | None = None
     nota: str | None = None
+    # Cosa scrivere nel campo, e se il valore va trattato come un segreto
+    # (campo mascherato, mai restituito dall'API).
+    etichetta: str | None = None
+    segreto: bool = False
 
 
 @dataclass
@@ -38,6 +42,9 @@ class StatoStrumento:
     configurato: bool = True
     requisiti: list[RequisitoStrumento] = field(default_factory=list)
     motivo: str | None = None
+    # Da dove arriva ciascun valore gia' impostato: «interfaccia» o
+    # «ambiente». Senza, chi vede «impostata» non sa dove intervenire.
+    origine: dict[str, str] = field(default_factory=dict)
     # Da cosa dipende il rimedio: `configurazione` (una variabile
     # d'ambiente), `immagine` (il worker non contiene il binario o il
     # runtime), `uso` (lo strumento e' pronto ma resta inattivo finche' non
@@ -52,37 +59,28 @@ class StatoStrumento:
             "kind": self.rimedio,
             "requirements": [
                 {"variable": r.variabile, "present": r.valore_presente,
-                 "free": r.gratuito, "where": r.dove, "note": r.nota}
+                 "free": r.gratuito, "where": r.dove, "note": r.nota,
+                 "label": r.etichetta, "secret": r.segreto,
+                 "source": self.origine.get(r.variabile or "")}
                 for r in self.requisiti],
         }
 
 
-def _requisiti(chiave: str) -> list[RequisitoStrumento]:
-    """Requisiti esterni di uno strumento, con la variabile che li soddisfa."""
-    if chiave == "spiderfoot":
-        return [RequisitoStrumento(
-            variabile="SPIDERFOOT_URL", valore_presente=bool(settings.spiderfoot_url),
-            gratuito=True, dove="https://github.com/smicallef/spiderfoot",
-            nota="Istanza SpiderFoot raggiungibile dal worker. Si avvia con "
-                 "`docker run -p 5001:5001 ghcr.io/smicallef/spiderfoot` e si "
-                 "indica come SPIDERFOOT_URL=http://spiderfoot:5001.")]
-    if chiave == "hibp":
-        return [RequisitoStrumento(
-            variabile="HIBP_API_KEY", valore_presente=bool(settings.hibp_api_key),
-            gratuito=False, dove="https://haveibeenpwned.com/API/Key",
-            nota="Abbonamento a pagamento. Senza, la ricerca per dominio non e' "
-                 "disponibile: XposedOrNot copre in parte la stessa area, gratis.")]
-    if chiave == "credential_exposure":
-        return [RequisitoStrumento(
-            variabile="CREDENTIAL_EXPOSURE_URL",
-            valore_presente=bool(settings.credential_exposure_url), gratuito=False,
-            nota="Indirizzo della fonte di intelligence su credenziali esposte."),
-            RequisitoStrumento(
-            variabile="CREDENTIAL_EXPOSURE_API_KEY",
-            valore_presente=bool(settings.credential_exposure_api_key), gratuito=False,
-            nota="Le fonti serie in questo ambito sono tutte commerciali. "
-                 "Senza abbonamento l'area resta scoperta e il rating lo dichiara.")]
-    return []
+def _requisiti(chiave: str, impostate: dict[str, str]) -> list[RequisitoStrumento]:
+    """Requisiti esterni di uno strumento, con la variabile che li soddisfa.
+
+    L'elenco sta in `tool_config.VARIABILI`, lo stesso che decide cosa si puo'
+    scrivere dall'interfaccia: due elenchi separati avrebbero permesso di
+    descrivere una variabile senza poterla impostare, che e' esattamente cio'
+    che rendeva la schermata inutile.
+    """
+    from app.services.tool_config import VARIABILI
+
+    return [RequisitoStrumento(
+        variabile=v.nome, valore_presente=v.nome in impostate,
+        gratuito=v.gratuito, dove=v.dove, nota=v.nota,
+        etichetta=v.etichetta, segreto=v.segreto)
+        for v in VARIABILI if v.strumento == chiave]
 
 
 # Strumenti che dipendono da un binario o da un runtime nel worker, non da una
@@ -137,8 +135,16 @@ AZIONI_DELL_ANALISTA = {
 }
 
 
-def stato_strumenti() -> list[dict[str, Any]]:
-    """Elenco degli strumenti con cio' che manca a ciascuno."""
+def stato_strumenti(db: Any = None) -> list[dict[str, Any]]:
+    """Elenco degli strumenti con cio' che manca a ciascuno.
+
+    Senza sessione si guarda solo l'ambiente: e' il comportamento di prima,
+    utile dove il database non c'e'.
+    """
+    from app.services.tool_config import origine, valori_effettivi
+
+    impostate = valori_effettivi(db)
+    fonti = origine(db)
     configurazione = load_yaml_config("tool_profiles")
     profili = configurazione.get("profiles", {})
     strumenti = configurazione.get("tools", {})
@@ -151,7 +157,7 @@ def stato_strumenti() -> list[dict[str, Any]]:
     nel_worker = _dipendenze_nel_worker()
     esiti: list[StatoStrumento] = []
     for chiave, definizione in strumenti.items():
-        requisiti = _requisiti(chiave)
+        requisiti = _requisiti(chiave, impostate)
         mancanti = [r for r in requisiti if not r.valore_presente]
         motivo = None
         rimedio = "configurazione"
@@ -169,7 +175,8 @@ def stato_strumenti() -> list[dict[str, Any]]:
             # contarlo fra quelli da sistemare gonfierebbe l'elenco di cose
             # da fare con voci su cui non c'e' nulla da fare.
             configurato=not mancanti and chiave not in nel_worker,
-            requisiti=requisiti, motivo=motivo, rimedio=rimedio))
+            requisiti=requisiti, motivo=motivo, rimedio=rimedio,
+            origine=fonti))
 
     # Prima cio' che non funziona: e' l'elenco di cosa c'e' da fare.
     esiti.sort(key=lambda s: (s.configurato, s.etichetta.lower()))

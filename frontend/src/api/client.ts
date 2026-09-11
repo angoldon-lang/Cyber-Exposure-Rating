@@ -6,7 +6,7 @@ import type {
   Finding, Health, IPAddressEntry, NetworkRangeEntry, Page, PortfolioView, PurgeResult,
   RemediationItem, Report, Scan, ScanComparison,
   ScanDetail, ScanProfile, ScopeEntry, ScopeEntryInput, ScoreDetail, TokenResponse,
-  ToolStatus, UserProfile, VerificationChallenge, VerificationResult,
+  ToolStatusResponse, UserProfile, VerificationChallenge, VerificationResult,
 } from './types';
 
 const BASE = '/api/v1';
@@ -130,7 +130,12 @@ export const api = {
     label_it: string; description_it: string; requires_verification: boolean;
     requires_authorization: boolean; tools: string[]; forbidden_actions: string[];
   }>>('/meta/profiles'),
-  toolStatus: () => request<ToolStatus[]>('/tool-status'),
+  toolStatus: () => request<ToolStatusResponse>('/tool-status'),
+  setToolSetting: (variabile: string, value: string) =>
+    request<void>(`/tool-status/${encodeURIComponent(variabile)}`,
+      { method: 'PUT', body: JSON.stringify({ value }) }),
+  clearToolSetting: (variabile: string) =>
+    request<void>(`/tool-status/${encodeURIComponent(variabile)}`, { method: 'DELETE' }),
   branding: () => request<Branding>('/branding'),
   updateBranding: (body: Partial<Branding>) =>
     request<Branding>('/branding', { method: 'PUT', body: JSON.stringify(body) }),

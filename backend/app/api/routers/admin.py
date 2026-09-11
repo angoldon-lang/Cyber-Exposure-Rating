@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
 from app.api.deps import (
@@ -15,6 +16,7 @@ from app.api.deps import (
     require_permission,
 )
 from app.core.config import load_yaml_config
+from app.core.segreti import SegretoNonDisponibile
 from app.core.rbac import Permission
 from app.models.audit import AuditLog
 from app.core.redaction import mask_email, sanitize_text
@@ -68,18 +70,82 @@ def list_connectors(db: DbDep,
 
 
 @router.get("/tool-status")
-def tool_status(current: CurrentUserDep) -> list[dict]:
+def tool_status(db: DbDep, current: CurrentUserDep) -> dict:
     """Cosa manca a ciascuno strumento per funzionare.
 
-    Non restituisce segreti: dice quale variabile impostare, se la fonte
-    costi qualcosa e dove procurarsi l'eventuale chiave. Il valore delle
-    chiavi resta nelle variabili d'ambiente, come per il resto della
-    piattaforma.
+    Non restituisce mai i valori: dice se una variabile e' impostata, da dove
+    arriva, cosa scriverci e dove procurarsi l'eventuale chiave.
     """
+    from app.services.tool_config import cifratura_disponibile
     from app.services.tool_status import stato_strumenti
 
     del current  # basta un'utenza autenticata: nessun dato riservato
-    return stato_strumenti()
+    attiva, motivo = cifratura_disponibile()
+    return {"tools": stato_strumenti(db),
+            "can_store": attiva, "storage_reason": motivo}
+
+
+class ValoreStrumento(BaseModel):
+    """Un valore da conservare. Non torna mai indietro dall'API."""
+
+    value: str = Field(min_length=1, max_length=2048)
+
+
+@router.put("/tool-status/{variabile}", status_code=status.HTTP_204_NO_CONTENT)
+def imposta_configurazione(
+    variabile: str,
+    payload: ValoreStrumento,
+    db: DbDep,
+    contesto: RequestContextDep,
+    current: CurrentUser = Depends(require_permission(Permission.CONNECTOR_WRITE)),
+) -> Response:
+    """Imposta una variabile di configurazione di uno strumento.
+
+    Il valore viene cifrato prima di toccare il database e non e' piu'
+    leggibile dall'API: per cambiarlo lo si sostituisce. Nel registro di
+    audit finisce il nome della variabile, mai il valore.
+    """
+    from app.services.tool_config import imposta
+
+    try:
+        imposta(db, variabile, payload.value, utente_id=current.id)
+    except SegretoNonDisponibile as errore:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(errore)) from errore
+    except ValueError as errore:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(errore)) from errore
+
+    record_audit(
+        db, action=AuditAction.TOOL_CONFIGURED, tenant_id=current.tenant_id,
+        actor_user_id=current.id, actor_email=current.email,
+        actor_roles=current.roles, entity_type="tool_setting", entity_id=variabile,
+        # Il nome della variabile, non il valore: un registro di audit e'
+        # leggibile da piu' persone di quante debbano vedere una chiave.
+        message=f"Configurazione impostata: {variabile}", **contesto)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/tool-status/{variabile}", status_code=status.HTTP_204_NO_CONTENT)
+def rimuovi_configurazione(
+    variabile: str,
+    db: DbDep,
+    contesto: RequestContextDep,
+    current: CurrentUser = Depends(require_permission(Permission.CONNECTOR_WRITE)),
+) -> Response:
+    """Toglie il valore conservato. Se `.env` ne contiene uno, torna quello."""
+    from app.services.tool_config import rimuovi
+
+    if not rimuovi(db, variabile):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "nessun valore conservato")
+    record_audit(
+        db, action=AuditAction.TOOL_CONFIGURED, tenant_id=current.tenant_id,
+        actor_user_id=current.id, actor_email=current.email,
+        actor_roles=current.roles, entity_type="tool_setting", entity_id=variabile,
+        # Il nome della variabile, non il valore: un registro di audit e'
+        # leggibile da piu' persone di quante debbano vedere una chiave.
+        message=f"Configurazione rimossa: {variabile}", **contesto)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/coverage-matrix")

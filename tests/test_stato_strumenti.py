@@ -83,9 +83,15 @@ def test_nessun_valore_di_chiave_viene_restituito(monkeypatch):
 
 
 def test_l_endpoint_risponde_a_un_utente_autenticato(client, admin):  # noqa: F811
+    """La risposta non e' piu' una lista: accanto agli strumenti dice se i
+    valori si possono conservare, perche' senza quel materiale i campi della
+    schermata vanno mostrati disabilitati invece di fallire al salvataggio."""
     risposta = client.get("/api/v1/tool-status", headers=admin)
     assert risposta.status_code == 200, risposta.text
-    assert any(s["key"] == "spiderfoot" for s in risposta.json())
+
+    corpo = risposta.json()
+    assert any(s["key"] == "spiderfoot" for s in corpo["tools"])
+    assert isinstance(corpo["can_store"], bool)
 
 
 def test_l_endpoint_richiede_l_autenticazione(client):  # noqa: F811
