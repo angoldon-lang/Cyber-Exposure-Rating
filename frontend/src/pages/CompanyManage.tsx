@@ -65,7 +65,11 @@ function SchedaAnagrafica({ azienda, onSalvata }: {
   async function salva() {
     setInCorso(true); setErrore(null); setEsito(null);
     try {
+      // Un campo facoltativo lasciato vuoto va inviato come assente. Il
+      // paese mancava da questo elenco: svuotarlo mandava "", che il
+      // backend rifiuta perche' si aspetta due lettere o niente.
       const corpo = { ...valori, vat_number: valori.vat_number || null,
+                      country: valori.country || null,
                       sector: valori.sector || null, size_band: valori.size_band || null,
                       notes: valori.notes || null };
       if (azienda) {
@@ -85,7 +89,13 @@ function SchedaAnagrafica({ azienda, onSalvata }: {
     }
   }
 
-  const slugValido = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(valori.slug);
+  // Stessa regola del backend (`SLUG_PATTERN`): deve iniziare e finire con
+  // una lettera o una cifra, quindi almeno tre caratteri. La versione
+  // precedente accettava anche «ag», il pulsante si abilitava e la
+  // creazione falliva con un messaggio che non diceva quale campo.
+  const slugValido = /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(valori.slug);
+  const paeseValido = !valori.country || /^[A-Za-z]{2}$/.test(valori.country);
+  const nomeValido = (valori.legal_name ?? '').trim().length >= 2;
 
   return (
     <div className="card">
@@ -107,8 +117,11 @@ function SchedaAnagrafica({ azienda, onSalvata }: {
                  placeholder="ACME S.p.A." />
         </Field>
         <Field label="Identificativo breve (slug)"
-               hint={azienda ? 'Non modificabile dopo la creazione' : 'minuscole e trattini'}
-               error={valori.slug && !slugValido ? 'Ammessi solo minuscole, cifre e trattini' : null}>
+               hint={azienda ? 'Non modificabile dopo la creazione'
+                             : 'minuscole, cifre e trattini; da 3 a 64 caratteri'}
+               error={valori.slug && !slugValido
+                 ? 'Da 3 a 64 caratteri: minuscole, cifre e trattini, primo e ultimo non trattino'
+                 : null}>
           <input type="text" value={valori.slug} onChange={aggiorna('slug')}
                  disabled={Boolean(azienda)} placeholder="acme" />
         </Field>
@@ -116,7 +129,9 @@ function SchedaAnagrafica({ azienda, onSalvata }: {
           <input type="text" value={valori.vat_number ?? ''} onChange={aggiorna('vat_number')}
                  placeholder="IT01234567890" />
         </Field>
-        <Field label="Paese" hint="codice ISO a due lettere">
+        <Field label="Paese" hint="codice ISO a due lettere, oppure vuoto"
+               error={valori.country && !paeseValido
+                 ? 'Due lettere (es. IT), oppure lasciare vuoto' : null}>
           <input type="text" value={valori.country ?? ''} onChange={aggiorna('country')}
                  maxLength={2} placeholder="IT" />
         </Field>
@@ -141,7 +156,7 @@ function SchedaAnagrafica({ azienda, onSalvata }: {
 
       <div className="toolbar">
         <button className="btn" onClick={salva}
-                disabled={inCorso || valori.legal_name.length < 2 || !slugValido}>
+                disabled={inCorso || !nomeValido || !slugValido || !paeseValido}>
           {azienda ? 'Salva modifiche' : 'Crea azienda'}
         </button>
         {!azienda && (

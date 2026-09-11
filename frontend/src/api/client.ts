@@ -12,6 +12,64 @@ import type {
 const BASE = '/api/v1';
 const TOKEN_KEY = 'defenix.token';
 
+/** Nomi dei campi come li legge chi compila la form, non come li chiama l'API. */
+const CAMPI: Record<string, string> = {
+  legal_name: 'Ragione sociale',
+  slug: 'Identificativo breve',
+  vat_number: 'Partita IVA',
+  country: 'Paese',
+  sector: 'Settore',
+  size_band: 'Dimensione',
+  notes: 'Note',
+  domain: 'Dominio',
+  address: 'Indirizzo',
+  cidr: 'Rete',
+  email: 'E-mail',
+  password: 'Password',
+  subject: 'Soggetto',
+  profiles: 'Profili',
+  valid_from: 'Valido dal',
+  valid_until: 'Valido fino al',
+};
+
+interface ErroreDiCampo { loc?: unknown[]; msg?: string; type?: string }
+
+/** Perche' quel campo non va bene, in italiano.
+ *
+ *  I messaggi di pydantic sono in inglese e citano il vincolo tecnico
+ *  («String should match pattern '^[a-z0-9]...'»): mostrare un'espressione
+ *  regolare a chi sta compilando una form non aiuta nessuno.
+ */
+function motivo(errore: ErroreDiCampo): string {
+  switch (errore.type) {
+    case 'missing': return 'manca';
+    case 'string_too_short': return 'e’ troppo corto';
+    case 'string_too_long': return 'e’ troppo lungo';
+    case 'string_pattern_mismatch': return 'non ha il formato richiesto';
+    case 'value_error': return errore.msg?.replace(/^Value error,\s*/, '') ?? 'non e’ valido';
+    default: return errore.msg ?? 'non e’ valido';
+  }
+}
+
+/** Trasforma il dettaglio di un 422 in una frase che nomina i campi.
+ *
+ *  L'API lo ha sempre mandato, ma qui veniva scartato perche' e' un array e
+ *  non una stringa: restava «Richiesta non valida», senza dire quale campo.
+ */
+export function messaggioDiValidazione(detail: unknown): string | null {
+  if (!Array.isArray(detail) || detail.length === 0) return null;
+  const parti = (detail as ErroreDiCampo[])
+    .filter((errore) => errore && typeof errore === 'object')
+    .map((errore) => {
+      const percorso = (errore.loc ?? []).map(String)
+        .filter((parte) => !['body', 'query', 'path'].includes(parte) && !/^\d+$/.test(parte));
+      const campo = percorso[percorso.length - 1] ?? '';
+      const nome = CAMPI[campo] ?? campo;
+      return nome ? `«${nome}» ${motivo(errore)}` : motivo(errore);
+    });
+  return parti.length ? `Dati non validi: ${parti.join('; ')}.` : null;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string, public detail?: unknown) {
     super(message);
@@ -49,7 +107,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     try {
       const payload = await response.json();
       detail = payload?.detail ?? payload;
-      if (typeof payload?.detail === 'string') message = payload.detail;
+      const daValidazione = messaggioDiValidazione(payload?.detail);
+      if (daValidazione) message = daValidazione;
+      else if (typeof payload?.detail === 'string') message = payload.detail;
       else if (typeof payload?.error === 'string') message = payload.error;
       else if (typeof payload?.detail?.error === 'string') message = payload.detail.error;
     } catch { /* corpo non JSON */ }
