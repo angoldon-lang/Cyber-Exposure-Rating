@@ -25,6 +25,20 @@ ARG NUCLEI_VERSION=3.3.7
 # verifica resta obbligatoria per tutti e quattro gli strumenti.
 ARG NAABU_SHA256=834c01c2cdd02efdddb78afee594d1782e704ea6aa7db87e613cf721e11db608
 
+# OWASP Amass. Si usa la 3.23.3, non la 4: la 4 ha rimosso `-json` e il suo
+# `amass db` non espone alcuna esportazione, quindi l'unico output leggibile
+# sarebbe il testo del terminale, da interpretare a colpi di espressioni
+# regolari. La 3.23.3 scrive JSON per riga ed e' cio' su cui l'adapter si
+# basa; verificato eseguendo il comando esatto dell'adapter.
+#
+# E' una versione non piu' mantenuta, e va saputo. Il rischio resta contenuto
+# per cosa fa e per come gira: interroga fonti pubbliche in sola lettura, nel
+# worker senza privilegi, con limiti di CPU e memoria, e il suo output passa
+# dalla normalizzazione come quello di ogni altro strumento.
+ARG AMASS_VERSION=3.23.3
+ARG AMASS_SHA256_AMD64=2b5afb8a567d9703dfb416099fb0452e2b4b4da5170f0b23cd3b812df2e9319c
+ARG AMASS_SHA256_ARM64=b67dfdf5659268bb48626ef39bf9c2c74c0b5d34d21c232a17e07ba200be11b5
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -52,6 +66,16 @@ RUN set -eu; \
         chmod +x "/out/${nome}"; \
         "/out/${nome}" -version >/dev/null 2>&1 || true; \
     }; \
+    scaricaz() { \
+        nome="$1"; url="$2"; atteso="$3"; interno="$4"; \
+        archivio="/tmp/dl/$(basename "${url}")"; \
+        curl -fsSL "${url}" -o "${archivio}"; \
+        echo "${atteso}  $(basename "${archivio}")" > /tmp/dl/atteso.txt; \
+        (cd /tmp/dl && sha256sum -c atteso.txt); \
+        unzip -q -o "${archivio}" "${interno}" -d /tmp/dl; \
+        mv "/tmp/dl/${interno}" "/out/${nome}"; \
+        chmod +x "/out/${nome}"; \
+    }; \
     scarica subfinder "${SUBFINDER_VERSION}"; \
     scarica httpx "${HTTPX_VERSION}"; \
     scarica nuclei "${NUCLEI_VERSION}"; \
@@ -60,6 +84,14 @@ RUN set -eu; \
     else \
         echo "naabu non disponibile per linux/${arch}: omesso"; \
     fi; \
+    if [ "${arch}" = "amd64" ]; then \
+        impronta="${AMASS_SHA256_AMD64}"; \
+    else \
+        impronta="${AMASS_SHA256_ARM64}"; \
+    fi; \
+    scaricaz amass \
+        "https://github.com/owasp-amass/amass/releases/download/v${AMASS_VERSION}/amass_Linux_${arch}.zip" \
+        "${impronta}" "amass_Linux_${arch}/amass"; \
     rm -rf /tmp/dl
 
 FROM python:3.11.11-slim-bookworm
@@ -143,7 +175,7 @@ ENV PYTHONPATH=/srv:/srv/backend
 # tornasse a installare uno script con lo stesso nome, la build si ferma qui
 # invece di consegnare un'immagine in cui httpx fallisce a ogni scansione.
 RUN set -eu; \
-    for strumento in subfinder httpx nuclei testssl.sh; do \
+    for strumento in subfinder httpx nuclei testssl.sh amass; do \
         percorso="$(command -v "${strumento}")"; \
         case "${percorso}" in \
             /opt/defenix/bin/*) ;; \

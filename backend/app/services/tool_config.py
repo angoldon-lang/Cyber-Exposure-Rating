@@ -48,6 +48,19 @@ VARIABILI: tuple[Variabile, ...] = (
              "`docker run -p 5001:5001 ghcr.io/smicallef/spiderfoot` e si indica "
              "come http://spiderfoot:5001"),
     Variabile(
+        nome="ZAP_URL", strumento="zap_baseline",
+        etichetta="Indirizzo del demone ZAP", segreto=False, gratuito=True,
+        dove="https://www.zaproxy.org/docs/api/",
+        nota="Con il compose e' http://zap:8090. Il servizio si avvia con "
+             "`docker compose --profile zap up -d`: gira come contenitore a se', "
+             "perche' il worker non deve poter avviare altri contenitori."),
+    Variabile(
+        nome="ZAP_API_KEY", strumento="zap_baseline",
+        etichetta="Chiave API del demone ZAP", segreto=True, gratuito=True,
+        dove=None,
+        nota="La sceglie chi installa, non un fornitore: `openssl rand -hex 24`. "
+             "Deve coincidere con quella passata al servizio nel compose."),
+    Variabile(
         nome="HIBP_API_KEY", strumento="hibp",
         etichetta="Chiave API Have I Been Pwned", segreto=True, gratuito=False,
         dove="https://haveibeenpwned.com/API/Key",

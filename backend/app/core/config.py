@@ -98,6 +98,8 @@ class Settings(BaseSettings):
     credential_exposure_url: str | None = None
     credential_exposure_api_key: str | None = None
     spiderfoot_url: str | None = None
+    zap_url: str | None = None
+    zap_api_key: str | None = None
     ransomware_live_url: str = "https://api.ransomware.live/v2"
     kev_feed_url: str = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
     epss_api_url: str = "https://api.first.org/data/v1/epss"

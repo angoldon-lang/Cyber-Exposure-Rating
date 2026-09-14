@@ -269,3 +269,16 @@ diagnosi: ## Dice cosa sta davvero girando: versioni, schede, binari
 		'for t in subfinder httpx nuclei testssl.sh; do printf "  %-12s %s\n" "$$t" "$$(command -v $$t || echo ASSENTE)"; done'
 	@echo
 	@echo "Se una riga dice ASSENTE o manca il Cache-Control: make aggiorna"
+
+.PHONY: up-zap
+up-zap: require-env ## Avvia lo stack con il demone ZAP (profilo zap)
+	@# Il controllo sta qui e non nel compose: `:?` nel file bloccherebbe
+	@# l'avvio anche a chi ZAP non lo usa, perche' Compose interpola
+	@# l'intero file a prescindere dai profili attivi.
+	@grep -qE '^ZAP_API_KEY=.+' .env \
+		|| (echo "ZAP_API_KEY non impostata in .env: richiesta dal profilo zap." \
+		    && echo "  openssl rand -hex 24" && exit 1)
+	$(COMPOSE) --profile zap up -d
+	@echo
+	@echo "ZAP in ascolto sulla rete interna. In Personalizzazione -> Strumenti"
+	@echo "impostare ZAP_URL=http://zap:8090 e la stessa ZAP_API_KEY."

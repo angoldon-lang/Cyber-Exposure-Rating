@@ -159,6 +159,35 @@ services:
     logging: *logging
 
   # --- Servizi opzionali -------------------------------------------------
+  # OWASP ZAP in modalita' demone. Sta qui, non dentro il worker: avviare
+  # contenitori dal worker richiederebbe il socket Docker al suo interno, che
+  # equivale al root sull'host — un contenitore che esegue scansioni non deve
+  # poterlo fare. Il worker lo comanda via API, come fa con SpiderFoot.
+  #
+  # Profilo dedicato: e' un contenitore pesante e serve solo al profilo
+  # Verified Extended. Si avvia con `make up-zap`.
+  #
+  # `:-` e non `:?` sulla chiave: Compose interpola l'intero file a
+  # prescindere dai profili attivi, e un `:?` qui bloccherebbe l'avvio anche
+  # a chi ZAP non lo usa. Il controllo sta in `make up-zap`, che rifiuta di
+  # partire senza chiave.
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:20250602-stable
+    profiles: ["zap"]
+    restart: unless-stopped
+    command: >
+      zap.sh -daemon -host 0.0.0.0 -port 8090
+      -config api.key=${ZAP_API_KEY:-}
+      -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
+    # Nessuna porta pubblicata: ci parla solo il worker, sulla rete interna.
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 2G }
+    logging: *logging
+
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.7
     profiles: ["oidc"]

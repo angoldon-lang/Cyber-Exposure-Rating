@@ -95,6 +95,7 @@ def destinazione_consentita(url: str) -> tuple[bool, str]:
 
 
 def get_da_servizio_configurato(client: httpx.Client, url: str, *, base: str,
+                                intestazioni: dict[str, str] | None = None,
                                 max_salti: int = MAX_SALTI) -> httpx.Response:
     """GET verso un servizio indicato dall'operatore, non verso un bersaglio.
 
@@ -126,7 +127,7 @@ def get_da_servizio_configurato(client: httpx.Client, url: str, *, base: str,
 
     corrente = url
     for _ in range(max_salti):
-        risposta = client.get(corrente)
+        risposta = client.get(corrente, headers=intestazioni or {})
         if not risposta.is_redirect:
             return risposta
         destinazione = risposta.headers.get("location")

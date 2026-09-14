@@ -43,18 +43,19 @@ def test_uno_strumento_a_pagamento_lo_dichiara():
     assert requisito["where"].startswith("https://")
 
 
-def test_una_dipendenza_dell_immagine_non_si_risolve_con_una_variabile():
-    """Suggerire una variabile inesistente manderebbe a cercare a vuoto.
+def test_nessuno_strumento_e_irrisolvibile_per_architettura_amd64():
+    """L'elenco delle dipendenze non risolvibili si e' svuotato, e va detto.
 
-    `naabu` non e' piu' in questo elenco: manca soltanto dove non esistono
-    binari per l'architettura, e su amd64 e' presente. La sua assenza e'
-    verificata da `test_naabu_dipende_dall_architettura`.
+    `amass` e' entrato nell'immagine (versione 3.23.3, l'ultima con output
+    JSON); `zap_baseline` non richiede piu' un runtime Docker dentro il
+    worker, perche' il demone ZAP e' un servizio a se' comandato via API.
+    Resta solo `naabu`, e solo dove non esistono binari per l'architettura:
+    lo verifica `test_naabu_dipende_dall_architettura`.
     """
-    for chiave in ("zap_baseline", "amass_passive"):
-        stato = _per_chiave()[chiave]
-        assert stato["configured"] is False
-        assert stato["requirements"] == []
-        assert stato["reason"]
+    from app.services import tool_status
+
+    assert tool_status._dipendenze_nel_worker() == {} or set(
+        tool_status._dipendenze_nel_worker()) == {"naabu"}
 
 
 def test_naabu_dichiara_chi_lo_sostituisce(monkeypatch):
@@ -119,10 +120,22 @@ def test_port_scan_spiega_da_cosa_dipende():
     assert "verificat" in (stato["reason"] or "")
 
 
-def test_una_dipendenza_dell_immagine_non_indica_variabili():
+def test_zap_si_configura_come_un_servizio_qualsiasi():
+    """Era dichiarato irrisolvibile perche' avviare l'immagine ZAP avrebbe
+    richiesto il socket Docker dentro il worker. Il demone e' ora un servizio
+    a se', e si configura con indirizzo e chiave come SpiderFoot."""
     stato = _per_chiave()["zap_baseline"]
-    assert stato["configured"] is False
-    assert stato["kind"] == "immagine"
+
+    assert stato["kind"] == "configurazione"
+    assert {r["variable"] for r in stato["requirements"]} == {"ZAP_URL", "ZAP_API_KEY"}
+    assert any(r["secret"] for r in stato["requirements"]), "la chiave e' un segreto"
+
+
+def test_amass_e_nell_immagine():
+    """Non compare piu' fra cio' che manca: il binario c'e'."""
+    stato = _per_chiave()["amass_passive"]
+
+    assert stato["configured"] is True
     assert stato["requirements"] == []
 
 

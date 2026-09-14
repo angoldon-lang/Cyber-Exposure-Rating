@@ -86,23 +86,7 @@ def _requisiti(chiave: str, impostate: dict[str, str]) -> list[RequisitoStrument
 # Strumenti che dipendono da un binario o da un runtime nel worker, non da una
 # variabile: il rimedio e' l'immagine, non la configurazione.
 def _dipendenze_nel_worker() -> dict[str, str]:
-    dipendenze = {
-        # Verificato su amass v4.2.0: il flag `-json` non esiste piu' (era in
-        # v3) e `-oA` scrive solo un file di testo. Metterlo nell'immagine
-        # senza riscrivere l'adapter aggiungerebbe uno strumento che fallisce,
-        # non uno che funziona. Subfinder e Certificate Transparency coprono
-        # gia' l'enumerazione dei sottodomini: nell'ultima scansione hanno
-        # prodotto 53 e 65 nomi.
-        "amass_passive": "Il binario `amass` non e' nell'immagine del worker. "
-                         "Subfinder e Certificate Transparency coprono gia' "
-                         "l'enumerazione dei sottodomini; l'aggiunta di amass "
-                         "richiede di riscrivere l'integrazione, perche' la "
-                         "versione 4 ha rimosso l'output JSON su cui si basa.",
-        "zap_baseline": "Richiede un runtime Docker dentro il worker, che per "
-                        "scelta non c'e': un contenitore che esegue scansioni "
-                        "non deve poter avviare altri contenitori. L'analisi "
-                        "web resta coperta da httpx e Nuclei.",
-    }
+    dipendenze: dict[str, str] = {}
     # naabu non pubblica binari per arm64 (usa libpcap tramite CGO). Su amd64
     # e' invece presente: dichiararlo mancante ovunque mandava a cercare un
     # problema che su quella architettura non esiste.

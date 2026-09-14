@@ -8,12 +8,17 @@ bloccare ne' la scansione ne' lo sviluppo delle funzionalita' a valle.
 from __future__ import annotations
 
 import json
+import time
 from datetime import UTC, datetime
 from email import message_from_string
 from email.policy import default as email_default
 from typing import Any
+from urllib.parse import urlencode
+
+import httpx
 
 from adapters.base import AdapterResult, AdapterStatus, BaseAdapter, DiscoveredAsset, NormalizedEvidence
+from adapters.http_sicuro import get_da_servizio_configurato
 from adapters.runner import UnsafeCommandError, is_available, run_command, tool_version
 from adapters.synthetic import build_posture
 from app.core.redaction import sanitize_text
@@ -136,24 +141,131 @@ class ZAPBaselineAdapter(BaseAdapter):
         "10096": ("version_disclosure", Severity.INFO.value),
     }
 
+    # Sola lettura: ragno e analisi passiva. `ascan` — l'attacco attivo — non
+    # compare in questo elenco e non deve comparirci: un Baseline che attacca
+    # non e' piu' un Baseline, e il mandato firmato dal cliente non lo copre.
+    AZIONI_AMMESSE = ("/JSON/spider/action/scan/", "/JSON/spider/view/status/",
+                      "/JSON/pscan/view/recordsToScan/", "/JSON/core/view/alerts/",
+                      "/JSON/core/view/version/")
+
+    @property
+    def base_url(self) -> str | None:
+        return self.context.connector_config.get("zap", {}).get("base_url")
+
+    @property
+    def api_key(self) -> str | None:
+        return self.context.connector_config.get("zap", {}).get("api_key")
+
     def check_available(self) -> tuple[bool, str]:
-        if not is_available("docker"):
-            return False, "runtime Docker non disponibile nel worker per l'immagine ZAP"
+        """ZAP gira come servizio a se', non come immagine avviata dal worker.
+
+        Avviare contenitori dal worker richiederebbe il socket Docker al suo
+        interno: un contenitore che esegue scansioni non deve poter creare
+        altri contenitori, perche' quel socket e' equivalente al root
+        sull'host. Il demone ZAP sta quindi nel compose, accanto agli altri
+        servizi, e il worker lo comanda via API.
+        """
+        if not self.base_url:
+            return False, "servizio ZAP non configurato (ZAP_URL)"
+        try:
+            with httpx.Client(timeout=10.0, follow_redirects=False) as client:
+                risposta = self._chiedi(client, "/JSON/core/view/version/")
+            risposta.raise_for_status()
+        except Exception as exc:  # noqa: BLE001
+            dettaglio = str(exc).strip() or type(exc).__name__
+            return False, f"servizio ZAP non raggiungibile: {dettaglio[:160]}"
         return True, "disponibile"
 
+    def _chiedi(self, client: httpx.Client, percorso: str,
+                **parametri: Any) -> httpx.Response:
+        """Chiamata all'API di ZAP, ristretta alle azioni di sola lettura."""
+        if percorso not in self.AZIONI_AMMESSE:
+            raise UnsafeCommandError(f"azione ZAP non ammessa: {percorso}")
+        base = (self.base_url or "").rstrip("/")
+        url = f"{base}{percorso}"
+        if parametri:
+            url = f"{url}?{urlencode(parametri)}"
+        # La chiave viaggia come intestazione, non nell'URL: gli indirizzi
+        # finiscono nei log di ogni proxy che attraversano.
+        intestazioni = {"X-ZAP-API-Key": self.api_key} if self.api_key else {}
+        return get_da_servizio_configurato(client, url, base=base, intestazioni=intestazioni)
+
     def execute(self) -> AdapterResult:
-        # L'esecuzione reale avviene tramite l'immagine ufficiale ZAP orchestrata
-        # dal worker (non dal container API), con rete e volumi dedicati.
         urls = self.context.scope_guard.filter_targets(self.context.web_targets, "url")
         if not urls:
             return AdapterResult(tool=self.key, status=AdapterStatus.SKIPPED,
                                  error_message="nessun URL autorizzato per ZAP Baseline",
                                  coverage_impact=self.coverage_weight)
-        return AdapterResult(
-            tool=self.key, status=AdapterStatus.SKIPPED,
-            error_message=("esecuzione ZAP Baseline delegata al worker containerizzato: "
-                           "abilitare il servizio `zap` nel compose per attivarla"),
-            coverage_impact=self.coverage_weight, target_count=len(urls))
+
+        massimo = int(self.config.get("max_targets", 5))
+        scadenza = time.monotonic() + float(self.config.get("timeout_seconds",
+                                                            self.default_timeout))
+        evidenze: list[NormalizedEvidence] = []
+        grezzo: dict[str, Any] = {}
+        falliti: list[str] = []
+        analizzati = 0
+
+        with httpx.Client(timeout=30.0, follow_redirects=False) as client:
+            for url in urls[:massimo]:
+                if time.monotonic() >= scadenza:
+                    break
+                analizzati += 1
+                try:
+                    alert = self._analizza(client, url, scadenza)
+                except Exception as exc:  # noqa: BLE001
+                    motivo = str(exc).strip() or type(exc).__name__
+                    falliti.append(f"{url}: {motivo[:120]}")
+                    grezzo[url] = {"error": motivo[:200]}
+                    continue
+                grezzo[url] = {"alerts": len(alert)}
+                evidenze.extend(self._from_alerts(url, alert))
+
+        non_analizzati = len(urls[:massimo]) - analizzati
+        if not analizzati:
+            stato, motivo = AdapterStatus.FAILED, "nessun URL analizzato entro il tempo massimo"
+            impatto = self.coverage_weight
+        elif len(falliti) == analizzati:
+            stato, motivo = AdapterStatus.FAILED, "; ".join(falliti[:3])
+            impatto = self.coverage_weight
+        elif falliti or non_analizzati:
+            stato = AdapterStatus.PARTIAL
+            motivo = "; ".join(falliti[:3]) or f"{non_analizzati} URL non analizzati"
+            impatto = self.coverage_weight * (len(falliti) + non_analizzati) / len(urls[:massimo])
+        else:
+            stato, motivo, impatto = AdapterStatus.SUCCESS, None, 0.0
+
+        return AdapterResult(tool=self.key, status=stato, evidences=evidenze,
+                             error_message=motivo, coverage_impact=impatto,
+                             target_count=analizzati, raw_output=self.dump_json(grezzo))
+
+    def _analizza(self, client: httpx.Client, url: str, scadenza: float) -> list[dict[str, Any]]:
+        """Ragno piu' analisi passiva su un URL, poi gli alert raccolti."""
+        avvio = self._chiedi(client, "/JSON/spider/action/scan/", url=url,
+                             maxChildren=str(self.config.get("max_children", 20)),
+                             recurse="true", subtreeOnly="true").json()
+        identificativo = str(avvio.get("scan", ""))
+
+        # Il ragno percorre il sito; l'analisi passiva osserva cio' che passa.
+        # Si aspettano entrambi: chiedere gli alert prima che la coda sia
+        # vuota restituisce un elenco parziale, che verrebbe registrato come
+        # se il sito fosse a posto.
+        self._attendi(client, "/JSON/spider/view/status/", "status", "100",
+                      scadenza, scanId=identificativo)
+        self._attendi(client, "/JSON/pscan/view/recordsToScan/", "recordsToScan", "0",
+                      scadenza)
+
+        alert = self._chiedi(client, "/JSON/core/view/alerts/", baseurl=url,
+                             start="0", count="500").json()
+        return list(alert.get("alerts", []))
+
+    def _attendi(self, client: httpx.Client, percorso: str, campo: str, atteso: str,
+                 scadenza: float, **parametri: Any) -> None:
+        while time.monotonic() < scadenza:
+            valore = str(self._chiedi(client, percorso, **parametri).json().get(campo, ""))
+            if valore == atteso:
+                return
+            time.sleep(2.0)
+        raise TimeoutError(f"tempo massimo raggiunto in attesa di {campo}={atteso}")
 
     def _from_alerts(self, url: str, alerts: list[dict[str, Any]]) -> list[NormalizedEvidence]:
         out: list[NormalizedEvidence] = []
