@@ -26,6 +26,7 @@ class CertificateTransparencyAdapter(BaseAdapter):
         raw: dict[str, object] = {}
         found: set[str] = set()
         checked = 0
+        falliti: list[str] = []
         with httpx.Client(timeout=30.0, follow_redirects=False) as client:
             for domain in self.context.scope_guard.filter_targets(self.context.domains, "hostname"):
                 checked += 1
@@ -34,7 +35,13 @@ class CertificateTransparencyAdapter(BaseAdapter):
                     response.raise_for_status()
                     entries = response.json()[:MAX_RESULTS]
                 except Exception as exc:  # noqa: BLE001
-                    raw[domain] = {"error": str(exc)[:200]}
+                    # crt.sh e' spesso lento e a volte risponde 502. Finora
+                    # l'errore finiva solo in `raw_output` e lo strumento si
+                    # dichiarava riuscito con zero risultati: un perimetro
+                    # piu' piccolo del vero, senza che nulla lo segnalasse.
+                    motivo = str(exc).strip() or type(exc).__name__
+                    raw[domain] = {"error": motivo[:200]}
+                    falliti.append(f"{domain}: {motivo[:120]}")
                     continue
                 raw[domain] = {"entries": len(entries)}
                 for entry in entries:
@@ -49,9 +56,22 @@ class CertificateTransparencyAdapter(BaseAdapter):
                 else AssetType.DOMAIN.value,
                 display_name=name, discovered_by=self.key,
                 attributes={"source": "certificate_transparency"}))
+        if not checked:
+            stato, motivo, impatto = AdapterStatus.SKIPPED, "nessun dominio in perimetro", 0.0
+        elif len(falliti) == checked:
+            stato = AdapterStatus.FAILED
+            motivo = "; ".join(falliti[:3])
+            impatto = self.coverage_weight
+        elif falliti:
+            stato = AdapterStatus.PARTIAL
+            motivo = (f"{len(falliti)} domini su {checked} non interrogati: "
+                      + "; ".join(falliti[:3]))
+            impatto = self.coverage_weight * len(falliti) / checked
+        else:
+            stato, motivo, impatto = AdapterStatus.SUCCESS, None, 0.0
+
         return AdapterResult(
-            tool=self.key,
-            status=AdapterStatus.SUCCESS if checked else AdapterStatus.SKIPPED,
+            tool=self.key, status=stato, error_message=motivo, coverage_impact=impatto,
             assets=assets, evidences=self._surface_evidence(found), target_count=checked,
             raw_output=self.dump_json(raw))
 

@@ -176,11 +176,16 @@ class EmailHarvestAdapter(BaseAdapter):
                 # I percorsi tipici si provano una volta sola per sito, e
                 # solo quelli che la pagina iniziale non collega gia': su un
                 # sito che li ha nel menu, riprovarli e' una serie di 404.
-                if radici_esplorate.isdisjoint({urlsplit(url).netloc}):
-                    origine = urlsplit(url)
+                # L'origine e' quella dove si e' ARRIVATI, non quella
+                # richiesta. Un sito che porta l'apice su «www» faceva
+                # costruire i candidati sull'apice, e ogni pagina ripagava
+                # l'intera catena di redirect: tre richieste al posto di una,
+                # sullo stesso sito del cliente.
+                if radici_esplorate.isdisjoint({urlsplit(finale).netloc}):
+                    origine = urlsplit(finale)
                     radici_esplorate.add(origine.netloc)
                     radice = f"{origine.scheme}://{origine.netloc}"
-                    interni = collegamenti_interni(pagina, url)
+                    interni = collegamenti_interni(pagina, finale)
                     gia_collegati = {urlsplit(u).path.rstrip("/") for u in interni}
                     tipici = [f"{radice}{p}" for p in PERCORSI_TIPICI
                               if p.rstrip("/") not in gia_collegati]

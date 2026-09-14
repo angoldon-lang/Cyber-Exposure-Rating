@@ -140,3 +140,34 @@ def test_l_output_grezzo_non_contiene_indirizzi_in_chiaro(adapter_context, monke
 
     esito = EmailHarvestAdapter(adapter_context).run()
     assert b"mario.rossi@" not in (esito.raw_output or b"")
+
+
+def test_i_candidati_partono_da_dove_si_e_arrivati(adapter_context, monkeypatch):
+    """Il sito porta l'apice su «www»: i percorsi vanno provati la'.
+
+    Costruendoli sull'apice, ogni pagina ripagava l'intera catena di
+    redirect — nel registro di una scansione reale erano tre richieste al
+    posto di una, sul sito del cliente.
+    """
+    import httpx
+
+    adapter_context.mock_mode = False
+    richieste: list[str] = []
+
+    def finta(_client, url, **_k):  # noqa: ANN001, ANN202
+        richieste.append(url)
+        # Qualunque cosa si chieda all'apice finisce su www.
+        finale = url.replace(f"https://{DOMINIO}", f"https://www.{DOMINIO}")
+        return httpx.Response(200, headers={"content-type": "text/html"},
+                              text=f"info@{DOMINIO}",
+                              request=httpx.Request("GET", finale))
+
+    monkeypatch.setattr("adapters.email_harvest_adapter.get_seguendo_redirect", finta)
+    EmailHarvestAdapter(adapter_context).run()
+
+    dopo_la_prima = richieste[1:]
+    assert dopo_la_prima, "nessun percorso tipico provato"
+    sull_apice = [u for u in dopo_la_prima if u.startswith(f"https://{DOMINIO}/")]
+    assert not sull_apice, (
+        "candidati costruiti sull'apice invece che sull'origine raggiunta: "
+        f"{sull_apice[:3]}")

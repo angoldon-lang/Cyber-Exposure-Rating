@@ -94,6 +94,53 @@ def destinazione_consentita(url: str) -> tuple[bool, str]:
     return True, "consentito"
 
 
+def get_da_servizio_configurato(client: httpx.Client, url: str, *, base: str,
+                                max_salti: int = MAX_SALTI) -> httpx.Response:
+    """GET verso un servizio indicato dall'operatore, non verso un bersaglio.
+
+    `destinazione_consentita` rifiuta gli indirizzi non pubblici, ed e' cio'
+    che deve fare per i bersagli: serve a impedire che un dominio in
+    scansione, o il redirect di un sito scansionato, porti la piattaforma a
+    interrogare la propria rete interna.
+
+    Un servizio come SpiderFoot non e' un bersaglio: e' infrastruttura, il cui
+    indirizzo lo scrive un amministratore nella configurazione, come per il
+    database. Farlo passare da quel controllo lo rendeva inutilizzabile
+    proprio nella distribuzione tipica, dove gira accanto al worker su un
+    indirizzo privato.
+
+    La protezione che resta e' quella che qui conta: i redirect non possono
+    uscire dall'origine configurata. Un servizio compromesso non puo' usarci
+    per raggiungere qualcos'altro.
+    """
+    origine = httpx.URL(base)
+
+    def stessa_origine(indirizzo: str) -> bool:
+        altro = httpx.URL(indirizzo)
+        return (altro.scheme == origine.scheme and altro.host == origine.host
+                and altro.port == origine.port)
+
+    if not stessa_origine(url):
+        raise RedirectNonConsentito(
+            f"indirizzo fuori dal servizio configurato: {url}")
+
+    corrente = url
+    for _ in range(max_salti):
+        risposta = client.get(corrente)
+        if not risposta.is_redirect:
+            return risposta
+        destinazione = risposta.headers.get("location")
+        if not destinazione:
+            return risposta
+        destinazione = str(httpx.URL(corrente).join(destinazione))
+        if not stessa_origine(destinazione):
+            raise RedirectNonConsentito(
+                f"il servizio configurato reindirizza fuori da se stesso: {destinazione}")
+        corrente = destinazione
+
+    raise RedirectNonConsentito(f"superati {max_salti} redirect consecutivi")
+
+
 def get_seguendo_redirect(client: httpx.Client, url: str,
                           max_salti: int = MAX_SALTI) -> httpx.Response:
     """GET che segue i redirect validando ogni destinazione.

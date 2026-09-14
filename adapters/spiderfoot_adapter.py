@@ -13,7 +13,7 @@ import httpx
 
 from adapters.base import AdapterResult, AdapterStatus, BaseAdapter, DiscoveredAsset, NormalizedEvidence
 from adapters.esposizione_email import evidenza_violazione, separa_indirizzo_e_fonte
-from adapters.http_sicuro import get_seguendo_redirect
+from adapters.http_sicuro import get_da_servizio_configurato
 from adapters.synthetic import build_posture
 from app.core.redaction import mask_email
 from app.models.enums import AssetType, ConfidenceClass, ScoreCategoryKey, Severity
@@ -63,14 +63,22 @@ class SpiderFootAdapter(BaseAdapter):
     def check_available(self) -> tuple[bool, str]:
         if not self.base_url:
             return False, "istanza SpiderFoot non configurata (SPIDERFOOT_URL)"
+        base = self.base_url.rstrip("/")
         try:
-            # Come per le altre sonde: i redirect si seguono con validazione.
+            # SpiderFoot non e' un bersaglio: e' un servizio il cui indirizzo
+            # lo scrive un amministratore. Il controllo anti-SSRF sui
+            # bersagli lo rifiutava perche' gira su un indirizzo privato,
+            # rendendolo inutilizzabile nella distribuzione tipica. Qui vale
+            # la regola che serve: i redirect non escono dal servizio.
             with httpx.Client(timeout=10.0, follow_redirects=False) as client:
-                response = get_seguendo_redirect(
-                    client, f"{self.base_url.rstrip('/')}/ping")
+                response = get_da_servizio_configurato(client, f"{base}/ping", base=base)
             response.raise_for_status()
         except Exception as exc:  # noqa: BLE001
-            return False, f"istanza SpiderFoot non raggiungibile: {type(exc).__name__}"
+            # Il tipo dell'eccezione da solo non dice cosa fare: senza il
+            # messaggio, «non raggiungibile» costringe a indovinare fra
+            # indirizzo sbagliato, servizio spento e porta chiusa.
+            dettaglio = str(exc).strip() or type(exc).__name__
+            return False, f"istanza SpiderFoot non raggiungibile: {dettaglio[:160]}"
         return True, "disponibile"
 
     def allowed_modules(self) -> list[str]:
