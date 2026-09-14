@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ---------------------------------------------------------------------------
-# API Defenix Exposure Rating.
+# API Defenix Security Rating.
 # Nel container API NON viene installato alcuno strumento di scansione: i tool
 # girano esclusivamente nei worker isolati.
 # ---------------------------------------------------------------------------

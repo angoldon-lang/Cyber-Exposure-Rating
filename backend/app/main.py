@@ -1,4 +1,4 @@
-"""Applicazione FastAPI Defenix Exposure Rating."""
+"""Applicazione FastAPI Defenix Security Rating."""
 from __future__ import annotations
 
 import time
@@ -20,7 +20,7 @@ configure_logging()
 logger = get_logger(__name__)
 
 DESCRIPTION = """
-**Defenix Exposure Rating** - External Cyber Exposure Rating.
+**Defenix Security Rating** - External Cyber Security Rating.
 
 Valutazione della sicurezza osservabile dall'esterno e dei rischi a cui
 l'organizzazione potrebbe essere esposta.
@@ -145,6 +145,6 @@ def root() -> dict[str, str]:
         "name": settings.app_name,
         "version": settings.app_version,
         "docs": f"{settings.api_prefix}/docs",
-        "scope_note": ("External Cyber Exposure Rating: valutazione della sicurezza "
+        "scope_note": ("External Cyber Security Rating: valutazione della sicurezza "
                        "osservabile dall'esterno. Non e' un penetration test."),
     }

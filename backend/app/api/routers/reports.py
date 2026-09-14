@@ -91,7 +91,7 @@ def generate_report(scan_id: uuid.UUID, payload: ReportCreate, db: DbDep,
         tenant_id=scan.tenant_id, company_id=scan.company_id, scan_id=scan.id,
         report_type=payload.report_type.value, language=payload.language,
         status=ReportStatus.GENERATING.value,
-        title=(f"Defenix Exposure Rating - {scan.company.legal_name} - "
+        title=(f"Defenix Security Rating - {scan.company.legal_name} - "
                f"{datetime.now(UTC):%d/%m/%Y}"),
         requires_review_before_publication=payload.is_final,
         generated_by_user_id=current.id)

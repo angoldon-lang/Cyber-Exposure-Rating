@@ -3,7 +3,7 @@
   size: A4;
   margin: 20mm 16mm 18mm 16mm;
   @top-center {
-    content: "Defenix Exposure Rating";
+    content: "Defenix Security Rating";
     font-family: "DejaVu Sans", Helvetica, sans-serif;
     font-size: 8pt; color: #8a8f98;
   }
@@ -154,3 +154,9 @@ li { margin-bottom: 1mm; }
   page-break-inside: avoid;
 }
 .radar-blocco svg { max-width: 132mm; height: auto; }
+
+/* Figure della sezione di contesto. Come il radar, il blocco non si spezza
+   fra due pagine: un grafico tagliato a meta' non si legge. */
+.figura { text-align: center; margin: 4mm 0 1mm; page-break-inside: avoid; }
+.figura svg { width: 150mm; height: auto; }
+.fonte { font-size: 7.5pt; color: var(--muted); margin: 0 0 5mm; text-align: center; }

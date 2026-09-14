@@ -62,7 +62,7 @@ function Shell({ profile, companies, onLogout }:
       <aside className="sidebar">
         <div className="sidebar__brand">
           Defenix
-          <span>Exposure Rating</span>
+          <span>Security Rating</span>
         </div>
 
         <nav aria-label="Navigazione principale">

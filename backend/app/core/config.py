@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- Applicazione ---
-    app_name: str = "Defenix Exposure Rating"
+    app_name: str = "Defenix Security Rating"
     app_version: str = Field(default_factory=versione_della_piattaforma)
     environment: Literal["development", "staging", "production"] = "development"
     debug: bool = False

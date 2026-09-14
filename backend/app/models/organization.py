@@ -15,6 +15,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    true as sa_true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -192,6 +193,12 @@ class TenantBranding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     report_intro_it: Mapped[str | None] = mapped_column(Text)
     report_footer_it: Mapped[str | None] = mapped_column(Text)
     contact_block_it: Mapped[str | None] = mapped_column(Text)
+    # Sezione di contesto in apertura del rapporto per la direzione: dati di
+    # settore che spiegano perche' l'esposizione esterna vada misurata. E'
+    # attiva salvo diversa indicazione — a chi consegna a un destinatario che
+    # quel contesto lo ha gia', due pagine in meno servono piu' del contesto.
+    show_context_section: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=sa_true())
 
     logo_bytes: Mapped[bytes | None] = mapped_column(LargeBinary)
     logo_mime: Mapped[str | None] = mapped_column(String(64))

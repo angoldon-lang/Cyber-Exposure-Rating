@@ -11,7 +11,7 @@ deliberata:
 
 | Misura | Domanda a cui risponde | Intervallo |
 |---|---|---|
-| **Exposure Rating** | Quanto e' esposta questa organizzazione? | 0–100, classe A–E |
+| **Security Rating** | Quanto e' esposta questa organizzazione? | 0–100, classe A–E |
 | **Confidence Score** | Quanto e' solida questa misura? | 0–100 |
 
 Il difetto tipico dei rating esterni e' fondere le due cose: una scansione

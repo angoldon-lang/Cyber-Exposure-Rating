@@ -228,6 +228,7 @@ export default function BrandingPage() {
         report_intro_it: valori!.report_intro_it || null,
         report_footer_it: valori!.report_footer_it || null,
         contact_block_it: valori!.contact_block_it || null,
+        show_context_section: valori!.show_context_section,
       });
       setValori({ ...salvato, has_logo: valori!.has_logo });
       setEsito('Personalizzazione salvata. Vale per i report generati d’ora in poi.');
@@ -319,6 +320,23 @@ export default function BrandingPage() {
         <Field label="Contatti" hint="sezione finale del report">
           <textarea value={valori.contact_block_it ?? ''} onChange={aggiorna('contact_block_it')} />
         </Field>
+        <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'flex-start',
+                                          margin: '10px 0 4px' }}>
+          <input type="checkbox" checked={valori.show_context_section}
+                 style={{ marginTop: 3 }}
+                 onChange={(e) => setValori((p) => (p ? {
+                   ...p, show_context_section: e.target.checked } : p))} />
+          <span>
+            <strong>Sezione di contesto in apertura</strong>
+            <br />
+            <span className="muted">
+              Due pagine con i dati di settore che spiegano perche&rsquo;
+              l&rsquo;esposizione esterna vada misurata, prima della sintesi per la
+              direzione. Compare solo nel rapporto esecutivo. Da togliere quando il
+              destinatario quel contesto lo ha gia&rsquo;.
+            </span>
+          </span>
+        </label>
         <div className="toolbar">
           <button className="btn" onClick={salva} disabled={inCorso || !coloreValido}>
             Salva personalizzazione

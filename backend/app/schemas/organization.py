@@ -137,6 +137,7 @@ class BrandingRead(ORMModel):
     report_intro_it: str | None
     report_footer_it: str | None
     contact_block_it: str | None
+    show_context_section: bool = True
     has_logo: bool = False
     logo_filename: str | None = None
 
@@ -150,3 +151,5 @@ class BrandingUpdate(BaseModel):
     report_intro_it: str | None = Field(default=None, max_length=4000)
     report_footer_it: str | None = Field(default=None, max_length=4000)
     contact_block_it: str | None = Field(default=None, max_length=2000)
+    # Interruttore della sezione di contesto in apertura dell'esecutivo.
+    show_context_section: bool | None = None

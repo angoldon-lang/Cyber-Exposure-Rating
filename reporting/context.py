@@ -15,7 +15,7 @@ from app.core.redaction import mask_email, strip_forbidden_keys
 from app.models.enums import SEVERITY_RANK
 
 _DISCLAIMER_BASE = (
-    "Defenix Exposure Rating e' una valutazione della sicurezza osservabile dall'esterno "
+    "Defenix Security Rating e' una valutazione della sicurezza osservabile dall'esterno "
     "e dei rischi a cui l'organizzazione potrebbe essere esposta. Non costituisce un "
     "penetration test, un vulnerability assessment completo ne' una certificazione di "
     "sicurezza. "
@@ -114,6 +114,7 @@ class ReportContext:
     def as_dict(self) -> dict[str, Any]:
         from app.core.config import settings
 
+        from reporting.figure_contesto import dove_sta_il_rischio, finestra_di_sfruttamento
         from reporting.radar import grafico_radar
 
         return {
@@ -121,6 +122,12 @@ class ReportContext:
             # piattaforma e' stato prodotto, un risultato diverso da una
             # rilevazione successiva non e' spiegabile.
             "platform_version": settings.app_version,
+            # La sezione di contesto apre il rapporto per la direzione.
+            # L'interruttore sta nella personalizzazione del tenant: chi
+            # consegna a chi quel contesto lo ha gia' toglie due pagine.
+            "show_context_section": self.brand.get("show_context_section", True),
+            "figura_sfruttamento": finestra_di_sfruttamento(),
+            "figura_rischio": dove_sta_il_rischio(),
             # Il radar arriva al modello gia' disegnato: SVG calcolato, non
             # un'immagine da risolvere durante la generazione del PDF.
             "radar_svg": grafico_radar(
@@ -208,4 +215,7 @@ def build_context(*, company: dict[str, Any], scan: dict[str, Any], score: dict[
             "name": (branding or {}).get("brand_name") or settings.report_brand_name,
             "owner": (branding or {}).get("brand_owner") or settings.report_brand_owner,
             "color": (branding or {}).get("primary_color") or "",
+            # Attiva salvo diversa indicazione: un tenant che non ha mai
+            # toccato la personalizzazione deve vedere la sezione.
+            "show_context_section": (branding or {}).get("show_context_section", True),
         })

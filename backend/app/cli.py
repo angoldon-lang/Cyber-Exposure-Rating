@@ -532,7 +532,7 @@ def scansioni(chiudi: bool = False) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="defenix", description="CLI Defenix Exposure Rating")
+    parser = argparse.ArgumentParser(prog="defenix", description="CLI Defenix Security Rating")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("init-db", help="crea lo schema del database")
     subparsers.add_parser("seed", help="crea tenant, ruoli, utenti e aziende dimostrative")

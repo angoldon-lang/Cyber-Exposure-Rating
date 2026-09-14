@@ -1,8 +1,8 @@
 # Ambito, limiti e aspetti legali
 
-## 1. Che cosa e' Defenix Exposure Rating
+## 1. Che cosa e' Defenix Security Rating
 
-> **External Cyber Exposure Rating**: valutazione della sicurezza osservabile
+> **External Cyber Security Rating**: valutazione della sicurezza osservabile
 > dall'esterno e dei rischi a cui l'organizzazione potrebbe essere esposta.
 
 Questa formulazione va usata in ogni contesto commerciale e contrattuale.

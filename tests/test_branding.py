@@ -115,3 +115,16 @@ def test_la_personalizzazione_non_attraversa_i_tenant(client, admin):  # noqa: F
     altro = _login(client, "altro@branding.example")
     assert client.get("/api/v1/branding", headers=altro).json()["brand_name"] is None
     assert client.get("/api/v1/branding", headers=admin).json()["brand_name"] == "Remarck"
+
+
+def test_l_interruttore_della_sezione_di_contesto_si_salva(client, admin):  # noqa: F811
+    """Attivo salvo diversa indicazione, e la scelta deve sopravvivere al
+    salvataggio: e' l'unico modo di togliere due pagine dal rapporto."""
+    iniziale = client.get("/api/v1/branding", headers=admin).json()
+    assert iniziale["show_context_section"] is True
+
+    risposta = client.put("/api/v1/branding", headers=admin,
+                          json={"show_context_section": False})
+    assert risposta.status_code == 200, risposta.text
+    assert risposta.json()["show_context_section"] is False
+    assert client.get("/api/v1/branding", headers=admin).json()["show_context_section"] is False

@@ -1,4 +1,4 @@
-"""Schema iniziale Defenix Exposure Rating.
+"""Schema iniziale Defenix Security Rating.
 
 Crea tutte le tabelle dai modelli SQLAlchemy e applica le difese PostgreSQL:
   * Row Level Security su ogni tabella con `tenant_id`;

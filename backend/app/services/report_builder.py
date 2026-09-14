@@ -104,6 +104,7 @@ def _branding_del_tenant(db: Session, tenant_id) -> dict[str, Any]:  # noqa: ANN
         "brand_name": riga.brand_name, "brand_owner": riga.brand_owner,
         "primary_color": riga.primary_color, "report_intro_it": riga.report_intro_it,
         "report_footer_it": riga.report_footer_it, "contact_block_it": riga.contact_block_it,
+        "show_context_section": riga.show_context_section,
     }
     if riga.logo_bytes:
         codificato = base64.b64encode(riga.logo_bytes).decode("ascii")

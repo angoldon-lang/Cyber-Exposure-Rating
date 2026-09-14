@@ -1,10 +1,10 @@
-# Defenix Exposure Rating - Deterministic scoring model
+# Defenix Security Rating - Deterministic scoring model
 # ---------------------------------------------------------------
 # Questo file e' l'UNICA fonte di verita' per il calcolo del rating.
 # L'AI NON puo' modificare punteggi: interpreta soltanto il risultato.
 # Ogni modifica richiede un bump di `version` e un test di regressione.
 version: "1.0.0"
-model_name: "Defenix Exposure Rating"
+model_name: "Defenix Security Rating"
 
 # Ogni categoria parte da 100 e subisce detrazioni.
 categories:

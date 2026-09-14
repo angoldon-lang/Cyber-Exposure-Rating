@@ -1,6 +1,6 @@
 # Componenti di terze parti
 
-Elenco dei componenti usati da Defenix Exposure Rating, con licenza, modalita'
+Elenco dei componenti usati da Defenix Security Rating, con licenza, modalita'
 d'uso, obblighi e rischi per un servizio commerciale.
 
 **Principio applicato:** gli strumenti con licenza copyleft sono invocati come

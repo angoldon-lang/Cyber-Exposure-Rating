@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="{{ language }}">
-<head><meta charset="utf-8"><title>{{ brand.name }} Exposure Rating - {{ company_name }}</title>
+<head><meta charset="utf-8"><title>{{ brand.name }} Security Rating - {{ company_name }}</title>
 <style>{{ stylesheet }}</style></head>
 <body>
 
@@ -12,7 +12,7 @@
     {% if logo_data_uri %}
       <img src="{{ logo_data_uri }}" alt="{{ brand.name }}" class="logo">
     {% endif %}
-    <h1>{{ brand.name }}<br>Exposure Rating</h1>
+    <h1>{{ brand.name }}<br>Security Rating</h1>
     <p class="subtitle">Valutazione dell'esposizione cyber osservabile dall'esterno</p>
   </div>
   <div>
@@ -43,8 +43,65 @@
     rilevazione sono riportati per esteso nel documento.<br><br>
     {% if footer_text %}{{ footer_text }}<br><br>{% endif %}
     Documento riservato prodotto da {{ brand.owner }}. Distribuzione limitata al destinatario.<br>
-    Piattaforma Defenix Exposure Rating {{ platform_version }}.</p>
+    Piattaforma Defenix Security Rating {{ platform_version }}.</p>
 </section>
+
+{# ------------------------ 1-bis. Contesto di settore ----------------------- #}
+{% if show_context_section %}
+<h2>Perche&rsquo; questa valutazione</h2>
+
+<p class="intro">Fino a pochi anni fa, fra la pubblicazione di una
+vulnerabilita&rsquo; e il suo sfruttamento passavano mesi. Quel margine non
+c&rsquo;e&rsquo; piu&rsquo;. La difesa non puo&rsquo; piu&rsquo; basarsi sul
+tempo di reazione: deve basarsi su quanto poco si offre all&rsquo;attaccante.</p>
+
+<h3>La finestra di reazione si e&rsquo; chiusa</h3>
+<p>Il tempo medio fra la divulgazione pubblica di una falla e il primo
+sfruttamento confermato e&rsquo; passato da oltre due anni a tre settimane. Il
+valore mediano e&rsquo; arrivato a zero ore: per meta&rsquo; delle
+vulnerabilita&rsquo; osservate, lo sfruttamento e&rsquo; contemporaneo alla
+divulgazione.</p>
+
+<div class="figura">{{ figura_sfruttamento|safe }}</div>
+<p class="fonte">Tempo medio fra divulgazione e primo sfruttamento confermato,
+su oltre 3.500 vulnerabilita&rsquo;. Scala logaritmica. Elaborazione su dati
+Wiz Research, <em>The State of Cloud Risk 2026</em> (Zero Day Clock).</p>
+
+<p>Non e&rsquo; un problema di velocita&rsquo; delle correzioni: nessun
+processo di aggiornamento, per quanto efficiente, opera su quella scala di
+tempo. E&rsquo; un problema di <strong>superficie</strong>. Cio&rsquo; che non
+e&rsquo; raggiungibile da Internet non entra in quella finestra.</p>
+
+<h3>Il rischio non sta dove si guarda</h3>
+<p>L&rsquo;attenzione delle organizzazioni si concentra sulle
+vulnerabilita&rsquo; del software. I dati dicono un&rsquo;altra cosa: la quasi
+totalita&rsquo; del rischio realmente sfruttabile nasce da informazioni
+esposte, credenziali in circolazione e accessi non protetti. L&rsquo;esecuzione
+di codice da remoto &mdash; la categoria che assorbe la maggior parte degli
+sforzi &mdash; pesa per meno di un decimo.</p>
+
+<div class="figura">{{ figura_rischio|safe }}</div>
+<p class="fonte">Distribuzione dei rilievi sfruttabili di gravita&rsquo; alta e
+critica. Elaborazione su dati Wiz Research, <em>The State of Cloud Risk 2026</em>.</p>
+
+<h3>L&rsquo;esposizione conta per cio&rsquo; a cui e&rsquo; collegata</h3>
+<p>Un servizio raggiungibile da Internet non e&rsquo;, di per se&rsquo;, un
+problema. Lo diventa quando porta a un&rsquo;identita&rsquo; privilegiata, a
+dati sensibili o a una funzione critica. Nelle organizzazioni osservate, il
+<strong>30%</strong> espone almeno un sistema ad alto impatto e il
+<strong>19%</strong> espone software collegato a identita&rsquo; con accesso a
+risorse interne riservate.</p>
+
+<div class="callout">
+  <strong>Cosa misura questo documento.</strong> La valutazione osserva
+  l&rsquo;organizzazione dall&rsquo;esterno, come la vedrebbe un attaccante
+  prima di qualsiasi contatto: quali sistemi rispondono su Internet, quali
+  informazioni sono gia&rsquo; pubbliche, quali credenziali risultano esposte,
+  come e&rsquo; configurata la posta. Non entra nei sistemi e non prova
+  intrusioni: quantifica cio&rsquo; che si offre, prima che qualcuno lo
+  raccolga.
+</div>
+{% endif %}
 
 {# --------------------------- 2. Sintesi esecutiva -------------------------- #}
 <h2>Sintesi per la direzione</h2>

@@ -69,7 +69,9 @@ def create_access_token(subject: str, claims: dict[str, Any], expires_minutes: i
         "sub": subject,
         "exp": expire,
         "iat": datetime.now(UTC),
-        "iss": "defenix-exposure-rating",
+        # `decode_local_token` non verifica l'emittente, quindi rinominarlo
+        # non invalida i token gia' emessi: nessuna sessione cade.
+        "iss": "defenix-security-rating",
         **claims,
     }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)

@@ -14,13 +14,13 @@ from app.schemas.common import HealthResponse
 router = APIRouter(tags=["health"])
 
 DISCLAIMER_IT = (
-    "Defenix Exposure Rating e' una valutazione della sicurezza osservabile "
+    "Defenix Security Rating e' una valutazione della sicurezza osservabile "
     "dall'esterno e dei rischi a cui l'organizzazione potrebbe essere esposta. "
     "NON costituisce un penetration test, un vulnerability assessment completo "
     "ne' una certificazione di sicurezza."
 )
 DISCLAIMER_EN = (
-    "Defenix Exposure Rating is an assessment of externally observable security "
+    "Defenix Security Rating is an assessment of externally observable security "
     "posture and of the risks the organisation may be exposed to. It is NOT a "
     "penetration test, a full vulnerability assessment, nor a security certification."
 )

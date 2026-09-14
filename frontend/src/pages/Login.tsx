@@ -27,7 +27,7 @@ export default function Login({ onLogin }: { onLogin: (profile: UserProfile) => 
   return (
     <div className="login">
       <div className="card login__card">
-        <h1 style={{ fontSize: 20, margin: '0 0 2px' }}>Defenix Exposure Rating</h1>
+        <h1 style={{ fontSize: 20, margin: '0 0 2px' }}>Defenix Security Rating</h1>
         <p className="muted small" style={{ marginTop: 0 }}>
           Valutazione dell’esposizione cyber osservabile dall’esterno
         </p>

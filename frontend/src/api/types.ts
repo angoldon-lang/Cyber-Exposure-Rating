@@ -1,4 +1,4 @@
-/** Tipi dell'API Defenix Exposure Rating (allineati agli schemi Pydantic). */
+/** Tipi dell'API Defenix Security Rating (allineati agli schemi Pydantic). */
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type RatingClass = 'A' | 'B' | 'C' | 'D' | 'E';
@@ -479,6 +479,8 @@ export interface Branding {
   report_intro_it: string | null;
   report_footer_it: string | null;
   contact_block_it: string | null;
+  /** Sezione di contesto in apertura del rapporto per la direzione. */
+  show_context_section: boolean;
   has_logo: boolean;
   logo_filename: string | null;
 }

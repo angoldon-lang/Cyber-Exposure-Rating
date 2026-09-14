@@ -1,6 +1,6 @@
-# Defenix Exposure Rating
+# Defenix Security Rating
 
-Piattaforma multi-tenant per la produzione di un **External Cyber Exposure Rating**:
+Piattaforma multi-tenant per la produzione di un **External Cyber Security Rating**:
 raccoglie evidenze OSINT sul perimetro esterno di un'azienda, le normalizza, le
 correla e le trasforma in un rating deterministico 0-100 con classe A-E, cinque
 rating tematici, un indice di confidenza separato, un report esecutivo, un

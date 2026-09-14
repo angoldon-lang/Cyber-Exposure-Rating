@@ -1,4 +1,4 @@
-"""Enumerazioni del dominio Defenix Exposure Rating."""
+"""Enumerazioni del dominio Defenix Security Rating."""
 from __future__ import annotations
 
 from enum import Enum

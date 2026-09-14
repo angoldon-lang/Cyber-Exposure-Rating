@@ -22,9 +22,14 @@ MARGINE_MM = 16.0
 def _bordo_sinistro_mm(pagina) -> float | None:  # noqa: ANN001
     posizioni: list[float] = []
 
-    def visita(testo, _cm, tm, _font, _size):  # noqa: ANN001
-        if testo.strip():
-            posizioni.append(tm[4])
+    def visita(testo, cm, tm, _font, _size):  # noqa: ANN001
+        if not testo.strip():
+            return
+        # Il testo dentro un SVG e' disegnato in un sistema di coordinate
+        # proprio: `tm[4]` da' la posizione nel disegno, non nella pagina.
+        # Va composta con la matrice corrente, altrimenti una figura
+        # perfettamente dentro i margini risulta a otto millimetri dal bordo.
+        posizioni.append(cm[0] * tm[4] + cm[2] * tm[5] + cm[4])
 
     pagina.extract_text(visitor_text=visita)
     return min(posizioni) / 72 * 25.4 if posizioni else None
@@ -62,7 +67,7 @@ def test_tutte_le_pagine_di_contenuto_rispettano_i_margini():
     fuori_margine = []
     for numero, pagina in enumerate(lettore.pages, 1):
         testo = pagina.extract_text() or ""
-        if numero == 1 or "Exposure Rating" in testo[:120] and numero == 1:
+        if numero == 1 or "Security Rating" in testo[:120] and numero == 1:
             continue  # copertina
         bordo = _bordo_sinistro_mm(pagina)
         if bordo is not None and bordo < MARGINE_MM - 0.5:

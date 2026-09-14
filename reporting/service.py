@@ -88,7 +88,7 @@ def generate_html(context: ReportContext, *, include_technical: bool = True) -> 
     if include_technical:
         parts.append(render_html(context, "technical.html.j2"))
     content = "\n".join(parts).encode("utf-8")
-    name = f"defenix-exposure-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
+    name = f"defenix-security-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
     return GeneratedReport("html", content, f"{name}.html")
 
 
@@ -103,7 +103,7 @@ def generate_pdf(context: ReportContext, *, include_technical: bool = True) -> G
 
     pages = [page for document in documents for page in document.pages]
     pdf_bytes = documents[0].copy(pages).write_pdf()
-    name = f"defenix-exposure-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
+    name = f"defenix-security-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
     return GeneratedReport("pdf", pdf_bytes, f"{name}.pdf")
 
 
@@ -116,7 +116,7 @@ def generate_docx(context: ReportContext, *, include_technical: bool = True) -> 
     document = Document()
 
     # --- copertina ---
-    title = document.add_heading(f"{context.brand['name']} Exposure Rating", level=0)
+    title = document.add_heading(f"{context.brand['name']} Security Rating", level=0)
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     subtitle = document.add_paragraph(
         "Valutazione dell'esposizione cyber osservabile dall'esterno")
@@ -267,7 +267,7 @@ def generate_docx(context: ReportContext, *, include_technical: bool = True) -> 
 
     buffer = io.BytesIO()
     document.save(buffer)
-    name = f"defenix-exposure-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
+    name = f"defenix-security-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
     return GeneratedReport("docx", buffer.getvalue(), f"{name}.docx")
 
 
@@ -281,7 +281,7 @@ def generate_json(context: ReportContext) -> GeneratedReport:
     payload["generated_at"] = context.generated_at.isoformat()
     payload["schema_version"] = "1.0.0"
     content = json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8")
-    name = f"defenix-exposure-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
+    name = f"defenix-security-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
     return GeneratedReport("json", content, f"{name}.json")
 
 
