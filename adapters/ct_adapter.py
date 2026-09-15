@@ -32,8 +32,16 @@ class CertificateTransparencyAdapter(BaseAdapter):
                 checked += 1
                 try:
                     response = client.get(CRTSH_URL, params={"q": f"%.{domain}", "output": "json"})
-                    response.raise_for_status()
-                    entries = response.json()[:MAX_RESULTS]
+                    # 404 significa «nessun certificato per questo dominio»,
+                    # non un guasto: e' l'esito normale per un dominio che non
+                    # ne ha mai emessi. Contarlo come errore toglieva
+                    # confidenza a una risposta corretta — lo stesso sbaglio
+                    # gia' corretto su ransomware.live.
+                    if response.status_code == 404:
+                        entries = []
+                    else:
+                        response.raise_for_status()
+                        entries = response.json()[:MAX_RESULTS]
                 except Exception as exc:  # noqa: BLE001
                     # crt.sh e' spesso lento e a volte risponde 502. Finora
                     # l'errore finiva solo in `raw_output` e lo strumento si

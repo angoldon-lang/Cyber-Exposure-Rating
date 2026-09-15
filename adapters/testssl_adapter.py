@@ -9,7 +9,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 from adapters.base import AdapterResult, AdapterStatus, BaseAdapter, NormalizedEvidence
-from adapters.runner import TemporaryWorkspace, UnsafeCommandError, is_available, read_output_file, run_command
+from adapters.runner import (
+    TemporaryWorkspace,
+    UnsafeCommandError,
+    is_available,
+    prima_riga,
+    read_output_file,
+    run_command,
+)
 from adapters.synthetic import build_posture
 from app.models.enums import ConfidenceClass, ScoreCategoryKey, Severity
 
@@ -17,7 +24,7 @@ BINARY = "testssl.sh"
 CATEGORY = ScoreCategoryKey.WEB_SECURITY.value
 ALLOWED_FLAGS = ("--jsonfile-pretty", "--quiet", "--color", "--severity", "--sneaky",
                  "--warnings", "--openssl-timeout", "--connect-timeout",
-                 "--protocols", "--categories", "--server-defaults")
+                 "--protocols", "--categories", "--server-defaults", "--ip")
 
 LEGACY_PROTOCOLS = ("SSLv2", "SSLv3", "TLSv1.0", "TLSv1.1")
 CERT_EXPIRY_WARNING_DAYS = 30
@@ -157,6 +164,7 @@ class TestSSLAdapter(BaseAdapter):
 
         evidences: list[NormalizedEvidence] = []
         raw: dict[str, Any] = {}
+        motivi: dict[str, str] = {}
         failures = 0
         analizzati = 0
         for host in targets:
@@ -182,6 +190,13 @@ class TestSSLAdapter(BaseAdapter):
                         "--severity", "LOW", "--sneaky",
                         "--protocols", "--categories", "--server-defaults",
                         "--connect-timeout", "10", "--openssl-timeout", "10",
+                        # Un host dietro a un bilanciatore risolve in piu'
+                        # indirizzi, e testssl li prova tutti, ciascuno con i
+                        # propri tentativi: nel registro cinque indirizzi
+                        # provati tre volte ciascuno, per oltre due minuti su
+                        # un host solo. La configurazione TLS di un servizio
+                        # bilanciato e' la stessa su ogni nodo.
+                        "--ip", "one",
                         host]
                 try:
                     result = run_command(BINARY, args, allow_flags=ALLOWED_FLAGS,
@@ -193,6 +208,15 @@ class TestSSLAdapter(BaseAdapter):
                     continue
                 if result.timed_out:
                     failures += 1
+                    motivi[host] = "tempo massimo raggiunto"
+                elif result.exit_code not in (0, None):
+                    # Un'uscita non nulla non veniva contata: senza file JSON
+                    # `json.loads(b"[]")` non solleva, e lo strumento si
+                    # dichiarava riuscito con copertura piena mentre meta'
+                    # degli host non era stata raggiunta. Nel registro:
+                    # cinque host su otto falliti, `status=success`.
+                    failures += 1
+                    motivi[host] = prima_riga(result.stderr) or f"uscito con codice {result.exit_code}"
                 payload_bytes = read_output_file(outfile)
             try:
                 findings = json.loads(payload_bytes or b"[]")
@@ -210,6 +234,10 @@ class TestSSLAdapter(BaseAdapter):
         if non_analizzati:
             motivo = (f"tempo massimo dello strumento ({int(budget)} s) esaurito: "
                       f"{non_analizzati} host su {len(targets)} non sono stati verificati")
+        if motivi:
+            elenco = "; ".join(f"{h}: {m}" for h, m in list(motivi.items())[:3])
+            nota = f"{len(motivi)} host non verificati ({elenco})"
+            motivo = f"{motivo}; {nota}" if motivo else nota
         if non_risolti:
             nota = (f"{non_risolti} nomi del perimetro non risolvono in un indirizzo "
                     "e non sono stati provati")
