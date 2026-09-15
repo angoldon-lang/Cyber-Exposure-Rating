@@ -111,6 +111,12 @@ class ReportContext:
     logo_data_uri: str | None = None
     limits: list[str] = field(default_factory=lambda: list(LIMITS_IT))
 
+    # Scansione su dati sintetici. Un report dimostrativo che non lo dichiara
+    # e' indistinguibile da uno vero: prima o poi qualcuno lo allega a
+    # un'offerta, o lo legge come una valutazione reale. Sta in fondo perche'
+    # ha un valore predefinito, e in un dataclass quelli vengono per ultimi.
+    is_demo: bool = False
+
     def as_dict(self) -> dict[str, Any]:
         from app.core.config import settings
 
@@ -138,6 +144,7 @@ class ReportContext:
             "scope": self.scope, "overall_score": self.overall_score,
             "rating_class": self.rating_class, "rating_label": self.rating_label,
             "is_provisional": self.is_provisional, "provisional_notice": self.provisional_notice,
+            "is_demo": self.is_demo,
             "confidence_value": self.confidence_value, "confidence_label": self.confidence_label,
             "categories": self.categories, "top_risks": self.top_risks,
             "findings": self.findings, "remediation_plan": self.remediation_plan,
@@ -195,6 +202,7 @@ def build_context(*, company: dict[str, Any], scan: dict[str, Any], score: dict[
         rating_class=str(score.get("rating_class", "E")),
         rating_label=str(score.get("rating_label_it", "")),
         is_provisional=bool(score.get("is_provisional")),
+        is_demo=bool(scan.get("mock_mode")),
         provisional_notice=score.get("provisional_reason"),
         confidence_value=float(confidence.get("value", 0.0)),
         confidence_label=str(confidence.get("label_it", "")),

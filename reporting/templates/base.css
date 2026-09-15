@@ -160,3 +160,21 @@ li { margin-bottom: 1mm; }
 .figura { text-align: center; margin: 4mm 0 1mm; page-break-inside: avoid; }
 .figura svg { width: 150mm; height: auto; }
 .fonte { font-size: 7.5pt; color: var(--muted); margin: 0 0 5mm; text-align: center; }
+
+/* ---------- documento dimostrativo ---------- */
+/* `position: fixed` in stampa ripete l'elemento su OGNI pagina: e' cio' che
+   serve a una filigrana, e il motivo per cui non si usa `absolute`. */
+.filigrana-demo {
+  position: fixed;
+  top: 130mm; left: 0; right: 0;
+  text-align: center;
+  font-size: 34pt; font-weight: 700; letter-spacing: 4pt;
+  color: rgba(155, 28, 28, .12);
+  transform: rotate(-24deg);
+  z-index: 100;
+}
+.banda-demo {
+  background: #9b1c1c; color: #fff;
+  font-size: 10pt; font-weight: 700; letter-spacing: .4pt;
+  padding: 3mm 6mm; margin: -12mm -12mm 8mm; border-radius: 2mm;
+}

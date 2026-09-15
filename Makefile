@@ -58,6 +58,22 @@ seed: ## Crea tenant, ruoli, utenti e aziende dimostrative
 demo: ## Esegue una scansione dimostrativa su dati sintetici
 	$(PY) -m app.cli demo-scan
 
+.PHONY: report-demo
+report-demo: ## Genera un report completo su dati sintetici (PDF + HTML in sample-output/)
+	@# Se non c'e' ancora una scansione dimostrativa la esegue: un comando che
+	@# pretende uno stato preesistente non serve a chi parte da zero.
+	$(PY) -m app.cli report-demo --out sample-output
+	@echo
+	@echo "I documenti portano banda e filigrana «dati dimostrativi»: non sono"
+	@echo "valutazioni reali e non vanno consegnati a un cliente."
+
+.PHONY: compose-report-demo
+compose-report-demo: require-env ## Come sopra, dentro il container API
+	$(COMPOSE) run --rm -w /srv/backend api python -m app.cli report-demo --out /tmp/report-demo
+	@echo
+	@echo "I file restano nel container: per portarli fuori usare"
+	@echo "  docker compose cp api:/tmp/report-demo ./sample-output"
+
 .PHONY: credentials
 credentials: ## Ristampa le credenziali demo generate
 	$(PY) -m app.cli show-credentials

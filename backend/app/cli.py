@@ -380,6 +380,63 @@ def demo_scan(company_slug: str | None = None, profile: str = "verified_standard
     return {"status": "ok", "scans": results}
 
 
+def report_demo(company: str | None = None, cartella: str = "sample-output",
+                formati: list[str] | None = None) -> dict:
+    """Genera i report di una scansione dimostrativa e li scrive su disco.
+
+    `demo-scan` calcolava il punteggio e si fermava li': per vedere un report
+    bisognava passare dall'interfaccia. Questo comando chiude il giro, ed e'
+    il modo piu' rapido per guardare l'effetto di una modifica
+    all'impaginazione senza eseguire una scansione vera.
+
+    Se non esiste ancora una scansione dimostrativa ne esegue una: un comando
+    che pretende uno stato preesistente non serve a chi parte da zero.
+    """
+    from pathlib import Path
+
+    from app.models.enums import ScanStatus
+    from app.services.report_builder import build_report_context
+    from reporting.service import generate
+
+    formati = formati or ["pdf", "html"]
+    conclusa = [ScanStatus.COMPLETED.value, ScanStatus.PARTIAL.value]
+
+    def _ultima_dimostrativa(db, slug: str | None):  # noqa: ANN001, ANN202
+        query = (select(Scan).join(Company, Scan.company_id == Company.id)
+                 .where(Scan.mock_mode.is_(True), Scan.status.in_(conclusa)))
+        if slug:
+            query = query.where(Company.slug == slug)
+        return db.execute(query.order_by(Scan.finished_at.desc()).limit(1)).scalar_one_or_none()
+
+    with session_scope() as db:
+        trovata = _ultima_dimostrativa(db, company) is not None
+    if not trovata:
+        print("Nessuna scansione dimostrativa: la eseguo ora.", file=sys.stderr)
+        esito = demo_scan(company_slug=company)
+        if esito.get("status") != "ok":
+            return esito
+
+    destinazione = Path(cartella)
+    destinazione.mkdir(parents=True, exist_ok=True)
+    prodotti: list[dict[str, str]] = []
+
+    with session_scope() as db:
+        scan = _ultima_dimostrativa(db, company)
+        if scan is None:
+            print("Nessuna scansione dimostrativa conclusa da cui generare il report.",
+                  file=sys.stderr)
+            return {"status": "no_scan"}
+        contesto = build_report_context(db, scan)
+        azienda = scan.company.legal_name
+
+    for documento in generate(contesto, formati):
+        percorso = destinazione / documento.filename
+        percorso.write_bytes(documento.content)
+        prodotti.append({"formato": documento.format, "file": str(percorso)})
+
+    return {"status": "ok", "company": azienda, "files": prodotti}
+
+
 def run_queued(scan_id: str | None = None) -> dict:
     """Esegue subito le scansioni in coda, senza passare da Celery.
 
@@ -541,6 +598,13 @@ def main() -> None:
     scan_parser.add_argument("--profile", default="verified_standard",
                              choices=[p.value for p in ScanProfileType])
     subparsers.add_parser("show-credentials", help="ristampa le credenziali demo generate")
+    report_parser = subparsers.add_parser(
+        "report-demo", help="genera i report di una scansione dimostrativa e li salva")
+    report_parser.add_argument("--company", default=None, help="slug dell'azienda")
+    report_parser.add_argument("--out", default="sample-output", help="cartella di destinazione")
+    report_parser.add_argument("--format", dest="formats", action="append",
+                               choices=["pdf", "html", "docx", "json", "csv"],
+                               help="ripetibile; senza, produce pdf e html")
     run_parser = subparsers.add_parser(
         "run-queued", help="esegue subito le scansioni in coda, senza Celery")
     run_parser.add_argument("--scan-id", default=None, help="una sola scansione")
@@ -565,6 +629,11 @@ def main() -> None:
             print("Cambiare le password al primo accesso e non usarle in produzione.")
     elif args.command == "demo-scan":
         print(json.dumps(demo_scan(args.company, args.profile), indent=2, ensure_ascii=False))
+    elif args.command == "report-demo":
+        esito = report_demo(company=args.company, cartella=args.out, formati=args.formats)
+        print(json.dumps(esito, indent=2, ensure_ascii=False))
+        if esito.get("status") != "ok":
+            sys.exit(1)
     elif args.command == "run-queued":
         print(json.dumps(run_queued(args.scan_id), indent=2, ensure_ascii=False))
     elif args.command == "scansioni":

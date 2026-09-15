@@ -5,7 +5,19 @@
 <body>
 
 {# ------------------------------ 1. Copertina ------------------------------ #}
+{% if is_demo %}
+{# Un report dimostrativo che non lo dichiara e' indistinguibile da uno vero.
+   La banda si vede in copertina, la filigrana su ogni pagina: entrambe
+   servono, perche' un documento si stampa e si sfoglia anche a partire dal
+   mezzo. #}
+<div class="filigrana-demo" aria-hidden="true">DATI DIMOSTRATIVI</div>
+{% endif %}
 <section class="cover">
+  {% if is_demo %}
+  <div class="banda-demo">
+    Documento dimostrativo &mdash; dati sintetici, non una valutazione reale
+  </div>
+  {% endif %}
   <div>
     {# Il logo arriva come data URI: nessun riferimento esterno da risolvere
        durante la generazione del PDF. #}

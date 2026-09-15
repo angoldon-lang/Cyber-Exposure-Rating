@@ -4,6 +4,14 @@
 <style>{{ stylesheet }}</style></head>
 <body>
 
+{% if is_demo %}
+<div class="filigrana-demo" aria-hidden="true">DATI DIMOSTRATIVI</div>
+<div class="callout danger">
+  <strong>Documento dimostrativo.</strong> I rilievi elencati provengono da
+  dati sintetici generati dalla piattaforma e non descrivono alcuna
+  organizzazione reale.
+</div>
+{% endif %}
 <h2 style="margin-top:0">Allegato tecnico</h2>
 <p class="company-name" style="font-size:12pt;font-weight:700;margin-bottom:1mm">{{ company_name }}</p>
 <p class="muted small">Profilo: {{ profile_label }} &middot;

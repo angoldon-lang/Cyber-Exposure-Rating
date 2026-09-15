@@ -175,7 +175,8 @@ def build_report_context(db: Session, scan: Scan, *, language: str = "it",
     return build_context(
         branding=_branding_del_tenant(db, scan.tenant_id),
         company={"legal_name": company.legal_name, "vat_number": company.vat_number},
-        scan={"profile_key": scan.profile_key, "scope_snapshot": scan.scope_snapshot_json or {}},
+        scan={"profile_key": scan.profile_key, "scope_snapshot": scan.scope_snapshot_json or {},
+              "mock_mode": scan.mock_mode},
         score={
             "overall_score": score.overall_score,
             "rating_class": score.rating_class,
