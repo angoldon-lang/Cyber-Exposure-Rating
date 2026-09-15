@@ -378,3 +378,32 @@ def test_la_cache_lunga_vale_solo_per_i_file_con_impronta_nel_nome():
             assert "js|css" in selettore, (
                 f"cache immutabile su {selettore.strip()}: se il nome non "
                 "cambia con il contenuto, l'aggiornamento non arriva")
+
+
+def test_le_immagini_del_compose_hanno_un_tag_fissato():
+    """Un `latest` rende irriproducibile un'installazione, e un tag inventato
+    si scopre solo al primo avvio di chi lo usa: e' successo con ZAP."""
+    immagini = re.findall(r"^\s*image:\s*(\S+)\s*$", COMPOSE_FILE.read_text(encoding="utf-8"),
+                          re.MULTILINE)
+
+    assert immagini, "nessuna immagine nel compose: controllo da rivedere"
+    senza_tag = [i for i in immagini if ":" not in i.rsplit("/", 1)[-1]]
+    assert not senza_tag, f"immagini senza tag: {senza_tag}"
+
+
+def test_il_controllo_delle_versioni_copre_anche_il_compose():
+    """Il tag ZAP inesistente e' passato perche' il controllo guardava solo i
+    Dockerfile. Senza questa copertura il prossimo passerebbe uguale."""
+    script = (REPO_ROOT / "scripts" / "check_pinned_versions.py").read_text(encoding="utf-8")
+
+    assert "docker-compose.yml" in script
+    assert "_immagine_esiste" in script
+
+
+def test_il_controllo_delle_versioni_copre_gli_zip_scaricati():
+    """`amass` arriva da un archivio, non da `git clone` ne' dal downloader
+    di ProjectDiscovery: senza una riga propria restava fissato e mai
+    verificato."""
+    script = (REPO_ROOT / "scripts" / "check_pinned_versions.py").read_text(encoding="utf-8")
+
+    assert "ZIP_TOOL" in script

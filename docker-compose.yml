@@ -172,7 +172,7 @@ services:
   # a chi ZAP non lo usa. Il controllo sta in `make up-zap`, che rifiuta di
   # partire senza chiave.
   zap:
-    image: ghcr.io/zaproxy/zaproxy:20250602-stable
+    image: ghcr.io/zaproxy/zaproxy:20260807-stable
     profiles: ["zap"]
     restart: unless-stopped
     command: >
