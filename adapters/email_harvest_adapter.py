@@ -138,7 +138,7 @@ class EmailHarvestAdapter(BaseAdapter):
         indirizzi: dict[str, set[str]] = {}
         raw: dict[str, Any] = {}
         errori = 0
-
+        lette = 0
         with httpx.Client(timeout=15.0, follow_redirects=False,
                           headers={"user-agent": "Defenix-Exposure-Rating"}) as client:
             while da_visitare and len(visitate) < massimo_pagine:
@@ -163,6 +163,7 @@ class EmailHarvestAdapter(BaseAdapter):
                 visitate.append(finale)
                 if "html" not in risposta.headers.get("content-type", "").lower():
                     continue
+                lette += 1
                 pagina = risposta.text[:massimo_byte]
 
                 nuovi = {a for a in indirizzi_in_pagina(pagina) if self._in_perimetro(a)}
@@ -199,14 +200,24 @@ class EmailHarvestAdapter(BaseAdapter):
                             "pages": len(pagine)})
             for indirizzo, pagine in sorted(indirizzi.items())
         ]
+        # Il costo sulla copertura era fisso a meta' del peso appena una
+        # pagina falliva e non si trovava alcun indirizzo: due pagine
+        # irraggiungibili su quindici lette pesavano quanto quindici su
+        # quindici. Ora e' la quota di cio' che non si e' riusciti a leggere.
+        #
+        # Un sito che non pubblica indirizzi non e' un'analisi mancata: e' un
+        # risultato, e non deve costare copertura.
+        tentate = errori + lette
+        quota = errori / tentate if tentate else 0.0
         return AdapterResult(
             tool=self.key,
-            status=AdapterStatus.PARTIAL if errori and not assets else AdapterStatus.SUCCESS,
+            status=AdapterStatus.PARTIAL if errori else AdapterStatus.SUCCESS,
             assets=assets, target_count=len(visitate), raw_output=self.dump_json(raw),
-            error_message=(f"{errori} pagine non raggiungibili" if errori and not assets
-                           else None),
-            coverage_impact=self.coverage_weight * 0.5 if errori and not assets else 0.0,
-            config_snapshot={"pages_visited": len(visitate), "addresses": len(assets)})
+            error_message=(f"{errori} pagine su {tentate} non raggiungibili"
+                           if errori else None),
+            coverage_impact=self.coverage_weight * quota,
+            config_snapshot={"pages_visited": len(visitate), "pages_read": lette,
+                             "addresses": len(assets)})
 
     # ------------------------------------------------------------------
     def mock(self) -> AdapterResult:

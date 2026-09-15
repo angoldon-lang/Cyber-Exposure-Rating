@@ -171,3 +171,50 @@ def test_i_candidati_partono_da_dove_si_e_arrivati(adapter_context, monkeypatch)
     assert not sull_apice, (
         "candidati costruiti sull'apice invece che sull'origine raggiunta: "
         f"{sull_apice[:3]}")
+
+
+def test_il_costo_sulla_copertura_e_proporzionale(adapter_context, monkeypatch):
+    """Era fisso a meta' del peso appena una pagina falliva.
+
+    Nel registro di una scansione reale: due pagine irraggiungibili su
+    quindici lette costavano quanto se fossero fallite tutte.
+    """
+    import httpx
+
+    adapter_context.mock_mode = False
+    fallite = {f"https://{DOMINIO}/contact", f"https://{DOMINIO}/team"}
+
+    def finta(_client, url, **_k):  # noqa: ANN001, ANN202
+        if url in fallite:
+            raise httpx.ConnectError("non raggiungibile")
+        return httpx.Response(200, headers={"content-type": "text/html"},
+                              text="pagina senza indirizzi",
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("adapters.email_harvest_adapter.get_seguendo_redirect", finta)
+    esito = EmailHarvestAdapter(adapter_context).run()
+
+    lette = esito.config_snapshot["pages_read"]
+    assert lette > len(fallite), "servono piu' pagine lette che fallite"
+    atteso = EmailHarvestAdapter(adapter_context).coverage_weight * len(fallite) / (
+        len(fallite) + lette)
+    assert esito.coverage_impact == pytest.approx(atteso)
+    assert esito.coverage_impact < 0.5, "due pagine su molte non sono meta' dell'analisi"
+
+
+def test_un_sito_senza_indirizzi_non_costa_copertura(adapter_context, monkeypatch):
+    """Non e' un'analisi mancata: e' un risultato."""
+    import httpx
+
+    adapter_context.mock_mode = False
+
+    def finta(_client, url, **_k):  # noqa: ANN001, ANN202
+        return httpx.Response(200, headers={"content-type": "text/html"},
+                              text="nessun indirizzo qui",
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("adapters.email_harvest_adapter.get_seguendo_redirect", finta)
+    esito = EmailHarvestAdapter(adapter_context).run()
+
+    assert esito.coverage_impact == 0.0
+    assert esito.error_message is None
