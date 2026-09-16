@@ -4,268 +4,314 @@
 <style>{{ stylesheet }}</style></head>
 <body>
 
-{# ------------------------------ 1. Copertina ------------------------------ #}
 {% if is_demo %}
 {# Un report dimostrativo che non lo dichiara e' indistinguibile da uno vero.
-   La banda si vede in copertina, la filigrana su ogni pagina: entrambe
-   servono, perche' un documento si stampa e si sfoglia anche a partire dal
-   mezzo. #}
+   La banda si vede in testa, la filigrana su ogni pagina: entrambe servono,
+   perche' un documento si stampa e si sfoglia anche a partire dal mezzo. #}
 <div class="filigrana-demo" aria-hidden="true">DATI DIMOSTRATIVI</div>
 {% endif %}
-<section class="cover">
-  {% if is_demo %}
-  <div class="banda-demo">
-    Documento dimostrativo &mdash; dati sintetici, non una valutazione reale
-  </div>
+
+{# ============================ 1. Testata e sintesi ======================== #}
+<div class="masthead">
+  {# Il logo arriva come data URI: nessun riferimento esterno da risolvere
+     durante la generazione del PDF. #}
+  {% if logo_data_uri %}<img src="{{ logo_data_uri }}" alt="{{ brand.name }}">{% endif %}
+  <span class="masthead-titolo">{{ brand.name }} Security Rating &middot;
+    Sintesi per la direzione</span>
+</div>
+
+{% if is_demo %}
+<div class="banda-demo">
+  Documento dimostrativo &mdash; dati sintetici, non una valutazione reale
+</div>
+{% endif %}
+
+<h1>Quanto e&rsquo; esposta l&rsquo;azienda,<br>spiegato in parole semplici</h1>
+<p class="occhiello">Questo documento riassume in poche pagine il risultato della
+verifica tecnica. Nessuna sigla senza spiegazione: che cosa abbiamo visto, che
+cosa puo&rsquo; succedere e che cosa conviene fare.</p>
+
+<table class="anagrafica">
+  <tr><th>Azienda</th><td><span class="company-name"><strong>{{ company_name }}</strong></span>
+      {% if company_vat %}<span class="muted">&middot; P.IVA {{ company_vat }}</span>{% endif %}</td></tr>
+  {% if domini_analizzati %}
+  <tr><th>{{ 'Domini analizzati' if domini_analizzati|length > 1 else 'Dominio analizzato' }}</th>
+      <td>{{ domini_analizzati|join(', ') }}</td></tr>
   {% endif %}
-  <div>
-    {# Il logo arriva come data URI: nessun riferimento esterno da risolvere
-       durante la generazione del PDF. #}
-    {% if logo_data_uri %}
-      <img src="{{ logo_data_uri }}" alt="{{ brand.name }}" class="logo">
+  <tr><th>Data della verifica</th><td>{{ generated_at.strftime('%d/%m/%Y') }}</td></tr>
+  <tr><th>Tipo di verifica</th><td>{{ tipo_verifica }}</td></tr>
+</table>
+
+<h2>Il risultato in due righe</h2>
+<div class="riquadro-esito">
+  <div class="voto">
+    {% if is_provisional %}
+      <span class="voto-numero">&ndash;&ndash;</span>
+    {% else %}
+      <span class="voto-numero">{{ '%.0f'|format(overall_score) }}</span><span class="voto-su">/100</span>
     {% endif %}
-    <h1>{{ brand.name }}<br>Security Rating</h1>
-    <p class="subtitle">Valutazione dell'esposizione cyber osservabile dall'esterno</p>
   </div>
-  <div>
-    <p class="company company-name">{{ company_name }}</p>
-    {% if company_vat %}<p class="meta">P.IVA / VAT: {{ company_vat }}</p>{% endif %}
-    <p class="meta">Data della valutazione: {{ generated_at.strftime('%d/%m/%Y') }}</p>
-    <p class="meta">Profilo di scansione: {{ profile_label }}</p>
-
-    <div class="rating-block">
-      {% if is_provisional %}
-        <p class="score">--</p>
-        <p class="class">Valutazione provvisoria</p>
-        <p class="confidence">{{ provisional_notice }}</p>
-      {% else %}
-        <p class="score">{{ '%.0f'|format(overall_score) }}<span style="font-size:18pt">/100</span></p>
-        <p class="class">Classe {{ rating_class }} &mdash; {{ rating_label }}</p>
-      {% endif %}
-      <p class="confidence">Affidabilita' della rilevazione: {{ '%.0f'|format(confidence_value) }}%
-        ({{ confidence_label }})</p>
-    </div>
+  <div class="voto-testo">
+    {% if is_provisional %}
+      <p class="voto-classe">Valutazione provvisoria</p>
+      <p class="voto-nota">{{ provisional_notice }}</p>
+    {% else %}
+      <p class="voto-classe">Classe {{ rating_class }} &mdash; {{ rating_label|lower }}</p>
+      <p class="voto-nota">{{ direzione.sintesi_risultato }}</p>
+    {% endif %}
   </div>
-  {# In copertina va la sintesi della limitazione, non il disclaimer per
-     intero: quel testo occupava mezza pagina, spingeva il resto sul foglio
-     successivo e compare comunque per esteso nel corpo del documento. #}
-  <p class="footer-note">
-    Valutazione dell&rsquo;esposizione osservabile dall&rsquo;esterno. Non e&rsquo; un
-    penetration test ne&rsquo; una certificazione di sicurezza; i limiti della
-    rilevazione sono riportati per esteso nel documento.<br><br>
-    {% if footer_text %}{{ footer_text }}<br><br>{% endif %}
-    Documento riservato prodotto da {{ brand.owner }}. Distribuzione limitata al destinatario.<br>
-    Piattaforma Defenix Security Rating {{ platform_version }}.</p>
-</section>
-
-{# ------------------------ 1-bis. Contesto di settore ----------------------- #}
-{% if show_context_section %}
-<h2>Perche&rsquo; questa valutazione</h2>
-
-<p class="intro">Fino a pochi anni fa, fra la pubblicazione di una
-vulnerabilita&rsquo; e il suo sfruttamento passavano mesi. Quel margine non
-c&rsquo;e&rsquo; piu&rsquo;. La difesa non puo&rsquo; piu&rsquo; basarsi sul
-tempo di reazione: deve basarsi su quanto poco si offre all&rsquo;attaccante.</p>
-
-<h3>La finestra di reazione si e&rsquo; chiusa</h3>
-<p>Il tempo medio fra la divulgazione pubblica di una falla e il primo
-sfruttamento confermato e&rsquo; passato da oltre due anni a tre settimane. Il
-valore mediano e&rsquo; arrivato a zero ore: per meta&rsquo; delle
-vulnerabilita&rsquo; osservate, lo sfruttamento e&rsquo; contemporaneo alla
-divulgazione.</p>
-
-<div class="figura">{{ figura_sfruttamento|safe }}</div>
-<p class="fonte">Tempo medio fra divulgazione e primo sfruttamento confermato,
-su oltre 3.500 vulnerabilita&rsquo;. Scala logaritmica. Elaborazione su dati
-Wiz Research, <em>The State of Cloud Risk 2026</em> (Zero Day Clock).</p>
-
-<p>Non e&rsquo; un problema di velocita&rsquo; delle correzioni: nessun
-processo di aggiornamento, per quanto efficiente, opera su quella scala di
-tempo. E&rsquo; un problema di <strong>superficie</strong>. Cio&rsquo; che non
-e&rsquo; raggiungibile da Internet non entra in quella finestra.</p>
-
-<h3>Il rischio non sta dove si guarda</h3>
-<p>L&rsquo;attenzione delle organizzazioni si concentra sulle
-vulnerabilita&rsquo; del software. I dati dicono un&rsquo;altra cosa: la quasi
-totalita&rsquo; del rischio realmente sfruttabile nasce da informazioni
-esposte, credenziali in circolazione e accessi non protetti. L&rsquo;esecuzione
-di codice da remoto &mdash; la categoria che assorbe la maggior parte degli
-sforzi &mdash; pesa per meno di un decimo.</p>
-
-<div class="figura">{{ figura_rischio|safe }}</div>
-<p class="fonte">Distribuzione dei rilievi sfruttabili di gravita&rsquo; alta e
-critica. Elaborazione su dati Wiz Research, <em>The State of Cloud Risk 2026</em>.</p>
-
-<h3>L&rsquo;esposizione conta per cio&rsquo; a cui e&rsquo; collegata</h3>
-<p>Un servizio raggiungibile da Internet non e&rsquo;, di per se&rsquo;, un
-problema. Lo diventa quando porta a un&rsquo;identita&rsquo; privilegiata, a
-dati sensibili o a una funzione critica. Nelle organizzazioni osservate, il
-<strong>30%</strong> espone almeno un sistema ad alto impatto e il
-<strong>19%</strong> espone software collegato a identita&rsquo; con accesso a
-risorse interne riservate.</p>
-
-<div class="callout">
-  <strong>Cosa misura questo documento.</strong> La valutazione osserva
-  l&rsquo;organizzazione dall&rsquo;esterno, come la vedrebbe un attaccante
-  prima di qualsiasi contatto: quali sistemi rispondono su Internet, quali
-  informazioni sono gia&rsquo; pubbliche, quali credenziali risultano esposte,
-  come e&rsquo; configurata la posta. Non entra nei sistemi e non prova
-  intrusioni: quantifica cio&rsquo; che si offre, prima che qualcuno lo
-  raccolga.
 </div>
-{% endif %}
 
-{# --------------------------- 2. Sintesi esecutiva -------------------------- #}
-<h2>Sintesi per la direzione</h2>
 {% if intro_text %}<p class="intro">{{ intro_text }}</p>{% endif %}
-{% if is_provisional %}
-<div class="callout warning">
-  <strong>{{ provisional_notice }}</strong><br>
-  L'affidabilita' della rilevazione ({{ '%.0f'|format(confidence_value) }}%) e' inferiore alla
-  soglia minima richiesta per pubblicare un rating definitivo. I rilievi elencati restano validi,
-  ma il punteggio complessivo non e' rappresentativo dell'intera esposizione.
-</div>
-{% else %}
-<p>La valutazione assegna a <strong>{{ company_name }}</strong> un punteggio complessivo di
-  <strong>{{ '%.0f'|format(overall_score) }}/100</strong>, corrispondente alla
-  <strong class="class-{{ rating_class }}">classe {{ rating_class }}</strong>
-  ({{ rating_label|lower }}), con un'affidabilita' della rilevazione del
-  <strong>{{ '%.0f'|format(confidence_value) }}%</strong>.</p>
-{% endif %}
+<p>In pratica: {{ direzione.in_pratica }}</p>
 
 {% if applied_caps %}
 <div class="callout danger">
-  <strong>Limitazione del punteggio applicata.</strong> Sono state riscontrate condizioni che
-  impongono un tetto massimo al rating complessivo, a prescindere dal punteggio delle singole aree:
+  <strong>Il punteggio e&rsquo; stato limitato d&rsquo;ufficio.</strong> Sono emerse
+  condizioni che impongono un tetto massimo al risultato, a prescindere dal punteggio
+  delle singole aree:
   <ul>{% for cap in applied_caps %}
     <li>{{ cap.reason_it }} &mdash; punteggio massimo consentito: {{ cap.max_score|int }}/100</li>
   {% endfor %}</ul>
 </div>
 {% endif %}
 
-{# --------------------------- 4. Rating tematici ---------------------------- #}
-<h2>Rating per area tematica</h2>
-{% if radar_svg %}
-<div class="radar-blocco">{{ radar_svg|safe }}</div>
-<p class="small muted" style="margin-top:-2mm">
-  Piu&rsquo; il profilo si avvicina al centro, piu&rsquo; l&rsquo;area e&rsquo; esposta.
-  Il punteggio di ciascuna area e&rsquo; su cento; il peso con cui concorre al
-  risultato complessivo e&rsquo; nella tabella che segue.
-</p>
-{% endif %}
-<table>
-  <thead><tr><th style="width:62mm">Area</th><th style="width:16mm">Peso</th>
-    <th style="width:18mm">Punteggio</th><th>Andamento</th>
-    <th style="width:20mm">Rilievi</th></tr></thead>
+<h2>{{ direzione.titolo_aree }}</h2>
+<table class="aree">
+  <thead><tr><th style="width:56mm">Area</th><th style="width:18mm">Esito</th>
+    <th>Che cosa significa</th></tr></thead>
   <tbody>
-  {% for category in categories %}
-    <tr>
-      <td>{{ category.label_it }}</td>
-      <td>{{ (category.weight * 100)|int }}%</td>
-      <td><strong>{{ '%.0f'|format(category.score) }}/100</strong></td>
-      <td><div class="bar"><span style="width:{{ category.score|int }}%"></span></div></td>
-      <td>{{ category.finding_count }}
-        {%- if category.critical_count %} <span class="badge sev-critical">{{ category.critical_count }} crit.</span>{% endif %}
-        {%- if category.high_count %} <span class="badge sev-high">{{ category.high_count }} alti</span>{% endif %}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-
-{# ------------------------ 5. Principali cinque rischi ---------------------- #}
-<h2>Principali rischi rilevati</h2>
-{% if top_risks %}
-<table>
-  <thead><tr><th style="width:16mm">Rif.</th><th style="width:18mm">Severita'</th>
-    <th>Rilievo</th><th style="width:24mm">Attendibilita'</th></tr></thead>
-  <tbody>
-  {% for risk in top_risks %}
-    <tr>
-      <td>{{ risk.reference_code }}</td>
-      <td><span class="badge sev-{{ risk.severity }}">{{ severity_label[risk.severity] }}</span></td>
-      <td><strong>{{ risk.title }}</strong>
-        {% if risk.cve_id %}<br><span class="small muted">{{ risk.cve_id }}
-          {%- if risk.cvss_score %} &middot; CVSS {{ risk.cvss_score }}{% endif %}
-          {%- if risk.cisa_kev %} &middot; presente in CISA KEV{% endif %}</span>{% endif %}
+  {% for area in direzione.aree %}
+    <tr class="{{ 'area-critica' if area.critica }}">
+      <td><span class="pallino {{ 'rosso' if area.critica else 'verde' }}"></span>{{ area.nome }}</td>
+      <td>{{ '%.0f'|format(area.punteggio) }}/100</td>
+      <td>{{ area.significato }}
+        {%- if area.critica %} <strong>{{ area.rilievi }}
+          rilie{{ 'vo' if area.rilievi == 1 else 'vi' }}
+          {%- if area.gravi %}, di cui {{ area.gravi }} da trattare per {{ 'primo' if area.gravi == 1 else 'primi' }}{% endif %}.</strong>
+        {%- endif %}
+        {%- if area.nota_copertura %} <span class="muted">{{ area.nota_copertura }}</span>{% endif %}
       </td>
-      <td>{{ confidence_label_map[risk.confidence_class] }}</td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
+
+<h2>Il perimetro osservato</h2>
+<table class="perimetro">
+  <thead><tr>
+    <th>Elementi aziendali individuati</th><th>Domini e sottodomini</th>
+    <th>Indirizzi internet</th><th>Rilievi complessivi</th>
+  </tr></thead>
+  <tbody><tr>
+    <td><strong>{{ exposure_summary.total_assets }}</strong>
+      <span class="muted">({{ exposure_summary.verified_assets }} confermati dell'azienda)</span></td>
+    <td><strong>{{ exposure_summary.domains }}</strong></td>
+    <td><strong>{{ exposure_summary.ip_addresses }}</strong></td>
+    <td><strong>{{ exposure_summary.findings_total }}</strong>
+      <span class="muted">({{ exposure_summary.critical }}
+        critic{{ 'o' if exposure_summary.critical == 1 else 'i' }},
+        {{ exposure_summary.high }} grav{{ 'e' if exposure_summary.high == 1 else 'i' }})</span></td>
+  </tr></tbody>
+</table>
+
+{% if comparison and comparison.previous_score is not none %}
+<p class="small muted">Rispetto alla rilevazione precedente:
+  {{ '%.0f'|format(comparison.previous_score) }} &rarr; {{ '%.0f'|format(comparison.current_score) }}
+  ({{ '%+.1f'|format(comparison.score_delta) }}), {{ comparison.new_findings|length }} nuovi
+  rilievi, {{ comparison.resolved_findings|length }} risolti.</p>
 {% else %}
-<p class="muted">Nessun rilievo significativo emerso nel perimetro analizzato. L'assenza di
-  rilievi non costituisce prova di sicurezza.</p>
+<p class="small muted">Prima valutazione: non c&rsquo;e&rsquo; ancora un confronto con
+  rilevazioni precedenti.</p>
 {% endif %}
 
-{# --------------------------- 7. Priorita' e quick win --------------------- #}
-<h2>Priorita' di intervento</h2>
-{% if remediation_plan %}
-<table>
-  <thead><tr><th style="width:10mm">#</th><th>Intervento</th><th style="width:22mm">Priorita'</th>
-    <th style="width:22mm">Impegno</th><th style="width:20mm">Rilievi</th></tr></thead>
-  <tbody>
-  {% for item in remediation_plan[:5] %}
-    <tr><td>{{ loop.index }}</td>
-      <td><strong>{{ item.title_it }}</strong><br>
-        <span class="small muted">{{ item.risk_mitigated_it }}</span></td>
-      <td>{{ priority_label[item.priority] }}</td>
-      <td>{{ effort_label[item.effort] }}</td>
-      <td>{{ item.finding_codes|length }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}<p class="muted">Nessun intervento prioritario identificato.</p>{% endif %}
+<div class="callout attenzione">
+  <strong>{{ direzione.avvertenza_punteggio.titolo }}</strong><br>
+  Affidabilita&rsquo; della rilevazione: <strong>{{ '%.0f'|format(confidence_value) }}%</strong>.
+  Dove un controllo non gira, l&rsquo;area resta alta per assenza di prove, non perche&rsquo;
+  sia stato dimostrato che tutto e&rsquo; a posto.
+  <strong>{{ direzione.avvertenza_punteggio.chiusura }}</strong>
+</div>
 
-{% if quick_wins %}
-<h3>Interventi rapidi ad alto beneficio</h3>
-<ul>
-{% for item in quick_wins %}
-  <li><strong>{{ item.title_it }}</strong> &mdash; {{ item.immediate_action_it }}
-    <span class="small muted">(impegno: {{ effort_label[item.effort]|lower }})</span></li>
+{# ------------------------ 2. Contesto di settore -------------------------- #}
+{% if show_context_section %}
+<h2>Perche&rsquo; questa verifica</h2>
+
+<p class="occhiello">Fino a pochi anni fa, fra la pubblicazione di una falla e il
+suo sfruttamento passavano mesi. Quel margine non c&rsquo;e&rsquo; piu&rsquo;. La
+difesa non puo&rsquo; piu&rsquo; basarsi sul tempo di reazione: deve basarsi su
+quanto poco si offre a chi attacca.</p>
+
+<h3>La finestra di reazione si e&rsquo; chiusa</h3>
+<p>Il tempo medio fra la divulgazione pubblica di una falla e il primo
+sfruttamento confermato e&rsquo; passato da oltre due anni a tre settimane. Il
+valore mediano e&rsquo; arrivato a zero ore: per meta&rsquo; delle falle
+osservate, lo sfruttamento e&rsquo; contemporaneo alla divulgazione.</p>
+
+<div class="figura">{{ figura_sfruttamento|safe }}</div>
+<p class="fonte">Tempo medio fra divulgazione e primo sfruttamento confermato,
+su oltre 3.500 vulnerabilita&rsquo;. Scala logaritmica. Elaborazione su dati
+Wiz Research, <em>The State of Cloud Risk 2026</em> (Zero Day Clock).</p>
+
+<p>Non e&rsquo; un problema di velocita&rsquo; delle correzioni: nessun processo
+di aggiornamento, per quanto ordinato, opera su quella scala di tempo. E&rsquo;
+un problema di <strong>superficie</strong>. Cio&rsquo; che non e&rsquo;
+raggiungibile da internet non entra in quella finestra.</p>
+
+<h3>Il rischio non sta dove si guarda</h3>
+<p>L&rsquo;attenzione si concentra sulle falle del software. I dati dicono
+un&rsquo;altra cosa: la quasi totalita&rsquo; del rischio realmente sfruttabile
+nasce da informazioni esposte, credenziali in circolazione e accessi non
+protetti. L&rsquo;esecuzione di codice da remoto &mdash; la categoria che
+assorbe la maggior parte degli sforzi &mdash; pesa per meno di un decimo.</p>
+
+<div class="figura">{{ figura_rischio|safe }}</div>
+<p class="fonte">Distribuzione dei rilievi sfruttabili di gravita&rsquo; alta e
+critica. Elaborazione su dati Wiz Research, <em>The State of Cloud Risk 2026</em>.</p>
+
+<div class="callout">
+  <strong>Che cosa misura questo documento.</strong> La verifica osserva
+  l&rsquo;azienda dall&rsquo;esterno, come la vedrebbe un estraneo prima di
+  qualsiasi contatto: quali sistemi rispondono su internet, quali informazioni
+  sono gia&rsquo; pubbliche, quali credenziali risultano in circolazione, come
+  e&rsquo; configurata la posta. Non entra nei sistemi e non prova intrusioni:
+  misura cio&rsquo; che si offre, prima che qualcuno lo raccolga.
+</div>
+{% endif %}
+
+{# ======================= 3. Che cosa abbiamo trovato ====================== #}
+
+{% if radar_svg %}
+<h2>Dove si concentra l&rsquo;esposizione</h2>
+<div class="radar-blocco">{{ radar_svg|safe }}</div>
+<p class="fonte">Piu&rsquo; il profilo si avvicina al centro, piu&rsquo; l&rsquo;area
+e&rsquo; esposta. Ogni asse e&rsquo; un&rsquo;area, il punteggio e&rsquo; su cento.</p>
+{% endif %}
+
+<h2>Che cosa abbiamo trovato</h2>
+{% if direzione.rilievi.schede %}
+<p>Li mettiamo in ordine di urgenza. Per ciascuno: che cosa manca, a che cosa
+somiglia, che cosa comporta.</p>
+
+{% for scheda in direzione.rilievi.schede %}
+<div class="scheda sev-{{ scheda.gravita }}">
+  <div class="scheda-testa">
+    <span class="scheda-titolo">{{ loop.index }}. {{ scheda.titolo }}</span>
+    <span class="badge sev-{{ scheda.gravita }}">{{ scheda.etichetta_gravita }}</span>
+  </div>
+  {% if scheda.manca %}<p><strong>Che cosa manca:</strong> {{ scheda.manca }}</p>{% endif %}
+  {% if scheda.paragone %}<p><strong>Un paragone:</strong> {{ scheda.paragone }}</p>{% endif %}
+  {% if scheda.comporta %}<p><strong>Che cosa comporta:</strong> {{ scheda.comporta }}</p>{% endif %}
+  {% if scheda.tempo %}
+  <p class="small muted"><strong>Impegno per sistemarlo:</strong> {{ scheda.tempo }}.</p>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% if direzione.rilievi.non_esposti %}
+<p class="small muted">Altri {{ direzione.rilievi.non_esposti }} interventi di rilevanza
+  minore sono descritti nell&rsquo;allegato tecnico.</p>
+{% endif %}
+{% if direzione.rilievi.informativi %}
+<p class="small muted">Sono stati registrati anche rilievi puramente informativi
+  ({{ direzione.rilievi.informativi|join('; ') }}): non incidono sul punteggio.</p>
+{% endif %}
+
+{% if direzione.buona_notizia %}
+<div class="callout buona">
+  <strong>La buona notizia</strong><br>{{ direzione.buona_notizia }}
+</div>
+{% endif %}
+{% else %}
+<p class="muted">Nel perimetro analizzato non sono emersi rilievi che richiedano un
+  intervento. L&rsquo;assenza di rilievi non costituisce prova di sicurezza: vale per
+  cio&rsquo; che si vede dall&rsquo;esterno e alla data della rilevazione.</p>
+{% endif %}
+
+{# ==================== 4. Che cosa puo' succedere davvero ================== #}
+{% if direzione.scenario %}
+<h2>Che cosa puo&rsquo; succedere davvero</h2>
+<p>{{ direzione.scenario.premessa }}</p>
+
+<div class="scenario">
+  <p class="scenario-titolo">{{ direzione.scenario.titolo }}</p>
+  <ol>{% for passo in direzione.scenario.passi %}<li>{{ passo }}</li>{% endfor %}</ol>
+</div>
+{% if direzione.scenario.variante %}<p>{{ direzione.scenario.variante }}</p>{% endif %}
+
+<h2>Perche&rsquo; il danno non e&rsquo; solo economico</h2>
+<ul class="elenco-danni">
+{% for voce in direzione.danno_oltre_il_denaro %}
+  <li><strong>{{ voce.titolo }}</strong> {{ voce.testo }}</li>
 {% endfor %}
 </ul>
 {% endif %}
 
-{# ----------------------- 8. Confronto con la precedente -------------------- #}
-<h2>Confronto con la scansione precedente</h2>
-{% if comparison and comparison.previous_score is not none %}
-<p>{{ comparison.summary_it }}</p>
-<table>
-  <tr><th style="width:60mm">Punteggio precedente</th>
-      <td>{{ '%.1f'|format(comparison.previous_score) }}/100
-        (classe {{ comparison.previous_class }})</td></tr>
-  <tr><th>Punteggio attuale</th>
-      <td>{{ '%.1f'|format(comparison.current_score) }}/100
-        (classe {{ comparison.current_class }})</td></tr>
-  <tr><th>Variazione</th><td>{{ '%+.1f'|format(comparison.score_delta) }} punti</td></tr>
-  <tr><th>Nuovi rilievi</th><td>{{ comparison.new_findings|length }}</td></tr>
-  <tr><th>Rilievi risolti</th><td>{{ comparison.resolved_findings|length }}</td></tr>
-  <tr><th>In attesa di conferma della chiusura</th>
-      <td>{{ comparison.pending_closure|length }}</td></tr>
-  <tr><th>Nuovi asset osservati</th><td>{{ comparison.new_assets|length }}</td></tr>
+<h2>Che cosa questa verifica non ha guardato</h2>
+<p>E&rsquo; giusto essere espliciti sui limiti, perche&rsquo; servono a leggere
+correttamente il punteggio.</p>
+<ul>
+{% for voce in direzione.limiti_divulgativi %}<li>{{ voce }}</li>{% endfor %}
+  <li>La fotografia vale al {{ generated_at.strftime('%d/%m/%Y') }}. Un&rsquo;esposizione
+    puo&rsquo; nascere la settimana successiva, con un nuovo servizio pubblicato o un
+    fornitore che cambia configurazione.</li>
+</ul>
+
+{# ======================= 5. Che cosa fare, in ordine ====================== #}
+{% if direzione.interventi %}
+<h2>Che cosa fare, in ordine</h2>
+<table class="interventi">
+  <thead><tr><th style="width:6%">#</th><th style="width:34%">Intervento</th>
+    <th style="width:24%">Quando</th><th style="width:36%">Come verificare che sia fatto</th></tr></thead>
+  <tbody>
+  {% for voce in direzione.interventi %}
+    <tr>
+      <td><strong>{{ loop.index }}</strong></td>
+      <td><strong>{{ voce.titolo }}</strong>
+        {% if voce.in_parole %}<br><span class="small muted">{{ voce.in_parole }}</span>{% endif %}</td>
+      <td>{{ voce.quando }}
+        {% if voce.tempo %}<br><span class="small muted">{{ voce.tempo }}</span>{% endif %}</td>
+      <td>{{ voce.verifica }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
 </table>
-{% else %}
-<p class="muted">Prima valutazione per questa organizzazione: non e' disponibile un confronto
-  con scansioni precedenti.</p>
 {% endif %}
 
-<div class="callout">
-  <strong>Disclaimer.</strong> {{ disclaimer }}
+{% if direzione.domande.voci %}
+<div class="callout buona">
+  <strong>{{ direzione.titolo_domande }}</strong><br>
+  Non serve altro per far partire la maggior parte del lavoro. Chiedi una risposta scritta.
+  <ol class="domande">
+  {% for voce in direzione.domande.voci %}
+    <li><strong>{{ voce.domanda }}</strong> <span class="muted">{{ voce.attesa }}</span></li>
+  {% endfor %}
+  </ol>
+</div>
+{% endif %}
+
+<div class="callout danger">
+  <strong>{{ direzione.raccomandazione_finale.titolo }}</strong><br>
+  {{ direzione.raccomandazione_finale.testo }}
 </div>
 
-<p class="small muted">
-  Perimetro analizzato, inventario degli asset, copertura degli strumenti, elenco
-  integrale dei rilievi e piano di rimedio completo sono riportati nell&rsquo;allegato
-  tecnico, documento separato.
-</p>
-
 {% if contact_block %}
-<section class="contatti">
-  <h2>Contatti</h2>
-  <p>{{ contact_block }}</p>
-</section>
+<h2>Il passo successivo</h2>
+<p class="contatti">{{ contact_block }}</p>
 {% endif %}
+
+<p class="nota-metodologica">
+  <strong>Nota metodologica.</strong> Questo documento e&rsquo; la sintesi divulgativa
+  del rapporto {{ brand.name }} Security Rating del
+  {{ generated_at.strftime('%d/%m/%Y') }}. Perimetro analizzato, inventario degli asset,
+  copertura degli strumenti, elenco integrale dei rilievi e piano di rimedio completo
+  sono nell&rsquo;allegato tecnico, documento separato. In caso di differenze fa fede
+  l&rsquo;allegato tecnico, che contiene le evidenze puntuali e i riferimenti normativi.
+  {{ disclaimer }}
+  {% if footer_text %}{{ footer_text }}{% endif %}
+  Documento riservato prodotto da {{ brand.owner }}. Distribuzione limitata al
+  destinatario. Piattaforma Defenix Security Rating {{ platform_version }}.
+</p>
 
 </body>
 </html>

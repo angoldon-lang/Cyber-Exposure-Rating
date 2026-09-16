@@ -1,11 +1,14 @@
 /* Foglio di stile dei report Defenix (PDF via WeasyPrint) */
 @page {
   size: A4;
-  margin: 20mm 16mm 18mm 16mm;
-  @top-center {
-    content: "Defenix Security Rating";
+  margin: 17mm 16mm 15mm 16mm;
+  /* Testatina di rincorsa: il nome dell'azienda, non quello del prodotto.
+     Il prodotto lo dice gia' la testata della prima pagina, e ripeterlo la'
+     sopra lo stampava due volte sullo stesso foglio. */
+  @top-right {
+    content: string(company-name);
     font-family: "DejaVu Sans", Helvetica, sans-serif;
-    font-size: 8pt; color: #8a8f98;
+    font-size: 7.5pt; letter-spacing: 1pt; color: #8a8f98;
   }
   @bottom-left {
     content: "Documento riservato - " string(company-name);
@@ -18,22 +21,6 @@
     font-size: 7.5pt; color: #8a8f98;
   }
 }
-/* La copertina occupa l'intera pagina, senza margini. La regola e' legata alla
-   pagina denominata e non a `:first`: i due documenti (esecutivo e allegato)
-   vengono renderizzati separatamente e le pagine concatenate, quindi `:first`
-   colpiva anche la prima pagina dell'allegato, che finiva contro il bordo. */
-@page copertina {
-  margin: 0;
-  /* Lo sfondo sta sulla PAGINA, non sul blocco: cosi' copre il foglio fino
-     ai bordi qualunque sia l'altezza del contenuto. Sul blocco lasciava una
-     striscia bianca in fondo ogni volta che il contenuto era piu' corto. */
-  background: linear-gradient(160deg, #0f3d5c 0%, #123a52 55%, #0b2436 100%);
-  @top-center { content: none; }
-  @bottom-left { content: none; }
-  @bottom-right { content: none; }
-}
-.cover { page: copertina; }
-
 :root {
   --ink: #12161c;
   --muted: #5c6470;
@@ -45,6 +32,12 @@
   --medium: #b45309;
   --low: #1d6a3a;
   --info: #4b5563;
+  /* Gravita' bassa: grigio, non verde. Il verde e' il colore di «a posto», e
+     su un rilievo — anche minore — dice il contrario di quel che c'e' scritto. */
+  --bassa: #6b7280;
+  /* Barra dei titoli di sezione. Resta verde anche quando il tenant cambia il
+     colore del marchio: e' il segnale di lettura, non un elemento di brand. */
+  --barra: #6b8e4e;
 }
 
 * { box-sizing: border-box; }
@@ -53,62 +46,102 @@ body {
   font-size: 9.5pt; line-height: 1.5; color: var(--ink); margin: 0;
 }
 
-/* ---------- copertina ---------- */
-.cover {
-  page-break-after: always;
-  /* La copertina deve stare in UNA pagina.
-     Era alta 297 mm, quanto un A4 intero, e sbordava: l'ultimo blocco
-     finiva su un secondo foglio quasi vuoto ma con lo sfondo pieno, in un
-     documento che ne ha cinque in tutto.
-     L'altezza utile misurata e' fra 270 e 285 mm — `@page copertina
-     { margin: 0 }` non libera l'intera pagina come ci si aspetterebbe —
-     quindi si sta sotto con un margine di sicurezza. Il numero e' empirico
-     e va trattato come tale: a garantirlo e'
-     `test_la_copertina_sta_in_una_pagina`, non questo commento.
-     `overflow: hidden` protegge dai testi personalizzati piu' lunghi del
-     previsto: meglio una nota accorciata che una pagina sprecata. */
-  height: 265mm; padding: 24mm 22mm; overflow: hidden;
-  color: #fff; display: flex; flex-direction: column; justify-content: space-between;
-}
-.cover h1 { font-size: 30pt; margin: 0 0 4mm; letter-spacing: -0.4pt; }
-.cover .subtitle { font-size: 12pt; color: #b9d4e6; margin: 0 0 10mm; }
-.cover .company { font-size: 19pt; font-weight: 700; margin: 0 0 2mm; }
-.cover .meta { font-size: 10pt; color: #c8dcea; }
-.cover .rating-block {
-  margin-top: 14mm; padding: 8mm; border: 1.5pt solid rgba(255,255,255,.28);
-  border-radius: 3mm; background: rgba(255,255,255,.07);
-}
-.cover .score { font-size: 46pt; font-weight: 700; line-height: 1; }
-.cover .class { font-size: 16pt; margin-top: 2mm; }
-.cover .confidence { font-size: 10pt; color: #c8dcea; margin-top: 4mm; }
-.cover .footer-note { font-size: 7.5pt; color: #9fbdd2; line-height: 1.4; }
-
 /* ---------- struttura ---------- */
+/* Il titolo di sezione porta una barra verticale a sinistra invece di una
+   riga sotto: separa senza tagliare la pagina in fasce, e resta leggibile
+   anche quando le sezioni sono corte e ravvicinate come qui. */
 h2 {
-  font-size: 14pt; color: var(--brand); margin: 9mm 0 3mm;
-  padding-bottom: 1.5mm; border-bottom: 1pt solid var(--line);
+  font-family: "DejaVu Serif", Georgia, serif;
+  font-size: 12.5pt; color: var(--brand); margin: 4mm 0 2mm;
+  padding: 0 0 0 3mm; border-left: 2.5pt solid var(--barra);
   page-break-after: avoid;
 }
-h3 { font-size: 11pt; margin: 6mm 0 2mm; page-break-after: avoid; }
+h3 {
+  font-family: "DejaVu Serif", Georgia, serif;
+  font-size: 10.5pt; color: var(--brand); margin: 5mm 0 2mm;
+  page-break-after: avoid;
+}
 p { margin: 0 0 3mm; }
 .company-name { string-set: company-name content(); }
 
-table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; font-size: 8.5pt; }
-th, td { padding: 2mm 2.5mm; border-bottom: 0.5pt solid var(--line); text-align: left;
+/* ---------- testata e apertura ---------- */
+.masthead {
+  display: flex; align-items: flex-end;
+  border-bottom: 2.5pt solid var(--brand);
+  padding-bottom: 2mm; margin-bottom: 4mm;
+}
+.masthead img { max-height: 13mm; max-width: 55mm; }
+.masthead-titolo {
+  /* `margin-left: auto` e non `justify-content`: senza logo il titolo resta
+     comunque a destra, dove lo si cerca. */
+  margin-left: auto;
+  font-size: 7.5pt; color: var(--muted); letter-spacing: 1.4pt;
+  text-transform: uppercase; text-align: right;
+}
+h1 {
+  font-family: "DejaVu Serif", Georgia, serif;
+  font-size: 19.5pt; line-height: 1.15; color: var(--brand);
+  margin: 0 0 2.5mm; letter-spacing: -0.2pt;
+}
+.occhiello { font-size: 9.5pt; color: #3a424e; margin-bottom: 2.5mm; }
+
+/* Anagrafica: due colonne, etichetta a sinistra, nessuna intestazione. Non e'
+   una tabella di dati, e' la carta d'identita' del documento. */
+table.anagrafica th {
+  background: none; width: 46mm; color: var(--muted); font-weight: 400;
+  border-bottom: 0.5pt solid var(--line);
+}
+table.anagrafica td { padding-left: 4mm; }
+
+/* Il voto. Il numero e' la prima cosa che si guarda, e deve reggere da solo
+   anche fotocopiato in bianco e nero: sta in un riquadro, grande. */
+.riquadro-esito {
+  display: flex; align-items: center; gap: 8mm;
+  background: #f1f5f9; border-left: 3pt solid var(--brand);
+  padding: 2.5mm 6mm; margin: 0 0 2.5mm; page-break-inside: avoid;
+}
+.voto { white-space: nowrap; padding-right: 3mm; }
+.voto-numero {
+  font-family: "DejaVu Serif", Georgia, serif;
+  font-size: 33pt; font-weight: 700; color: var(--brand); line-height: 1;
+}
+.voto-su { font-size: 12pt; color: var(--muted); }
+.voto-testo { flex: 1; }
+.voto-classe {
+  font-family: "DejaVu Serif", Georgia, serif;
+  font-size: 13pt; color: var(--brand); margin: 0 0 1.5mm;
+}
+.voto-nota { font-size: 8.5pt; color: var(--muted); margin: 0; }
+
+/* Le aree: un pallino dice subito quali guardare, il colore non e' l'unico
+   segnale (la riga critica e' anche in neretto). */
+.pallino {
+  display: inline-block; width: 2mm; height: 2mm; border-radius: 50%;
+  margin-right: 2mm; vertical-align: middle;
+}
+.pallino.verde { background: var(--low); }
+.pallino.rosso { background: var(--critical); }
+table.aree tr.area-critica td { font-weight: 700; }
+table.aree tr.area-critica .muted { font-weight: 400; }
+table.perimetro td { font-size: 9.5pt; }
+
+table { width: 100%; border-collapse: collapse; margin: 2mm 0 3mm; font-size: 8.2pt; }
+th, td { padding: 1.5mm 2.5mm; border-bottom: 0.5pt solid var(--line); text-align: left;
          vertical-align: top; }
-th { background: #f2f5f8; color: var(--brand); font-weight: 700;
-     border-bottom: 1pt solid var(--line); }
+th { background: var(--brand); color: #fff; font-weight: 700;
+     font-size: 7.5pt; letter-spacing: 0.8pt; text-transform: uppercase;
+     border-bottom: none; }
 tr { page-break-inside: avoid; }
 
 .badge {
   display: inline-block; padding: 0.4mm 2mm; border-radius: 1.2mm;
   font-size: 7.5pt; font-weight: 700; color: #fff; white-space: nowrap;
 }
-.sev-critical { background: var(--critical); }
-.sev-high { background: var(--high); }
-.sev-medium { background: var(--medium); }
-.sev-low { background: var(--low); }
-.sev-info { background: var(--info); }
+.badge.sev-critical { background: var(--critical); }
+.badge.sev-high { background: var(--high); }
+.badge.sev-medium { background: var(--medium); }
+.badge.sev-low { background: var(--bassa); }
+.badge.sev-info { background: var(--info); }
 
 .class-A { color: #1d6a3a; } .class-B { color: #3f7d20; }
 .class-C { color: #b45309; } .class-D { color: #c2410c; } .class-E { color: #9b1c1c; }
@@ -118,10 +151,17 @@ tr { page-break-inside: avoid; }
 
 .callout {
   border-left: 2.5pt solid var(--accent); background: #f4f8fb;
-  padding: 3mm 4mm; margin: 4mm 0; page-break-inside: avoid;
+  padding: 2.5mm 4mm; margin: 3.5mm 0; page-break-inside: avoid;
 }
 .callout.warning { border-left-color: var(--high); background: #fdf5f0; }
 .callout.danger { border-left-color: var(--critical); background: #fdf2f2; }
+.callout.attenzione { border-left-color: #c08a2e; background: #fdf8ee; }
+.callout.buona { border-left-color: var(--low); background: #f1f7f2; }
+.callout > strong:first-child {
+  font-family: "DejaVu Serif", Georgia, serif; font-size: 10.5pt; color: var(--brand);
+}
+.callout ol.domande { margin: 2mm 0 0; padding-left: 6mm; }
+.callout ol.domande li { margin-bottom: 1.5mm; }
 
 .finding {
   border: 0.5pt solid var(--line); border-radius: 1.5mm;
@@ -141,25 +181,64 @@ li { margin-bottom: 1mm; }
 .no-break { page-break-inside: avoid; }
 
 /* Personalizzazione del tenant ------------------------------------------- */
-.cover .logo { max-height: 60px; max-width: 240px; margin-bottom: 12px; }
 .intro { font-size: 10.5pt; border-left: 3px solid #ccc; padding-left: 10px; margin-bottom: 14px; }
-.contatti { margin-top: 24px; }
-.contatti p { white-space: pre-line; }
+.contatti { white-space: pre-line; }
 
 /* Radar delle aree tematiche. Il blocco e' centrato e non si spezza fra due
    pagine: un grafico tagliato a meta' non si legge. */
 .radar-blocco {
   text-align: center;
-  margin: 2mm 0 1mm;
+  margin: 1mm 0 0;
   page-break-inside: avoid;
 }
-.radar-blocco svg { max-width: 132mm; height: auto; }
+.radar-blocco svg { max-width: 112mm; height: auto; }
 
 /* Figure della sezione di contesto. Come il radar, il blocco non si spezza
    fra due pagine: un grafico tagliato a meta' non si legge. */
 .figura { text-align: center; margin: 4mm 0 1mm; page-break-inside: avoid; }
 .figura svg { width: 150mm; height: auto; }
 .fonte { font-size: 7.5pt; color: var(--muted); margin: 0 0 5mm; text-align: center; }
+
+/* ---------- rilievi in parole semplici ---------- */
+/* Una scheda per intervento, non per rilievo: chi legge deve decidere sugli
+   interventi. Il filo di gravita' sta in alto, dove cade l'occhio. */
+.scheda {
+  border: 0.5pt solid var(--line); border-top-width: 2.5pt;
+  padding: 3mm 4mm 1.5mm; margin: 0 0 3.5mm; page-break-inside: avoid;
+}
+.scheda.sev-critical { border-top-color: var(--critical); }
+.scheda.sev-high { border-top-color: var(--high); }
+.scheda.sev-medium { border-top-color: var(--medium); }
+.scheda.sev-low { border-top-color: var(--bassa); }
+.scheda-testa {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 4mm; margin-bottom: 2mm;
+}
+.scheda-titolo {
+  font-family: "DejaVu Serif", Georgia, serif; font-size: 11pt; color: var(--brand);
+}
+.scheda p { margin: 0 0 1.8mm; font-size: 9pt; }
+
+/* La scena: numerata, su fondo tenue, perche' si legga come un racconto e non
+   come un elenco di requisiti. */
+.scenario {
+  background: #f1f5f9; border-left: 2.5pt solid var(--brand);
+  padding: 3mm 4mm 1mm 4mm; margin: 0 0 4mm;
+}
+.scenario-titolo {
+  font-family: "DejaVu Serif", Georgia, serif; font-size: 11pt;
+  color: var(--brand); margin: 0 0 2mm;
+}
+.scenario ol { margin: 0; padding-left: 6mm; }
+.scenario li { margin-bottom: 2mm; }
+.elenco-danni li { margin-bottom: 2mm; }
+
+table.interventi { table-layout: fixed; }
+table.interventi td { font-size: 8.5pt; }
+.nota-metodologica {
+  font-size: 7.5pt; color: var(--muted); line-height: 1.45;
+  border-top: 0.5pt solid var(--line); padding-top: 2.5mm; margin-top: 6mm;
+}
 
 /* ---------- documento dimostrativo ---------- */
 /* `position: fixed` in stampa ripete l'elemento su OGNI pagina: e' cio' che
@@ -176,5 +255,5 @@ li { margin-bottom: 1mm; }
 .banda-demo {
   background: #9b1c1c; color: #fff;
   font-size: 10pt; font-weight: 700; letter-spacing: .4pt;
-  padding: 3mm 6mm; margin: -12mm -12mm 8mm; border-radius: 2mm;
+  padding: 2.5mm 5mm; margin: 0 0 6mm; border-radius: 1.5mm;
 }

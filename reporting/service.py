@@ -11,17 +11,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
 
 from app.core.config import settings
 from app.core.logging import get_logger
 from reporting.context import (
     CONFIDENCE_LABEL_IT,
-    EFFORT_LABEL_IT,
     OWNERSHIP_LABEL_IT,
-    PRIORITY_LABEL_IT,
     SEVERITY_LABEL_IT,
+    TIPO_VERIFICA_IT,
     ReportContext,
 )
+from reporting.narrativa import sintesi_per_la_direzione
 
 logger = get_logger(__name__)
 
@@ -57,24 +58,47 @@ def _stylesheet() -> str:
     return (TEMPLATE_DIR / "base.css").read_text(encoding="utf-8")
 
 
+# I due documenti sono renderizzati separatamente e le pagine concatenate:
+# `counter(pages)` vale percio' per ciascuno dei due, e nel PDF finale la
+# numerazione riparte da uno a meta' documento. Non si puo' unificare senza
+# unire i due modelli; si puo' pero' dire a quale dei due appartiene ogni
+# numero, che e' cio' che serve a chi ha il documento in mano.
+_NUMERAZIONE_ALLEGATO = """
+@page {
+  @bottom-right { content: "Allegato tecnico - pagina " counter(page) " di " counter(pages); }
+}
+"""
+
+
 def render_html(context: ReportContext, template_name: str) -> str:
     template = _environment().get_template(template_name)
-    return template.render(**context.as_dict(), stylesheet=_stylesheet_per(context))
+    # Il foglio di stile va passato come `Markup`, altrimenti l'autoescape gli
+    # trasforma ogni virgoletta in `&#34;` e il CSS arriva a WeasyPrint con
+    # tutte le stringhe rotte: `content: "Pagina "` non produce nulla,
+    # `font-family: "DejaVu Sans"` cade sul ripiego generico. Il contenuto e'
+    # nostro: l'unico valore che arriva dall'esterno e' il colore del tenant,
+    # che `_stylesheet_per` accetta solo in notazione esadecimale.
+    stile = _stylesheet_per(context)
+    if template_name == "technical.html.j2":
+        stile += _NUMERAZIONE_ALLEGATO
+    return template.render(**context.as_dict(), stylesheet=Markup(stile))
 
 
 def _stylesheet_per(context: ReportContext) -> str:
     """Foglio di stile con il colore del tenant, se impostato.
 
     Il valore e' gia' vincolato alla sola notazione esadecimale dallo schema di
-    validazione: qui viene comunque riverificato, perche' il foglio di stile non
-    passa dall'autoescape dei template.
+    validazione: qui viene comunque riverificato, perche' il foglio di stile
+    viene consegnato al modello come `Markup` e non passa quindi
+    dall'autoescape.
     """
     base = _stylesheet()
     colore = (context.brand or {}).get("color") or ""
     if not re.fullmatch(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})", colore):
         return base
-    return f"{base}\n:root {{ --brand: {colore}; }}\n" \
-           f"h1, h2 {{ color: {colore}; }}\n.cover {{ border-top: 6px solid {colore}; }}\n"
+    return (f"{base}\n:root {{ --brand: {colore}; }}\n"
+            f"h1, h2, h3 {{ color: {colore}; }}\n"
+            f".masthead {{ border-bottom-color: {colore}; }}\n")
 
 
 def _slug(value: str) -> str:
@@ -108,131 +132,195 @@ def generate_pdf(context: ReportContext, *, include_technical: bool = True) -> G
 
 
 def generate_docx(context: ReportContext, *, include_technical: bool = True) -> GeneratedReport:
-    """Report Word tramite python-docx."""
+    """Report Word tramite python-docx.
+
+    Segue la stessa scaletta del PDF, con gli stessi testi: chi esporta in
+    Word perche' deve rimaneggiare il documento non deve ritrovarsi con una
+    versione che dice altro.
+    """
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.shared import Pt, RGBColor
 
     document = Document()
+    direzione = sintesi_per_la_direzione(
+        categories=context.categories, coverage_matrix=context.coverage_matrix,
+        remediation_plan=context.remediation_plan, overall_score=context.overall_score)
 
-    # --- copertina ---
-    title = document.add_heading(f"{context.brand['name']} Security Rating", level=0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    subtitle = document.add_paragraph(
-        "Valutazione dell'esposizione cyber osservabile dall'esterno")
-    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    def _tabella(intestazioni: tuple[str, ...]):  # noqa: ANN202
+        tabella = document.add_table(rows=1, cols=len(intestazioni))
+        tabella.style = "Light Grid Accent 1"
+        for indice, etichetta in enumerate(intestazioni):
+            tabella.rows[0].cells[indice].text = etichetta
+        return tabella
 
-    document.add_paragraph()
-    heading = document.add_paragraph()
-    run = heading.add_run(context.company_name)
-    run.bold = True
-    run.font.size = Pt(18)
-    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # --- apertura ---
+    if context.is_demo:
+        avviso = document.add_paragraph()
+        corsa = avviso.add_run("Documento dimostrativo - dati sintetici, "
+                               "non una valutazione reale")
+        corsa.bold = True
+        corsa.font.color.rgb = RGBColor(0x9B, 0x1C, 0x1C)
 
-    meta = document.add_paragraph()
-    meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    meta.add_run(f"Data: {context.generated_at:%d/%m/%Y}\n"
-                 f"Profilo di scansione: {context.profile_label}")
-
-    document.add_paragraph()
-    rating = document.add_paragraph()
-    rating.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    if context.is_provisional:
-        run = rating.add_run("Valutazione provvisoria")
-        run.font.size = Pt(20)
-        run.font.color.rgb = RGBColor(0xC2, 0x41, 0x0C)
-        document.add_paragraph(context.provisional_notice or "").alignment = \
-            WD_ALIGN_PARAGRAPH.CENTER
-    else:
-        run = rating.add_run(f"{context.overall_score:.0f}/100 - Classe {context.rating_class}")
-        run.bold = True
-        run.font.size = Pt(24)
-        document.add_paragraph(context.rating_label).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    titolo = document.add_heading(
+        "Quanto e' esposta l'azienda, spiegato in parole semplici", level=0)
+    titolo.alignment = WD_ALIGN_PARAGRAPH.LEFT
     document.add_paragraph(
-        f"Affidabilita' della rilevazione: {context.confidence_value:.0f}% "
-        f"({context.confidence_label})").alignment = WD_ALIGN_PARAGRAPH.CENTER
+        "Questo documento riassume in poche pagine il risultato della verifica tecnica. "
+        "Nessuna sigla senza spiegazione: che cosa abbiamo visto, che cosa puo' succedere "
+        "e che cosa conviene fare.")
 
-    document.add_paragraph()
-    disclaimer = document.add_paragraph()
-    disclaimer.add_run(context.disclaimer).italic = True
-    document.add_page_break()
-
-    # --- perimetro ---
-    document.add_heading("Perimetro della valutazione", level=1)
-    scope_table = document.add_table(rows=0, cols=2)
-    scope_table.style = "Light Grid Accent 1"
-    for label, value in (
-        ("Profilo di scansione", context.profile_label),
-        ("Domini analizzati", ", ".join(context.scope.get("domains", [])) or "nessuno"),
-        ("Domini verificati", ", ".join(context.scope.get("verified_domains", []))
-         or "nessun dominio verificato"),
-        ("Indirizzi IP autorizzati", ", ".join(context.scope.get("ip_addresses", [])) or "-"),
-        ("Reti autorizzate", ", ".join(context.scope.get("network_ranges", [])) or "-"),
-        ("Esclusioni", ", ".join(context.scope.get("excluded", [])) or "nessuna"),
+    anagrafica = document.add_table(rows=0, cols=2)
+    anagrafica.style = "Light List Accent 1"
+    domini = ", ".join(context.domini_analizzati()) or "nessuno"
+    for etichetta, valore in (
+        ("Azienda", context.company_name),
+        ("P.IVA / VAT", context.company_vat or "-"),
+        ("Domini analizzati" if len(context.domini_analizzati()) > 1 else "Dominio analizzato",
+         domini),
+        ("Data della verifica", f"{context.generated_at:%d/%m/%Y}"),
+        ("Tipo di verifica", TIPO_VERIFICA_IT.get(
+            context.profile_key, "Analisi dall'esterno, senza accesso ai sistemi aziendali")),
     ):
-        row = scope_table.add_row().cells
-        row[0].text = label
-        row[1].text = value
+        riga = anagrafica.add_row().cells
+        riga[0].text = etichetta
+        riga[1].text = valore
 
-    # --- rating tematici ---
-    document.add_heading("Rating per area tematica", level=1)
-    table = document.add_table(rows=1, cols=4)
-    table.style = "Light Grid Accent 1"
-    header = table.rows[0].cells
-    for index, label in enumerate(("Area", "Peso", "Punteggio", "Rilievi")):
-        header[index].text = label
-    for category in context.categories:
-        row = table.add_row().cells
-        row[0].text = str(category.get("label_it", category.get("key")))
-        row[1].text = f"{float(category.get('weight', 0)) * 100:.0f}%"
-        row[2].text = f"{float(category.get('score', 0)):.0f}/100"
-        row[3].text = str(category.get("finding_count", 0))
-
-    # --- rischi principali ---
-    document.add_heading("Principali rischi rilevati", level=1)
-    if context.top_risks:
-        risks = document.add_table(rows=1, cols=4)
-        risks.style = "Light Grid Accent 1"
-        header = risks.rows[0].cells
-        for index, label in enumerate(("Rif.", "Severita'", "Rilievo", "Attendibilita'")):
-            header[index].text = label
-        for risk in context.top_risks:
-            row = risks.add_row().cells
-            row[0].text = str(risk.get("reference_code", ""))
-            row[1].text = SEVERITY_LABEL_IT.get(str(risk.get("severity")), "")
-            row[2].text = str(risk.get("title", ""))
-            row[3].text = CONFIDENCE_LABEL_IT.get(str(risk.get("confidence_class")), "")
+    # --- il risultato ---
+    document.add_heading("Il risultato in due righe", level=1)
+    esito = document.add_paragraph()
+    if context.is_provisional:
+        corsa = esito.add_run("Valutazione provvisoria")
+        corsa.font.size = Pt(20)
+        corsa.font.color.rgb = RGBColor(0xC2, 0x41, 0x0C)
+        document.add_paragraph(context.provisional_notice or "")
     else:
-        document.add_paragraph("Nessun rilievo significativo nel perimetro analizzato. "
-                               "L'assenza di rilievi non costituisce prova di sicurezza.")
+        corsa = esito.add_run(f"{context.overall_score:.0f}/100 - Classe {context.rating_class} "
+                              f"- {context.rating_label.lower()}")
+        corsa.bold = True
+        corsa.font.size = Pt(20)
+        document.add_paragraph(direzione["sintesi_risultato"])
+    document.add_paragraph(f"In pratica: {direzione['in_pratica']}")
 
-    # --- piano di remediation ---
-    document.add_heading("Priorita' di intervento", level=1)
-    for index, item in enumerate(context.remediation_plan[:10], start=1):
-        paragraph = document.add_paragraph(style="List Number")
-        paragraph.add_run(f"{item['title_it']} ").bold = True
-        paragraph.add_run(
-            f"(priorita': {PRIORITY_LABEL_IT.get(item['priority'], item['priority'])}, "
-            f"impegno: {EFFORT_LABEL_IT.get(item['effort'], item['effort'])})\n")
-        paragraph.add_run(f"Azione immediata: {item['immediate_action_it']}").italic = True
+    if context.applied_caps:
+        document.add_paragraph("Il punteggio e' stato limitato d'ufficio:").bold = True
+        for cap in context.applied_caps:
+            document.add_paragraph(
+                f"{cap.get('reason_it', '')} - punteggio massimo consentito: "
+                f"{int(cap.get('max_score', 0))}/100", style="List Bullet")
 
-    if context.quick_wins:
-        document.add_heading("Interventi rapidi ad alto beneficio", level=2)
-        for item in context.quick_wins:
-            document.add_paragraph(f"{item['title_it']}: {item['immediate_action_it']}",
-                                   style="List Bullet")
+    # --- le aree ---
+    document.add_heading(direzione["titolo_aree"], level=1)
+    aree = _tabella(("Area", "Esito", "Che cosa significa"))
+    for area in direzione["aree"]:
+        riga = aree.add_row().cells
+        riga[0].text = area["nome"]
+        riga[1].text = f"{area['punteggio']:.0f}/100"
+        riga[2].text = " ".join(x for x in (area["significato"], area["nota_copertura"]) if x)
 
-    # --- confronto ---
-    document.add_heading("Confronto con la scansione precedente", level=1)
-    if context.comparison and context.comparison.get("previous_score") is not None:
-        document.add_paragraph(str(context.comparison.get("summary_it", "")))
+    document.add_heading("Il perimetro osservato", level=1)
+    perimetro = _tabella(("Elementi aziendali", "Domini e sottodomini",
+                          "Indirizzi internet", "Rilievi complessivi"))
+    riga = perimetro.add_row().cells
+    riepilogo = context.exposure_summary
+    riga[0].text = (f"{riepilogo.get('total_assets', 0)} "
+                    f"({riepilogo.get('verified_assets', 0)} confermati dell'azienda)")
+    riga[1].text = str(riepilogo.get("domains", 0))
+    riga[2].text = str(riepilogo.get("ip_addresses", 0))
+    riga[3].text = (f"{riepilogo.get('findings_total', 0)} "
+                    f"({riepilogo.get('critical', 0)} critici, {riepilogo.get('high', 0)} gravi)")
+
+    avvertenza = direzione["avvertenza_punteggio"]
+    document.add_paragraph(avvertenza["titolo"]).bold = True
+    document.add_paragraph(
+        f"Affidabilita' della rilevazione: {context.confidence_value:.0f}%. Dove un controllo "
+        f"non gira, l'area resta alta per assenza di prove, non perche' sia stato dimostrato "
+        f"che tutto e' a posto. {avvertenza['chiusura']}")
+
+    # --- che cosa abbiamo trovato ---
+    document.add_page_break()
+    document.add_heading("Che cosa abbiamo trovato", level=1)
+    schede = direzione["rilievi"]["schede"]
+    if schede:
+        for indice, scheda in enumerate(schede, start=1):
+            document.add_heading(
+                f"{indice}. {scheda['titolo']} [{scheda['etichetta_gravita']}]", level=2)
+            for etichetta, testo in (("Che cosa manca", scheda["manca"]),
+                                     ("Un paragone", scheda["paragone"]),
+                                     ("Che cosa comporta", scheda["comporta"]),
+                                     ("Impegno per sistemarlo", scheda["tempo"])):
+                if not testo:
+                    continue
+                paragrafo = document.add_paragraph()
+                paragrafo.add_run(f"{etichetta}: ").bold = True
+                paragrafo.add_run(testo)
+        if direzione["rilievi"]["informativi"]:
+            document.add_paragraph(
+                "Rilievi puramente informativi, che non incidono sul punteggio: "
+                + "; ".join(direzione["rilievi"]["informativi"]) + ".")
+        if direzione["buona_notizia"]:
+            document.add_paragraph("La buona notizia").bold = True
+            document.add_paragraph(direzione["buona_notizia"])
     else:
-        document.add_paragraph("Prima valutazione: nessun confronto disponibile.")
+        document.add_paragraph(
+            "Nel perimetro analizzato non sono emersi rilievi che richiedano un intervento. "
+            "L'assenza di rilievi non costituisce prova di sicurezza.")
 
-    # --- limiti ---
-    document.add_heading("Limiti della valutazione", level=1)
-    for limit in context.limits:
-        document.add_paragraph(limit, style="List Bullet")
+    # --- che cosa puo' succedere ---
+    scenario = direzione["scenario"]
+    if scenario:
+        document.add_heading("Che cosa puo' succedere davvero", level=1)
+        document.add_paragraph(scenario["premessa"])
+        document.add_paragraph(scenario["titolo"]).bold = True
+        for passo in scenario["passi"]:
+            document.add_paragraph(passo, style="List Number")
+        if scenario["variante"]:
+            document.add_paragraph(scenario["variante"])
+
+        document.add_heading("Perche' il danno non e' solo economico", level=1)
+        for voce in direzione["danno_oltre_il_denaro"]:
+            paragrafo = document.add_paragraph(style="List Bullet")
+            paragrafo.add_run(f"{voce['titolo']} ").bold = True
+            paragrafo.add_run(voce["testo"])
+
+    document.add_heading("Che cosa questa verifica non ha guardato", level=1)
+    for voce in direzione["limiti_divulgativi"]:
+        document.add_paragraph(voce, style="List Bullet")
+    document.add_paragraph(
+        f"La fotografia vale al {context.generated_at:%d/%m/%Y}. Un'esposizione puo' nascere "
+        f"la settimana successiva, con un nuovo servizio pubblicato o un fornitore che cambia "
+        f"configurazione.", style="List Bullet")
+
+    # --- che cosa fare ---
+    if direzione["interventi"]:
+        document.add_page_break()
+        document.add_heading("Che cosa fare, in ordine", level=1)
+        piano = _tabella(("#", "Intervento", "Quando", "Come verificare che sia fatto"))
+        for indice, voce in enumerate(direzione["interventi"], start=1):
+            riga = piano.add_row().cells
+            riga[0].text = str(indice)
+            riga[1].text = " - ".join(x for x in (voce["titolo"], voce["in_parole"]) if x)
+            riga[2].text = " - ".join(x for x in (voce["quando"], voce["tempo"]) if x)
+            riga[3].text = voce["verifica"]
+
+    domande = direzione["domande"]
+    if domande.get("voci"):
+        document.add_heading(direzione["titolo_domande"], level=1)
+        document.add_paragraph(
+            "Non serve altro per far partire la maggior parte del lavoro. "
+            "Chiedi una risposta scritta.")
+        for voce in domande["voci"]:
+            paragrafo = document.add_paragraph(style="List Number")
+            paragrafo.add_run(voce["domanda"]).bold = True
+            paragrafo.add_run(f" {voce['attesa']}")
+
+    raccomandazione = direzione["raccomandazione_finale"]
+    document.add_heading(raccomandazione["titolo"], level=1)
+    document.add_paragraph(raccomandazione["testo"])
+
+    if context.contact_block:
+        document.add_heading("Il passo successivo", level=1)
+        document.add_paragraph(context.contact_block)
 
     # --- allegato tecnico ---
     if include_technical:
@@ -263,7 +351,14 @@ def generate_docx(context: ReportContext, *, include_technical: bool = True) -> 
                 document.add_paragraph(f"Verifica: {remediation['verification_it']}")
 
     document.add_paragraph()
-    document.add_paragraph(context.disclaimer).italic = True
+    nota = document.add_paragraph()
+    nota.add_run("Nota metodologica. ").bold = True
+    nota.add_run(
+        f"Perimetro analizzato, inventario degli asset, copertura degli strumenti, elenco "
+        f"integrale dei rilievi e piano di rimedio completo sono nell'allegato tecnico. "
+        f"In caso di differenze fa fede l'allegato tecnico. {context.disclaimer} "
+        f"Documento riservato prodotto da {context.brand['owner']}. Distribuzione limitata "
+        f"al destinatario.").italic = True
 
     buffer = io.BytesIO()
     document.save(buffer)

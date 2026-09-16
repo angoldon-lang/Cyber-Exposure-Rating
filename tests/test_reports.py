@@ -205,7 +205,7 @@ def test_cap_dichiarato_nel_report():
         "categories": [],
         "confidence": {"value": 88.0, "label_it": "Alta affidabilita'"}})
     testo = service.generate_html(contesto).content.decode("utf-8")
-    assert "Limitazione del punteggio applicata" in testo
+    assert "punteggio e&rsquo; stato limitato" in testo
     assert "Pubblicazione ransomware attiva" in testo
 
 

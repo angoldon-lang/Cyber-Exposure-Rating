@@ -57,6 +57,14 @@ LIMITS_IT = [
     "dal calcolo del rating.",
 ]
 
+# Come si chiama, per chi legge, cio' che e' stato fatto. «Verified Standard
+# Check» e' il nome del profilo, non una spiegazione.
+TIPO_VERIFICA_IT = {
+    "public_passive": "Analisi da fonti pubbliche, senza alcun contatto con i sistemi aziendali",
+    "verified_standard": "Analisi dall'esterno, senza accesso ai sistemi aziendali",
+    "verified_extended": "Analisi estesa dall'esterno, senza accesso ai sistemi aziendali",
+}
+
 SEVERITY_LABEL_IT = {"critical": "Critica", "high": "Alta", "medium": "Media",
                      "low": "Bassa", "info": "Informativa"}
 CONFIDENCE_LABEL_IT = {"confirmed": "Confermata", "probable": "Probabile",
@@ -117,13 +125,39 @@ class ReportContext:
     # ha un valore predefinito, e in un dataclass quelli vengono per ultimi.
     is_demo: bool = False
 
+    def domini_analizzati(self) -> list[str]:
+        """I domini dichiarati nel perimetro, in ordine e senza duplicati.
+
+        La prima pagina deve dire su che cosa e' stata fatta la verifica: un
+        rapporto che non nomina il dominio analizzato non e' verificabile da
+        chi lo riceve.
+        """
+        visti: list[str] = []
+        for chiave in ("verified_domains", "domains"):
+            for dominio in self.scope.get(chiave) or []:
+                testo = str(dominio).strip()
+                if testo and testo not in visti:
+                    visti.append(testo)
+        return visti
+
     def as_dict(self) -> dict[str, Any]:
         from app.core.config import settings
 
         from reporting.figure_contesto import dove_sta_il_rischio, finestra_di_sfruttamento
+        from reporting.narrativa import sintesi_per_la_direzione
         from reporting.radar import grafico_radar
 
+        # Il rapporto per la direzione e' scritto in italiano corrente: i testi
+        # stanno in `config/narrativa_direzione.yaml` e qui vengono solo
+        # associati a cio' che il motore ha gia' deciso.
+        direzione = sintesi_per_la_direzione(
+            categories=self.categories, coverage_matrix=self.coverage_matrix,
+            remediation_plan=self.remediation_plan, overall_score=self.overall_score)
         return {
+            "direzione": direzione,
+            "tipo_verifica": TIPO_VERIFICA_IT.get(
+                self.profile_key, "Analisi dall'esterno, senza accesso ai sistemi aziendali"),
+            "domini_analizzati": self.domini_analizzati(),
             # Un report circola per mesi: senza sapere con quale versione della
             # piattaforma e' stato prodotto, un risultato diverso da una
             # rilevazione successiva non e' spiegabile.
@@ -136,8 +170,12 @@ class ReportContext:
             "figura_rischio": dove_sta_il_rischio(),
             # Il radar arriva al modello gia' disegnato: SVG calcolato, non
             # un'immagine da risolvere durante la generazione del PDF.
+            # Il radar sta nel rapporto per la direzione: sugli assi vanno i
+            # nomi correnti delle aree, non le etichette del modello di rating.
             "radar_svg": grafico_radar(
-                self.categories, colore=self.brand.get("color") or "#1f4e79"),
+                [{"label_it": area["nome_breve"], "score": area["punteggio"]}
+                 for area in direzione["aree"]],
+                colore=self.brand.get("color") or "#1f4e79"),
             "company_name": self.company_name, "company_vat": self.company_vat,
             "generated_at": self.generated_at, "language": self.language,
             "profile_key": self.profile_key, "profile_label": self.profile_label,

@@ -1,0 +1,700 @@
+# Lingua della sintesi per la direzione.
+#
+# Il rapporto esecutivo si rivolge a chi decide, non a chi configura: nomi
+# delle aree senza sigle, un paragone per ogni rilievo, una scena di quel che
+# puo' succedere davvero. Questi testi NON entrano nel calcolo del punteggio e
+# non descrivono alcuna evidenza: traducono in italiano corrente cio' che il
+# motore ha gia' deciso. Il rapporto tecnico resta la fonte dei fatti.
+version: "1.0.0"
+
+# --------------------------------------------------------------------------
+# Le aree del rating, dette come le direbbe chi non fa questo mestiere.
+# `esito_positivo` e' la frase da mostrare quando nell'area non e' emerso
+# nulla: «nessun rilievo» non e' una risposta, e non va confuso con «sicuro».
+# `nome_breve` e' quello che sta sull'asse del radar: li' lo spazio e' poco e
+# un nome troncato non si legge.
+# --------------------------------------------------------------------------
+aree:
+  attack_surface:
+    nome: "Servizi aziendali visibili da internet"
+    nome_breve: "Servizi esposti"
+    esito_positivo: >-
+      Non sono emersi accessi o servizi lasciati aperti verso l'esterno.
+    esito_negativo: >-
+      Risultano raggiungibili dall'esterno servizi che non dovrebbero esserlo,
+      o che lo sono senza protezione adeguata.
+  technical_vulnerabilities:
+    nome: "Falle tecniche note"
+    nome_breve: "Falle tecniche"
+    esito_positivo: >-
+      Sui sistemi raggiunti non risultano vulnerabilita' gia' catalogate
+      pubblicamente.
+    esito_negativo: >-
+      Su sistemi raggiungibili da internet girano versioni con falle gia'
+      pubbliche, per le quali esiste una correzione.
+  web_security:
+    nome: "Sicurezza del sito web"
+    nome_breve: "Sito web"
+    esito_positivo: "Nessun problema rilevato."
+    esito_negativo: >-
+      La configurazione dei siti lascia spazio a manomissioni del contenuto o
+      all'intercettazione di quel che vi transita.
+  email_dns_security:
+    nome: "Posta elettronica e dominio"
+    nome_breve: "Posta e dominio"
+    esito_positivo: >-
+      Il dominio e' configurato per impedire che qualcuno scriva a nome
+      dell'azienda.
+    esito_negativo: >-
+      Manca tutto o in parte il controllo su chi puo' scrivere a nome del
+      dominio aziendale.
+  darkweb_breach:
+    nome: "Dati rubati e imitazioni del marchio"
+    nome_breve: "Dati rubati e marchio"
+    esito_positivo: "Nessuna evidenza trovata."
+    esito_negativo: >-
+      Risultano in circolazione credenziali aziendali, oppure domini che
+      imitano il marchio.
+
+# --------------------------------------------------------------------------
+# Che cosa puo' succedere davvero.
+#
+# Una scena sola, quella dell'area piu' debole: un elenco di scenari si legge
+# come un catalogo e non lascia traccia. I passi sono la catena vista nei casi
+# reali, senza dettagli operativi sfruttabili — non e' un manuale.
+# --------------------------------------------------------------------------
+scenari:
+  email_dns_security:
+    titolo: "La frode sul pagamento"
+    premessa: >-
+      Il rilievo piu' grave non e' un tecnicismo: e' la premessa della truffa
+      piu' diffusa e piu' costosa per le imprese italiane, la frode sul
+      pagamento. Ecco come funziona, passo per passo.
+    passi:
+      - >-
+        Un truffatore individua l'azienda e i suoi clienti. Sono informazioni
+        pubbliche: sito, fiere, comunicati, profili professionali dei
+        commerciali.
+      - >-
+        Invia a un cliente un'e-mail che risulta partita da un indirizzo
+        dell'azienda. Non e' un indirizzo simile: e' esattamente quello.
+        Senza il controllo mancante, il server del cliente la consegna in
+        posta in arrivo.
+      - >-
+        Il messaggio comunica un cambio di coordinate bancarie, magari
+        allegando una fattura ricostruita bene, con il logo e le diciture
+        dell'azienda.
+      - "Il cliente paga. Su un conto che non e' quello dell'azienda."
+      - >-
+        Ce ne si accorge settimane dopo, sollecitando un insoluto. A quel
+        punto il denaro non e' recuperabile e si apre la parte peggiore: chi
+        deve pagare due volte? Il cliente sostiene di aver pagato in buona
+        fede su istruzioni arrivate dal dominio del fornitore. Il fornitore
+        sostiene di non aver mai scritto quell'e-mail. Entrambe le cose sono
+        vere.
+    variante: >-
+      La stessa leva funziona anche verso l'interno: un'e-mail che sembra
+      della proprieta' o della direzione chiede a un collaboratore
+      dell'amministrazione un bonifico urgente e riservato, in una giornata di
+      chiusura o prima delle ferie. Non serve alcuna competenza informatica:
+      serve solo che il messaggio arrivi dal dominio giusto.
+
+  attack_surface:
+    titolo: "L'accesso lasciato aperto"
+    premessa: >-
+      Un servizio raggiungibile da internet che non doveva esserlo e' la porta
+      d'ingresso piu' usata. Non serve un attacco sofisticato: serve trovarlo
+      prima di chi lo gestisce.
+    passi:
+      - >-
+        Chi attacca non sceglie l'azienda: interroga elenchi pubblici di
+        sistemi raggiungibili e cerca quelli che rispondono. E' un'attivita'
+        automatica, continua, che non costa nulla.
+      - >-
+        Trova il servizio esposto e prova le credenziali gia' in suo possesso,
+        raccolte da furti di dati avvenuti altrove. Molte persone riusano la
+        stessa password.
+      - >-
+        Una volta dentro, si muove verso i sistemi che contano: gestionale,
+        file di produzione, posta, backup.
+      - >-
+        Osserva per giorni o settimane, senza fare rumore, per capire come e'
+        fatta la rete e dove stanno le copie di sicurezza.
+      - >-
+        Cifra i dati e chiede un riscatto, dopo averne portata fuori una copia
+        da usare come seconda leva se il riscatto non arriva.
+    variante: >-
+      La stessa porta serve anche senza riscatto: un accesso stabile a un
+      sistema aziendale vale sul mercato criminale e viene rivenduto a chi
+      sapra' cosa farne.
+
+  technical_vulnerabilities:
+    titolo: "La falla nota e la finestra chiusa"
+    premessa: >-
+      Una vulnerabilita' pubblicata e' un'informazione che arriva
+      contemporaneamente a chi deve correggerla e a chi vuole sfruttarla. La
+      differenza la fa chi si muove prima.
+    passi:
+      - >-
+        Il produttore pubblica la correzione e, con essa, la descrizione del
+        problema. Da quel momento il difetto e' pubblico.
+      - >-
+        Entro poche ore circolano strumenti automatici che lo sfruttano. Non
+        vanno scritti: si scaricano.
+      - >-
+        Quegli strumenti vengono lanciati su elenchi di sistemi raggiungibili
+        da internet. L'azienda non viene scelta: viene trovata.
+      - >-
+        Se il sistema non e' stato aggiornato, l'accesso e' immediato e non
+        richiede credenziali.
+      - >-
+        Da li' vale la stessa catena di sempre: ricognizione interna,
+        backup, cifratura, riscatto.
+    variante: >-
+      Il tempo medio fra la pubblicazione di una falla e il primo sfruttamento
+      confermato si misura ormai in settimane, e per meta' dei casi in ore.
+      Nessun processo di aggiornamento, per quanto ordinato, opera su quella
+      scala: conta quanto poco si lascia raggiungibile.
+
+  web_security:
+    titolo: "Il sito come punto di appoggio"
+    premessa: >-
+      Il sito aziendale e' l'unica cosa che tutti i clienti guardano. Per
+      questo e' un buon posto da cui partire, anche quando non contiene nulla
+      di riservato.
+    passi:
+      - >-
+        Chi attacca cerca sul sito la parte che accetta dati: un modulo
+        contatti, un'area riservata, un pannello di gestione.
+      - >-
+        Sfrutta una configurazione permissiva per inserire contenuto proprio
+        nelle pagine, oppure per leggere quel che vi transita.
+      - >-
+        Chi visita il sito riceve contenuto manomesso da un indirizzo di cui
+        si fida, perche' e' quello dell'azienda.
+      - >-
+        Le credenziali inserite dai clienti, o i dati dei moduli, finiscono a
+        destinazione doppia.
+      - >-
+        L'azienda se ne accorge quando il sito viene segnalato come pericoloso
+        dai browser o dai motori di ricerca, spesso settimane dopo.
+    variante: >-
+      Lo stesso appoggio serve a ospitare pagine di truffa rivolte ad altri:
+      la segnalazione arriva al proprietario del dominio, che ne risponde.
+
+  darkweb_breach:
+    titolo: "La credenziale che circola gia'"
+    premessa: >-
+      Quando un servizio esterno subisce un furto di dati, le credenziali
+      aziendali usate per registrarsi finiscono in circolazione. Il problema
+      non nasce in azienda, ma arriva in azienda.
+    passi:
+      - >-
+        Una piattaforma esterna, usata da un dipendente con l'indirizzo
+        aziendale, subisce un furto di dati.
+      - >-
+        Utenza e password finiscono in elenchi che circolano, gratuitamente o
+        a pagamento, e vengono raccolti in archivi consultabili.
+      - >-
+        Qualcuno prova quelle stesse credenziali sui servizi dell'azienda:
+        posta, VPN, gestionale. Molte persone riusano la stessa password.
+      - >-
+        Se una funziona, l'accesso e' legittimo agli occhi dei sistemi: non
+        c'e' nulla da forzare e nulla che suoni come allarme.
+      - >-
+        Da una casella di posta autentica partono poi le richieste di
+        pagamento, che nessun controllo tecnico puo' distinguere da quelle
+        vere.
+    variante: >-
+      La stessa disponibilita' di indirizzi aziendali alimenta i domini che
+      imitano il marchio: scritti quasi uguali, servono a ingannare i clienti
+      dell'azienda, non l'azienda.
+
+# --------------------------------------------------------------------------
+# Le tre domande da fare a chi gestisce i sistemi. Una risposta scritta
+# a queste tre fa partire la maggior parte del lavoro.
+# --------------------------------------------------------------------------
+domande:
+  email_dns_security:
+    a_chi: "a chi gestisce la posta"
+    voci:
+      - domanda: >-
+          Abbiamo un record DMARC pubblicato sul nostro dominio? Se si', con
+          quale policy?
+        attesa: >-
+          Risposta attesa oggi: no. Risposta attesa fra tre mesi: si', in
+          modalita' di blocco.
+      - domanda: >-
+          Le nostre e-mail in uscita sono firmate con DKIM? Da quali sistemi
+          partono e-mail a nome dell'azienda?
+        attesa: >-
+          Attenzione: contano anche gestionale, CRM, piattaforma di newsletter
+          e portale fatture.
+      - domanda: "Chi riceve e legge i rapporti sugli abusi del nostro dominio?"
+        attesa: >-
+          Se la risposta e' «nessuno», il controllo non esiste.
+  attack_surface:
+    a_chi: "a chi gestisce la rete"
+    voci:
+      - domanda: >-
+          Qual e' l'elenco dei servizi che oggi rispondono da internet, e chi
+          ha deciso che ciascuno di essi fosse pubblico?
+        attesa: >-
+          Se l'elenco non esiste su carta, non esiste.
+      - domanda: >-
+          Gli accessi remoti (VPN, desktop remoto, pannelli di gestione)
+          richiedono un secondo fattore di autenticazione?
+        attesa: >-
+          Risposta attesa: si', per tutti, amministratori compresi.
+      - domanda: >-
+          Chi si accorge, e in quanto tempo, se domani viene pubblicato un
+          nuovo servizio per errore?
+        attesa: >-
+          Se la risposta e' «ce ne accorgiamo quando qualcosa non va», non
+          c'e' controllo.
+  technical_vulnerabilities:
+    a_chi: "a chi gestisce i sistemi"
+    voci:
+      - domanda: >-
+          Ogni quanto vengono applicati gli aggiornamenti di sicurezza sui
+          sistemi raggiungibili da internet?
+        attesa: >-
+          Risposta attesa: entro giorni, non entro trimestri.
+      - domanda: >-
+          Quali sistemi esposti non sono piu' aggiornabili perche' il
+          produttore non li segue piu'?
+        attesa: >-
+          Se ce ne sono, vanno sostituiti o tolti da internet: non c'e' una
+          terza strada.
+      - domanda: >-
+          Chi controlla che un aggiornamento dichiarato sia stato davvero
+          applicato?
+        attesa: >-
+          «L'abbiamo schedulato» non e' una verifica.
+  web_security:
+    a_chi: "a chi gestisce il sito"
+    voci:
+      - domanda: >-
+          Tutti i nostri siti rispondono solo in HTTPS, con certificato
+          valido e rinnovo automatico?
+        attesa: >-
+          Risposta attesa: si', compresi i sottodomini e i siti di campagna.
+      - domanda: >-
+          Esistono pannelli di gestione o ambienti di prova raggiungibili da
+          internet?
+        attesa: >-
+          Se esistono, vanno chiusi o protetti: sono la porta piu' battuta.
+      - domanda: >-
+          Chi e' responsabile degli aggiornamenti del sito e del suo
+          impianto, e con quale cadenza li applica?
+        attesa: >-
+          Se il sito e' stato costruito da un fornitore che non lo segue piu',
+          non e' aggiornato.
+  darkweb_breach:
+    a_chi: "a chi gestisce gli account aziendali"
+    voci:
+      - domanda: >-
+          Le caselle aziendali sono protette da un secondo fattore di
+          autenticazione, per tutti?
+        attesa: >-
+          Una credenziale rubata, da sola, non deve bastare a entrare.
+      - domanda: >-
+          Quante persone usano l'indirizzo aziendale per registrarsi a servizi
+          esterni, e con quale password?
+        attesa: >-
+          Se la password e' la stessa della posta, il furto altrui diventa
+          nostro.
+      - domanda: >-
+          Chi riceve la segnalazione se domani un nostro indirizzo compare in
+          un furto di dati?
+        attesa: >-
+          Se la risposta e' «nessuno», lo scopriremo dall'uso che ne verra'
+          fatto.
+
+# --------------------------------------------------------------------------
+# Blocchi fissi: valgono a prescindere dai rilievi.
+# --------------------------------------------------------------------------
+danno_oltre_il_denaro:
+  - titolo: "Tocca i tuoi clienti."
+    testo: >-
+      Il bersaglio della truffa e' il cliente, ma la richiesta arriva dal
+      dominio dell'azienda. Il danno di reputazione ricade su chi lo possiede.
+  - titolo: "Tocca la responsabilita'."
+    testo: >-
+      In caso di contestazione, dimostrare di aver adottato le misure tecniche
+      ordinarie — e queste lo sono — cambia la posizione dell'azienda.
+  - titolo: "Tocca la conformita'."
+    testo: >-
+      Se nell'e-mail o negli allegati circolano dati personali, l'incidente
+      ricade nel perimetro GDPR. Per le imprese che rientrano nella direttiva
+      NIS2, o che forniscono aziende che vi rientrano, l'igiene della posta e
+      degli accessi e' fra i primi elementi richiesti in fase di qualifica del
+      fornitore.
+  - titolo: "Tocca il rapporto con l'assicurazione."
+    testo: >-
+      Le polizze cyber e le coperture sulle frodi informatiche richiedono
+      sempre piu' spesso misure minime documentate.
+
+raccomandazione_finale:
+  titolo: "Una raccomandazione che va oltre il punteggio"
+  testo: >-
+    Questa verifica guarda l'azienda da fuori, come farebbe un estraneo. Le tre
+    esposizioni che contano davvero in un'impresa — l'accesso remoto, i sistemi
+    di produzione e i backup — si valutano soltanto dall'interno. Un buon voto
+    dall'esterno non dice nulla su questi tre punti.
+
+limiti_divulgativi:
+  - >-
+    E' un'analisi dall'esterno: nessuno e' entrato nella rete aziendale.
+    Server, postazioni, backup, permessi degli utenti e sistemi di produzione
+    non sono stati verificati.
+  - >-
+    Dove un controllo non e' stato eseguito, il risultato dell'area resta alto
+    per assenza di prove, non perche' sia stato dimostrato che tutto e' a
+    posto.
+
+# Come si legge la data di scadenza in fondo alla prima pagina.
+avvertenza_punteggio:
+  titolo: "Attenzione a come si legge il punteggio"
+  chiusura: >-
+    Un buon voto qui non e' un certificato di sicurezza: e' una fotografia di
+    cio' che si vede da fuori, in un dato momento.
+
+# --------------------------------------------------------------------------
+# Ogni rilievo, detto senza sigle.
+#
+# Le chiavi sono gli identificativi del catalogo delle remediation: il motore
+# associa gia' ogni rilievo a un intervento, e qui l'intervento acquista una
+# lingua. `manca` dice che cosa non c'e', `paragone` lo rende immaginabile,
+# `comporta` dice che cosa ne consegue, `tempo` quanto costa in ore di lavoro
+# di chi gia' amministra quei sistemi.
+# --------------------------------------------------------------------------
+interventi:
+  REM-EMAIL-DMARC:
+    semplice: "Nessuno controlla chi scrive a nome dell'azienda"
+    manca: >-
+      una regola pubblica che dica ai server di posta di tutto il mondo che
+      cosa fare quando ricevono un'e-mail che dichiara di venire dal dominio
+      aziendale ma non e' autentica.
+    paragone: >-
+      e' come avere carta intestata e timbro aziendale in libera circolazione,
+      senza che nessuno debba verificare la firma. Chi riceve la lettera si
+      fida.
+    comporta: >-
+      un truffatore puo' scrivere ai clienti, ai fornitori o ai dipendenti
+      presentandosi come l'azienda. E non se ne ha notizia, perche' senza
+      questa regola non arrivano nemmeno i rapporti su chi usa il dominio.
+    tempo: "mezza giornata di lavoro"
+  REM-EMAIL-SPF:
+    semplice: "L'elenco di chi puo' spedire a nome dell'azienda e' sbagliato"
+    manca: >-
+      un elenco corretto e chiuso dei sistemi autorizzati a inviare posta per
+      conto del dominio.
+    paragone: >-
+      e' la lista dei fornitori autorizzati a presentarsi alla portineria a
+      nome dell'azienda. Se e' incompleta o non viene applicata, entra
+      chiunque.
+    comporta: >-
+      le e-mail false a nome dell'azienda non vengono fermate, e alcune di
+      quelle vere rischiano di finire fra la posta indesiderata.
+    tempo: "pochi minuti"
+  REM-EMAIL-DKIM:
+    semplice: "Le e-mail dell'azienda non portano un sigillo di autenticita'"
+    manca: >-
+      la firma digitale automatica sui messaggi in uscita: un sigillo
+      invisibile che prova che il messaggio e' partito davvero dai sistemi
+      aziendali e non e' stato modificato lungo il percorso.
+    paragone: >-
+      e' il sigillo di ceralacca sulla busta: non nasconde il contenuto, ma
+      dice se qualcuno l'ha aperta o rifatta.
+    comporta: >-
+      senza sigillo, le e-mail legittime sono piu' facilmente scambiate per
+      sospette, e soprattutto il controllo su chi scrive a nome dell'azienda
+      non puo' funzionare davvero. I due interventi vanno fatti insieme.
+    tempo: "poche ore"
+  REM-EMAIL-MTASTS:
+    semplice: "La posta puo' viaggiare in chiaro"
+    manca: "l'obbligo di consegna cifrata e i relativi rapporti di controllo."
+    paragone: >-
+      e' la differenza tra spedire una busta chiusa e spedire una cartolina.
+      Oggi, in certe condizioni, la posta dell'azienda puo' essere costretta a
+      viaggiare come una cartolina, leggibile lungo il tragitto.
+    comporta: >-
+      chi si trova sul percorso puo' leggere il contenuto dei messaggi, e
+      nessuno se ne accorge.
+    tempo: "poche ore"
+  REM-EMAIL-STARTTLS:
+    semplice: "Il server di posta non offre una consegna cifrata"
+    manca: >-
+      la cifratura sul collegamento fra i server di posta, quella che
+      protegge il messaggio mentre e' in viaggio.
+    paragone: >-
+      e' una busta trasparente: arriva, ma chiunque la maneggi legge.
+    comporta: >-
+      il contenuto delle e-mail, allegati compresi, e' leggibile da chi
+      controlla un tratto del percorso.
+    tempo: "poche ore"
+  REM-DNS-DNSSEC:
+    semplice: "L'indirizzo del dominio puo' essere dirottato"
+    manca: >-
+      la firma dei dati che dicono a internet dove si trovano il sito e la
+      posta dell'azienda.
+    paragone: >-
+      e' l'elenco telefonico di internet. Senza firma, qualcuno puo' alterare
+      la voce che riguarda l'azienda e mandare chi la cerca su un server che
+      non e' il suo.
+    comporta: >-
+      visitatori e messaggi possono essere deviati verso sistemi controllati
+      da altri, senza che il nome del dominio cambi di una lettera.
+    tempo: "una giornata di lavoro, con il gestore del dominio"
+  REM-DNS-CAA:
+    semplice: "Chiunque puo' farsi rilasciare un certificato a nome dell'azienda"
+    manca: >-
+      l'elenco pubblico delle autorita' autorizzate a emettere certificati per
+      il dominio.
+    paragone: >-
+      e' la lista dei fabbri autorizzati a duplicare le chiavi di casa. Se
+      quella lista non esiste, vale qualsiasi fabbro.
+    comporta: >-
+      un terzo puo' ottenere un certificato valido per il dominio e allestire
+      un sito che il browser dichiara sicuro.
+    tempo: "pochi minuti"
+  REM-DNS-EXPIRY:
+    semplice: "Il dominio aziendale e' vicino alla scadenza"
+    manca: >-
+      un rinnovo con margine e una protezione contro il trasferimento non
+      autorizzato.
+    paragone: >-
+      e' l'insegna dell'azienda e l'indirizzo a cui arriva la posta. Se scade,
+      non si spegne soltanto: qualcun altro puo' prenderla.
+    comporta: >-
+      alla scadenza il sito smette di rispondere e la posta smette di
+      arrivare. Se il dominio viene registrato da altri, tornano entrambi, ma
+      sotto il controllo di qualcun altro.
+    tempo: "pochi minuti"
+  REM-WEB-HTTPS:
+    semplice: "Il sito accetta connessioni non protette"
+    manca: >-
+      l'obbligo di usare il collegamento cifrato su tutte le pagine, non solo
+      su alcune.
+    paragone: >-
+      e' un ufficio con la porta principale chiusa a chiave e una laterale
+      accostata. Conta la laterale.
+    comporta: >-
+      quel che i clienti digitano sul sito, credenziali comprese, puo' essere
+      letto o modificato mentre viaggia.
+    tempo: "poche ore"
+  REM-TLS-CERT:
+    semplice: "Il certificato del sito non e' in regola"
+    manca: >-
+      un certificato valido, per il nome giusto e rinnovato prima della
+      scadenza.
+    paragone: >-
+      e' il documento d'identita' del sito. Scaduto o intestato a un altro
+      nome, il visitatore riceve un avviso di pericolo.
+    comporta: >-
+      i browser mostrano un avviso di sito non sicuro. I clienti si fermano, e
+      chi e' abituato a quell'avviso non distingue piu' il sito vero da una
+      imitazione.
+    tempo: "poche ore"
+  REM-TLS-HARDENING:
+    semplice: "La protezione del collegamento e' obsoleta"
+    manca: >-
+      la disattivazione dei metodi di cifratura superati, che restano attivi
+      per compatibilita' con sistemi ormai in disuso.
+    paragone: >-
+      e' una serratura di trent'anni fa: c'e', si chiude, e la chiave falsa si
+      trova.
+    comporta: >-
+      chi si trova sul percorso puo' costringere il collegamento a usare il
+      metodo piu' debole e leggere quel che vi transita.
+    tempo: "poche ore"
+  REM-WEB-HEADERS:
+    semplice: "Il sito non dice al browser come proteggere chi lo visita"
+    manca: >-
+      le istruzioni che il sito dovrebbe dare al browser per limitare quel che
+      una pagina puo' fare.
+    paragone: >-
+      e' il regolamento affisso all'ingresso. Senza, ogni visitatore decide da
+      se' cosa gli e' concesso.
+    comporta: >-
+      diventa piu' facile inserire contenuto estraneo nelle pagine
+      dell'azienda o indurre i visitatori a compiere azioni che non vogliono.
+    tempo: "poche ore"
+  REM-WEB-COOKIES:
+    semplice: "Le sessioni dei visitatori non sono protette"
+    manca: >-
+      i contrassegni che impediscono di leggere o riusare il segnaposto di
+      sessione di chi e' collegato.
+    paragone: >-
+      e' il braccialetto che si riceve all'ingresso: se puo' essere copiato,
+      chiunque entra al posto del cliente.
+    comporta: >-
+      la sessione di un utente autenticato puo' essere usata da altri, senza
+      bisogno della sua password.
+    tempo: "pochi minuti"
+  REM-WEB-CORS:
+    semplice: "Il sito si fida di chiunque lo interroghi"
+    manca: >-
+      la restrizione su quali altri siti possono leggere i dati delle
+      applicazioni aziendali.
+    paragone: >-
+      e' uno sportello che consegna la pratica a chiunque la chieda, senza
+      guardare chi sta davanti.
+    comporta: >-
+      un sito di terzi puo' leggere dati riservati dell'applicazione
+      aziendale usando la sessione del cliente collegato.
+    tempo: "poche ore"
+  REM-WEB-INFOLEAK:
+    semplice: "Il sito racconta piu' del necessario su come e' fatto"
+    manca: >-
+      la rimozione di versioni, percorsi interni e messaggi d'errore
+      dettagliati dalle risposte pubbliche.
+    paragone: >-
+      e' la planimetria dell'edificio appesa fuori dall'ingresso, con
+      indicate anche le porte di servizio.
+    comporta: >-
+      chi prepara un attacco sa in anticipo quali falle provare, e non spreca
+      tentativi che darebbero nell'occhio.
+    tempo: "poche ore"
+  REM-WEB-ADMIN:
+    semplice: "Un pannello di gestione e' raggiungibile da internet"
+    manca: >-
+      la protezione, o la rimozione dalla rete pubblica, delle pagine di
+      amministrazione e degli ambienti di prova.
+    paragone: >-
+      e' la porta dell'ufficio direzione che si apre sulla strada, con il
+      cartello sopra.
+    comporta: >-
+      chiunque puo' provare a entrare, continuamente e automaticamente. Gli
+      ambienti di prova contengono spesso copie dei dati veri.
+    tempo: "una giornata di lavoro"
+  REM-WEB-SECURITYTXT:
+    semplice: "Non c'e' un recapito per chi segnala un problema di sicurezza"
+    manca: "un file pubblico che indichi a chi rivolgersi."
+    paragone: >-
+      e' il citofono. Chi vuole avvisare che c'e' una finestra aperta, senza,
+      non sa a chi dirlo.
+    comporta: >-
+      una segnalazione utile arriva in ritardo, o si perde in un indirizzo
+      generico.
+    tempo: "pochi minuti"
+  REM-AS-REMOVE-SERVICE:
+    semplice: "Un servizio interno risponde da internet"
+    manca: >-
+      la chiusura verso l'esterno di un servizio che era destinato all'uso
+      interno.
+    paragone: >-
+      e' il magazzino con la saracinesca alzata sul retro, mentre tutti
+      guardano l'ingresso principale.
+    comporta: >-
+      chi cerca automaticamente sistemi raggiungibili lo trova, e prova a
+      entrare con credenziali gia' in suo possesso.
+    tempo: "una giornata di lavoro"
+  REM-AS-VPN:
+    semplice: "L'accesso remoto e' esposto e non aggiornato"
+    manca: >-
+      l'aggiornamento e l'irrigidimento degli apparati di accesso remoto e di
+      confine.
+    paragone: >-
+      e' la porta blindata dell'azienda. Se la serratura ha un difetto noto,
+      il fatto che sia blindata non aiuta.
+    comporta: >-
+      e' la via d'ingresso piu' usata negli attacchi con riscatto: da li' si
+      arriva a tutto il resto.
+    tempo: "una giornata di lavoro, con finestra di fermo"
+  REM-AS-SUBDOMAIN:
+    semplice: "Un sottodominio abbandonato puo' essere occupato da altri"
+    manca: >-
+      la bonifica dei nomi che puntano ancora a servizi non piu' attivi.
+    paragone: >-
+      e' un'insegna dell'azienda rimasta su un negozio sfitto. Chi prende quel
+      locale si trova l'insegna gia' montata.
+    comporta: >-
+      un terzo puo' pubblicare contenuto proprio su un indirizzo che porta il
+      nome dell'azienda, e usarlo per ingannare clienti e dipendenti.
+    tempo: "poche ore"
+  REM-AS-INVENTORY:
+    semplice: "Non esiste un elenco di cio' che l'azienda espone"
+    manca: >-
+      un inventario tenuto aggiornato dei sistemi raggiungibili da internet,
+      con un responsabile per ciascuno.
+    paragone: >-
+      e' l'elenco delle chiavi consegnate. Senza, non si sa quante ne
+      circolano ne' a chi.
+    comporta: >-
+      i sistemi che nessuno sa di avere non vengono aggiornati ne' spenti, e
+      restano raggiungibili per anni.
+    tempo: "qualche giornata, una volta"
+  REM-VULN-PATCH:
+    semplice: "Un sistema esposto ha una falla gia' pubblica"
+    manca: >-
+      l'aggiornamento di sicurezza gia' disponibile per il software
+      raggiungibile da internet.
+    paragone: >-
+      e' un difetto della serratura pubblicato sul giornale, con la
+      riparazione disponibile gratis dal fabbricante.
+    comporta: >-
+      lo sfruttamento e' automatico e non richiede competenze: gli strumenti
+      circolano entro poche ore dalla pubblicazione.
+    tempo: "da poche ore a una giornata"
+  REM-VULN-UPGRADE:
+    semplice: "Un sistema esposto non e' piu' seguito dal produttore"
+    manca: >-
+      la sostituzione o l'aggiornamento di software per cui non escono piu'
+      correzioni di sicurezza.
+    paragone: >-
+      e' un macchinario di cui non si trovano piu' i ricambi. Finche' va, va.
+      Quando si rompe, non si ripara.
+    comporta: >-
+      le falle che verranno scoperte da qui in avanti non avranno una
+      correzione: l'unica risposta sara' spegnere o sostituire.
+    tempo: "da pianificare, settimane"
+  REM-IR-RANSOMWARE:
+    semplice: "Risultano evidenze pubbliche di una compromissione"
+    manca: >-
+      la gestione formale dell'incidente: contenimento, verifica dell'ambito,
+      notifica dove dovuta.
+    paragone: >-
+      e' un furto gia' avvenuto di cui si trova notizia fuori dall'azienda,
+      prima che dentro.
+    comporta: >-
+      la compromissione puo' essere ancora in corso. Oltre al danno diretto,
+      la mancata notifica nei termini previsti e' sanzionabile.
+    tempo: "immediato, con supporto specialistico"
+  REM-CRED-ROTATION:
+    semplice: "Credenziali aziendali risultano in circolazione"
+    manca: >-
+      il cambio delle password coinvolte e la verifica degli accessi avvenuti
+      con quelle utenze.
+    paragone: >-
+      e' un mazzo di chiavi smarrito mesi fa. Non si sa chi lo abbia, e le
+      serrature sono le stesse.
+    comporta: >-
+      chi ha quelle credenziali entra come un dipendente: nessun sistema di
+      allarme suona, perche' l'accesso e' formalmente legittimo.
+    tempo: "una giornata di lavoro"
+  REM-BRAND-TAKEDOWN:
+    semplice: "Esistono domini che imitano il marchio aziendale"
+    manca: >-
+      la richiesta di rimozione dei nomi registrati per somigliare a quello
+      dell'azienda.
+    paragone: >-
+      e' un'insegna quasi identica aperta in fondo alla stessa via. I clienti
+      non guardano l'accento.
+    comporta: >-
+      i clienti ricevono richieste di pagamento da un indirizzo che sembra
+      quello dell'azienda, e il danno ricade sul marchio vero.
+    tempo: "da poche ore a settimane, secondo il registro"
+  REM-MON-SOC:
+    semplice: "Nessuno guarda i segnali fuori dall'orario di lavoro"
+    manca: >-
+      un presidio continuativo che rilevi accessi anomali ed esposizioni
+      appena compaiono.
+    paragone: >-
+      e' l'antifurto collegato a una centrale, invece che alla sirena sul
+      muro.
+    comporta: >-
+      fra la compromissione e l'accorgersene passano settimane, ed e' in
+      quelle settimane che il danno si forma.
+    tempo: "servizio continuativo, da valutare"

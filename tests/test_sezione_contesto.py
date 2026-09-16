@@ -41,12 +41,18 @@ def _contesto(attiva: bool):  # noqa: ANN202
     return contesto
 
 
+# Il titolo della sezione («Perche' questa verifica») non basta piu' a
+# riconoscerla: il documento riscritto parla di «verifica» anche altrove, per
+# esempio in «Che cosa questa verifica non ha guardato». Serve una stringa che
+# compaia solo qui.
+MARCATORE = "finestra di reazione"
+
+
 def test_la_sezione_compare_quando_attiva():
     testo = _testo(rs.generate_pdf(_contesto(True), include_technical=False).content)
 
-    assert "Perche" in testo and "questa valutazione" in testo
-    assert "finestra di reazione" in testo
-    assert "Cosa misura questo documento" in testo
+    assert MARCATORE in testo
+    assert "Che cosa misura questo documento" in testo
 
 
 def test_la_spunta_la_toglie_davvero():
@@ -54,7 +60,7 @@ def test_la_spunta_la_toglie_davvero():
     con = rs.generate_pdf(_contesto(True), include_technical=False).content
     senza = rs.generate_pdf(_contesto(False), include_technical=False).content
 
-    assert "questa valutazione" not in _testo(senza)
+    assert MARCATORE not in _testo(senza)
     assert _pagine(senza) < _pagine(con)
 
 
@@ -63,7 +69,7 @@ def test_e_attiva_per_chi_non_ha_mai_toccato_la_personalizzazione():
     contesto = _context()
     contesto.brand = {k: v for k, v in contesto.brand.items() if k != "show_context_section"}
 
-    assert "questa valutazione" in _testo(
+    assert MARCATORE in _testo(
         rs.generate_pdf(contesto, include_technical=False).content)
 
 
@@ -71,7 +77,7 @@ def test_non_finisce_nell_allegato_tecnico():
     """L'allegato lo legge chi verifica il lavoro: li' il contesto e' gia' dato."""
     modello = (rs.render_html(_contesto(True), "technical.html.j2"))
 
-    assert "questa valutazione" not in modello
+    assert MARCATORE not in modello
 
 
 # ------------------------------------------------------------------- figure

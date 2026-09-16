@@ -3,8 +3,9 @@
 Piattaforma multi-tenant per la produzione di un **External Cyber Security Rating**:
 raccoglie evidenze OSINT sul perimetro esterno di un'azienda, le normalizza, le
 correla e le trasforma in un rating deterministico 0-100 con classe A-E, cinque
-rating tematici, un indice di confidenza separato, un report esecutivo, un
-allegato tecnico e un piano di rimedio prioritizzato.
+rating tematici, un indice di confidenza separato, un rapporto per la direzione
+scritto in italiano corrente, un allegato tecnico e un piano di rimedio
+prioritizzato.
 
 > **Che cosa NON e'.** Il rating e' una valutazione dell'esposizione esterna
 > osservabile da fonti pubbliche. **Non e' un penetration test, non e' un
@@ -307,6 +308,38 @@ Dettaglio in [`docs/SCORING_MODEL.md`](docs/SCORING_MODEL.md).
 
 ---
 
+## I due documenti
+
+Ogni scansione produce **due documenti distinti**, generati insieme e
+concatenati nello stesso PDF.
+
+**Il rapporto per la direzione** e' scritto per chi decide, non per chi
+configura: sei pagine, nessuna sigla senza spiegazione. Apre con il risultato,
+le cinque aree con il significato di ciascun esito e il perimetro osservato;
+poi ogni intervento in una scheda che dice *che cosa manca*, *un paragone*,
+*che cosa comporta* e *quanto costa sistemarlo*; poi la scena di che cosa puo'
+succedere davvero nell'area piu' esposta; infine che cosa fare in ordine, con
+la colonna «come verificare che sia fatto», e le tre domande da fare a chi
+gestisce quei sistemi.
+
+I testi divulgativi stanno in **`config/narrativa_direzione.yaml`**: nomi
+correnti delle aree, un paragone per ciascuno dei 27 interventi del catalogo,
+una scena per ciascuna delle cinque aree. Si correggono senza toccare il
+codice, e un test verifica che catalogo tecnico e lingua divulgativa restino
+allineati. **Nulla di tutto questo entra nel calcolo del punteggio**: e' la
+traduzione di cio' che il motore ha gia' deciso.
+
+**L'allegato tecnico** e' il documento separato che permette di verificare il
+lavoro: perimetro, inventario degli asset, copertura degli strumenti, elenco
+integrale dei rilievi con le evidenze sanitizzate e piano di rimedio completo.
+In caso di differenze fra i due, fa fede l'allegato.
+
+La sezione di contesto di settore in apertura (la finestra fra divulgazione e
+sfruttamento, dove si concentra il rischio) si toglie dalla personalizzazione
+del tenant, in **Amministrazione → Personalizzazione**.
+
+---
+
 ## Struttura del progetto
 
 ```
@@ -314,15 +347,16 @@ Dettaglio in [`docs/SCORING_MODEL.md`](docs/SCORING_MODEL.md).
 ├── docker-compose.yml         │   ├── scoring.yaml            57 regole, 5 categorie
 ├── .env.example               │   ├── tool_profiles.yaml      22 tool, 3 profili
 ├── Makefile                   │   ├── remediation_catalog.yaml
-├── backend/                   │   ├── rating_caps.yaml
-│   ├── app/                   │   ├── evidence_confidence.yaml
-│   │   ├── api/routers/       │   └── nuclei_allowlist.yaml
-│   │   ├── core/              ├── reporting/              Jinja2, PDF, DOCX, JSON, CSV
-│   │   ├── models/            ├── frontend/               React + TypeScript + Vite
-│   │   ├── schemas/           ├── workers/                immagini e wrapper dei tool
-│   │   ├── services/          ├── deploy/                 configurazioni di runtime
-│   │   └── workers/           ├── tests/                  373 test
-│   └── alembic/               ├── docs/                   ARCHITECTURE, SCORING_MODEL,
+├── backend/                   │   ├── narrativa_direzione.yaml
+│   ├── app/                   │   ├── rating_caps.yaml
+│   │   ├── api/routers/       │   ├── evidence_confidence.yaml
+│   │   ├── core/              │   └── nuclei_allowlist.yaml
+│   │   ├── models/            ├── reporting/              Jinja2, PDF, DOCX, JSON, CSV
+│   │   ├── schemas/           ├── frontend/               React + TypeScript + Vite
+│   │   ├── services/          ├── workers/                immagini e wrapper dei tool
+│   │   └── workers/           ├── deploy/                 configurazioni di runtime
+│   └── alembic/               ├── tests/                  373 test
+                               ├── docs/                   ARCHITECTURE, SCORING_MODEL,
 ├── adapters/                  │                           SCAN_PROFILES, SECURITY_MODEL,
 │   ├── runner.py              │                           LEGAL_AND_SCOPE, DEPLOYMENT,
 │   └── <un file per tool>     │                           OPERATIONS_RUNBOOK

@@ -260,7 +260,7 @@ export default function BrandingPage() {
       <div className="card">
         <h2>Marchio</h2>
         <div className="form-grid">
-          <Field label="Nome del marchio" hint="compare in copertina e nell’intestazione">
+          <Field label="Nome del marchio" hint="compare nella testata e nel titolo del report">
             <input type="text" value={valori.brand_name ?? ''} onChange={aggiorna('brand_name')}
                    placeholder="Defenix" />
           </Field>
@@ -314,10 +314,10 @@ export default function BrandingPage() {
         <Field label="Introduzione" hint="apre la sintesi per la direzione">
           <textarea value={valori.report_intro_it ?? ''} onChange={aggiorna('report_intro_it')} />
         </Field>
-        <Field label="Nota in copertina" hint="sotto la limitazione d’ambito">
+        <Field label="Nota finale" hint="in fondo, nella nota metodologica">
           <textarea value={valori.report_footer_it ?? ''} onChange={aggiorna('report_footer_it')} />
         </Field>
-        <Field label="Contatti" hint="sezione finale del report">
+        <Field label="Contatti" hint="sezione «Il passo successivo», in fondo al report">
           <textarea value={valori.contact_block_it ?? ''} onChange={aggiorna('contact_block_it')} />
         </Field>
         <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'flex-start',
