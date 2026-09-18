@@ -6,26 +6,60 @@
 
 {% if is_demo %}
 {# Un report dimostrativo che non lo dichiara e' indistinguibile da uno vero.
-   La banda si vede in testa, la filigrana su ogni pagina: entrambe servono,
-   perche' un documento si stampa e si sfoglia anche a partire dal mezzo. #}
+   La banda si vede in copertina, la filigrana su ogni pagina: entrambe
+   servono, perche' un documento si stampa e si sfoglia anche a partire dal
+   mezzo. #}
 <div class="filigrana-demo" aria-hidden="true">DATI DIMOSTRATIVI</div>
 {% endif %}
 
-{# ============================ 1. Testata e sintesi ======================== #}
-<div class="masthead">
-  {# Il logo arriva come data URI: nessun riferimento esterno da risolvere
-     durante la generazione del PDF. #}
-  {% if logo_data_uri %}<img src="{{ logo_data_uri }}" alt="{{ brand.name }}">{% endif %}
-  <span class="masthead-titolo">{{ brand.name }} Security Rating &middot;
-    Sintesi per la direzione</span>
-</div>
+{# ------------------------------ 1. Copertina ------------------------------ #}
+<section class="cover">
+  {% if is_demo %}
+  <div class="banda-demo">
+    Documento dimostrativo &mdash; dati sintetici, non una valutazione reale
+  </div>
+  {% endif %}
+  <div>
+    {# Il logo arriva come data URI: nessun riferimento esterno da risolvere
+       durante la generazione del PDF. #}
+    {% if logo_data_uri %}
+      <img src="{{ logo_data_uri }}" alt="{{ brand.name }}" class="logo">
+    {% endif %}
+    <h1 class="cover-titolo">{{ brand.name }}<br>Security Rating</h1>
+    <p class="subtitle">Valutazione dell'esposizione cyber osservabile dall'esterno</p>
+  </div>
+  <div>
+    <p class="company company-name">{{ company_name }}</p>
+    {% if company_vat %}<p class="meta">P.IVA / VAT: {{ company_vat }}</p>{% endif %}
+    <p class="meta">Data della valutazione: {{ generated_at.strftime('%d/%m/%Y') }}</p>
+    <p class="meta">Profilo di scansione: {{ profile_label }}</p>
 
-{% if is_demo %}
-<div class="banda-demo">
-  Documento dimostrativo &mdash; dati sintetici, non una valutazione reale
-</div>
-{% endif %}
+    {# Il quadrante dice a colpo d'occhio in che parte della scala si sta: il
+       numero da solo lo sa leggere chi ha in testa le soglie delle classi.
+       Il colore non e' l'unico segnale — numero, classe e soglie sono
+       scritti sul disegno. #}
+    <div class="rating-block">
+      <div class="quadrante-copertina">{{ tachimetro_copertina|safe }}</div>
+      {% if is_provisional %}
+      <p class="confidence">{{ provisional_notice }}</p>
+      {% endif %}
+      <p class="confidence">Affidabilita' della rilevazione: {{ '%.0f'|format(confidence_value) }}%
+        ({{ confidence_label }})</p>
+    </div>
+  </div>
+  {# In copertina va la sintesi della limitazione, non il disclaimer per
+     intero: quel testo occupava mezza pagina, spingeva il resto sul foglio
+     successivo e compare comunque per esteso nel corpo del documento. #}
+  <p class="footer-note">
+    Valutazione dell&rsquo;esposizione osservabile dall&rsquo;esterno. Non e&rsquo; un
+    penetration test ne&rsquo; una certificazione di sicurezza; i limiti della
+    rilevazione sono riportati per esteso nel documento.<br><br>
+    {% if footer_text %}{{ footer_text }}<br><br>{% endif %}
+    Documento riservato prodotto da {{ brand.owner }}. Distribuzione limitata al destinatario.<br>
+    Piattaforma Defenix Security Rating {{ platform_version }}.</p>
+</section>
 
+{# ============================ 2. Apertura ================================= #}
 <h1>Quanto e&rsquo; esposta l&rsquo;azienda,<br>spiegato in parole semplici</h1>
 <p class="occhiello">Questo documento riassume in poche pagine il risultato della
 verifica tecnica. Nessuna sigla senza spiegazione: che cosa abbiamo visto, che
@@ -44,21 +78,16 @@ cosa puo&rsquo; succedere e che cosa conviene fare.</p>
 
 <h2>Il risultato in due righe</h2>
 <div class="riquadro-esito">
-  <div class="voto">
-    {% if is_provisional %}
-      <span class="voto-numero">&ndash;&ndash;</span>
-    {% else %}
-      <span class="voto-numero">{{ '%.0f'|format(overall_score) }}</span><span class="voto-su">/100</span>
-    {% endif %}
-  </div>
+  <div class="voto">{{ tachimetro|safe }}</div>
   <div class="voto-testo">
     {% if is_provisional %}
       <p class="voto-classe">Valutazione provvisoria</p>
       <p class="voto-nota">{{ provisional_notice }}</p>
     {% else %}
-      <p class="voto-classe">Classe {{ rating_class }} &mdash; {{ rating_label|lower }}</p>
       <p class="voto-nota">{{ direzione.sintesi_risultato }}</p>
     {% endif %}
+    <p class="voto-nota">Affidabilita&rsquo; della rilevazione:
+      {{ '%.0f'|format(confidence_value) }}% ({{ confidence_label|lower }}).</p>
   </div>
 </div>
 
@@ -308,7 +337,6 @@ correttamente il punteggio.</p>
   sono nell&rsquo;allegato tecnico, documento separato. In caso di differenze fa fede
   l&rsquo;allegato tecnico, che contiene le evidenze puntuali e i riferimenti normativi.
   {{ disclaimer }}
-  {% if footer_text %}{{ footer_text }}{% endif %}
   Documento riservato prodotto da {{ brand.owner }}. Distribuzione limitata al
   destinatario. Piattaforma Defenix Security Rating {{ platform_version }}.
 </p>

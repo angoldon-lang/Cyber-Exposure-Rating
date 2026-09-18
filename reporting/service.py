@@ -154,6 +154,55 @@ def generate_docx(context: ReportContext, *, include_technical: bool = True) -> 
             tabella.rows[0].cells[indice].text = etichetta
         return tabella
 
+    # --- copertina ---
+    # Il quadrante del PDF e' un SVG, e Word non ne accetta: qui il punteggio
+    # resta scritto, come nella versione precedente di questo documento.
+    titolo = document.add_heading(f"{context.brand['name']} Security Rating", level=0)
+    titolo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    sottotitolo = document.add_paragraph(
+        "Valutazione dell'esposizione cyber osservabile dall'esterno")
+    sottotitolo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    document.add_paragraph()
+    intestazione = document.add_paragraph()
+    intestazione.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    corsa = intestazione.add_run(context.company_name)
+    corsa.bold = True
+    corsa.font.size = Pt(18)
+
+    anagrafe = document.add_paragraph()
+    anagrafe.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    anagrafe.add_run(f"Data della valutazione: {context.generated_at:%d/%m/%Y}\n"
+                     f"Profilo di scansione: {context.profile_label}")
+
+    document.add_paragraph()
+    voto = document.add_paragraph()
+    voto.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if context.is_provisional:
+        corsa = voto.add_run("Valutazione provvisoria")
+        corsa.font.size = Pt(20)
+        corsa.font.color.rgb = RGBColor(0xC2, 0x41, 0x0C)
+        document.add_paragraph(
+            context.provisional_notice or "").alignment = WD_ALIGN_PARAGRAPH.CENTER
+    else:
+        corsa = voto.add_run(f"{context.overall_score:.0f}/100 - Classe {context.rating_class}")
+        corsa.bold = True
+        corsa.font.size = Pt(24)
+        document.add_paragraph(context.rating_label).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    document.add_paragraph(
+        f"Affidabilita' della rilevazione: {context.confidence_value:.0f}% "
+        f"({context.confidence_label})").alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    document.add_paragraph()
+    limitazione = document.add_paragraph()
+    limitazione.add_run(
+        "Valutazione dell'esposizione osservabile dall'esterno. Non e' un penetration "
+        "test ne' una certificazione di sicurezza; i limiti della rilevazione sono "
+        "riportati per esteso nel documento.").italic = True
+    if context.footer_text:
+        document.add_paragraph(context.footer_text).italic = True
+    document.add_page_break()
+
     # --- apertura ---
     if context.is_demo:
         avviso = document.add_paragraph()

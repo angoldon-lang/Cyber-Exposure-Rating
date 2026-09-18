@@ -146,6 +146,7 @@ class ReportContext:
         from reporting.figure_contesto import dove_sta_il_rischio, finestra_di_sfruttamento
         from reporting.narrativa import sintesi_per_la_direzione
         from reporting.radar import grafico_radar
+        from reporting.tachimetro import quadrante
 
         # Il rapporto per la direzione e' scritto in italiano corrente: i testi
         # stanno in `config/narrativa_direzione.yaml` e qui vengono solo
@@ -153,8 +154,20 @@ class ReportContext:
         direzione = sintesi_per_la_direzione(
             categories=self.categories, coverage_matrix=self.coverage_matrix,
             remediation_plan=self.remediation_plan, overall_score=self.overall_score)
+        # Il quadrante del punteggio: due versioni, perche' la copertina ha
+        # fondo scuro e il corpo no. Su valutazione provvisoria l'ago non si
+        # disegna: fermarlo su un numero suggerirebbe una misura che non e'
+        # stata fatta.
+        punteggio = None if self.is_provisional else self.overall_score
         return {
             "direzione": direzione,
+            "tachimetro": quadrante(
+                punteggio, classe=self.rating_class if not self.is_provisional else "",
+                etichetta=self.rating_label if not self.is_provisional else ""),
+            "tachimetro_copertina": quadrante(
+                punteggio, classe=self.rating_class if not self.is_provisional else "",
+                etichetta=self.rating_label if not self.is_provisional else "",
+                su_fondo_scuro=True),
             "tipo_verifica": TIPO_VERIFICA_IT.get(
                 self.profile_key, "Analisi dall'esterno, senza accesso ai sistemi aziendali"),
             "domini_analizzati": self.domini_analizzati(),

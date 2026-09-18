@@ -21,6 +21,22 @@
     font-size: 7.5pt; color: #8a8f98;
   }
 }
+/* La copertina occupa l'intera pagina, senza margini. La regola e' legata alla
+   pagina denominata e non a `:first`: i due documenti (esecutivo e allegato)
+   vengono renderizzati separatamente e le pagine concatenate, quindi `:first`
+   colpiva anche la prima pagina dell'allegato, che finiva contro il bordo. */
+@page copertina {
+  margin: 0;
+  /* Lo sfondo sta sulla PAGINA, non sul blocco: cosi' copre il foglio fino
+     ai bordi qualunque sia l'altezza del contenuto. Sul blocco lasciava una
+     striscia bianca in fondo ogni volta che il contenuto era piu' corto. */
+  background: linear-gradient(160deg, #0f3d5c 0%, #123a52 55%, #0b2436 100%);
+  @top-right { content: none; }
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+.cover { page: copertina; }
+
 :root {
   --ink: #12161c;
   --muted: #5c6470;
@@ -45,6 +61,39 @@ body {
   font-family: "DejaVu Sans", Helvetica, Arial, sans-serif;
   font-size: 9.5pt; line-height: 1.5; color: var(--ink); margin: 0;
 }
+
+/* ---------- copertina ---------- */
+.cover {
+  page-break-after: always;
+  /* La copertina deve stare in UNA pagina.
+     Era alta 297 mm, quanto un A4 intero, e sbordava: l'ultimo blocco
+     finiva su un secondo foglio quasi vuoto ma con lo sfondo pieno.
+     L'altezza utile misurata e' fra 270 e 285 mm — `@page copertina
+     { margin: 0 }` non libera l'intera pagina come ci si aspetterebbe —
+     quindi si sta sotto con un margine di sicurezza. Il numero e' empirico
+     e va trattato come tale: a garantirlo e'
+     `test_la_copertina_sta_in_una_pagina`, non questo commento.
+     `overflow: hidden` protegge dai testi personalizzati piu' lunghi del
+     previsto: meglio una nota accorciata che una pagina sprecata. */
+  height: 265mm; padding: 20mm 22mm; overflow: hidden;
+  color: #fff; display: flex; flex-direction: column; justify-content: space-between;
+}
+.cover .logo { max-height: 60px; max-width: 240px; margin-bottom: 12px; }
+.cover .cover-titolo {
+  font-family: "DejaVu Serif", Georgia, serif;
+  font-size: 30pt; color: #fff; margin: 0 0 4mm; letter-spacing: -0.4pt; line-height: 1.1;
+}
+.cover .subtitle { font-size: 12pt; color: #b9d4e6; margin: 0; }
+.cover .company { font-size: 19pt; font-weight: 700; margin: 0 0 2mm; }
+.cover .meta { font-size: 10pt; color: #c8dcea; margin: 0 0 1mm; }
+.cover .rating-block {
+  margin-top: 8mm; padding: 5mm 8mm 6mm; border: 1.5pt solid rgba(255,255,255,.28);
+  border-radius: 3mm; background: rgba(255,255,255,.07);
+}
+.cover .quadrante-copertina { text-align: center; }
+.cover .quadrante-copertina svg { width: 96mm; height: auto; }
+.cover .confidence { font-size: 10pt; color: #c8dcea; margin: 3mm 0 0; text-align: center; }
+.cover .footer-note { font-size: 7.5pt; color: #9fbdd2; line-height: 1.4; margin: 0; }
 
 /* ---------- struttura ---------- */
 /* Il titolo di sezione porta una barra verticale a sinistra invece di una
@@ -100,18 +149,11 @@ table.anagrafica td { padding-left: 4mm; }
   background: #f1f5f9; border-left: 3pt solid var(--brand);
   padding: 2.5mm 6mm; margin: 0 0 2.5mm; page-break-inside: avoid;
 }
-.voto { white-space: nowrap; padding-right: 3mm; }
-.voto-numero {
-  font-family: "DejaVu Serif", Georgia, serif;
-  font-size: 33pt; font-weight: 700; color: var(--brand); line-height: 1;
-}
-.voto-su { font-size: 12pt; color: var(--muted); }
+.voto { padding-right: 4mm; }
+.voto svg { width: 62mm; height: auto; }
 .voto-testo { flex: 1; }
-.voto-classe {
-  font-family: "DejaVu Serif", Georgia, serif;
-  font-size: 13pt; color: var(--brand); margin: 0 0 1.5mm;
-}
-.voto-nota { font-size: 8.5pt; color: var(--muted); margin: 0; }
+.voto-nota { font-size: 9pt; color: var(--muted); margin: 0 0 2mm; }
+.voto-nota:last-child { margin-bottom: 0; }
 
 /* Le aree: un pallino dice subito quali guardare, il colore non e' l'unico
    segnale (la riga critica e' anche in neretto). */
@@ -255,5 +297,5 @@ table.interventi td { font-size: 8.5pt; }
 .banda-demo {
   background: #9b1c1c; color: #fff;
   font-size: 10pt; font-weight: 700; letter-spacing: .4pt;
-  padding: 2.5mm 5mm; margin: 0 0 6mm; border-radius: 1.5mm;
+  padding: 2.5mm 5mm; margin: -10mm -12mm 6mm; border-radius: 1.5mm;
 }

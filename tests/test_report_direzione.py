@@ -46,16 +46,16 @@ def _pagine(pdf: bytes) -> list[str]:
 
 def test_l_esecutivo_resta_di_poche_pagine():
     pagine = _pagine(rs.generate_pdf(_context(), include_technical=False).content)
-    assert len(pagine) <= 6, f"{len(pagine)} pagine: non e' piu' un documento per la direzione"
+    assert len(pagine) <= 7, f"{len(pagine)} pagine: non e' piu' un documento per la direzione"
 
 
-def test_la_riserva_di_distribuzione_e_nel_documento():
-    """Il documento circola: deve dire in chiaro a chi e' destinato.
+def test_la_copertina_sta_in_una_pagina():
+    """Era alta quanto un A4 intero e sbordava: il blocco finale finiva su un
+    secondo foglio quasi vuoto, con lo sfondo pieno."""
+    pagine = _pagine(rs.generate_pdf(_context(), include_technical=False).content)
 
-    Stava in copertina; tolta la copertina, e' finita nella nota metodologica
-    in fondo, che e' il posto in cui si cercano le condizioni d'uso."""
-    testo = "".join(_pagine(rs.generate_pdf(_context(), include_technical=False).content))
-    assert "Distribuzione limitata" in testo
+    assert "Distribuzione limitata" in pagine[0], "la copertina non e' completa"
+    assert "Distribuzione limitata" not in pagine[1], "la copertina sborda sulla seconda pagina"
 
 
 @pytest.mark.parametrize("sezione", [

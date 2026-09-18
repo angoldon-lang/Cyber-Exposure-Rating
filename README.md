@@ -314,8 +314,11 @@ Ogni scansione produce **due documenti distinti**, generati insieme e
 concatenati nello stesso PDF.
 
 **Il rapporto per la direzione** e' scritto per chi decide, non per chi
-configura: sei pagine, nessuna sigla senza spiegazione. Apre con il risultato,
-le cinque aree con il significato di ciascun esito e il perimetro osservato;
+configura: una copertina e sei pagine, nessuna sigla senza spiegazione. In
+copertina il punteggio sta su un quadrante che va dal rosso al verde, con le
+soglie delle classi marcate sul disegno: il numero da solo lo sa leggere chi ha
+in testa dove cadono. Poi il risultato, le cinque aree con il significato di
+ciascun esito e il perimetro osservato;
 poi ogni intervento in una scheda che dice *che cosa manca*, *un paragone*,
 *che cosa comporta* e *quanto costa sistemarlo*; poi la scena di che cosa puo'
 succedere davvero nell'area piu' esposta; infine che cosa fare in ordine, con

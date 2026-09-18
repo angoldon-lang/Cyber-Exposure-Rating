@@ -19,106 +19,90 @@ pytestmark = pytest.mark.slow
 MARGINE_MM = 16.0
 
 
-def _bordo_sinistro_mm(pagina) -> float | None:  # noqa: ANN001
-    larghezza = float(pagina.mediabox.width)
-    altezza = float(pagina.mediabox.height)
-    posizioni: list[float] = []
+def _bordi_sinistri_mm(contesto, modello: str) -> list[float]:
+    """Il bordo sinistro del testo, pagina per pagina, in millimetri.
 
-    def visita(testo, cm, tm, _font, _size):  # noqa: ANN001
-        if not testo.strip():
-            return
-        # Il testo dentro un SVG e' disegnato in un sistema di coordinate
-        # proprio: `tm[4]` da' la posizione nel disegno, non nella pagina.
-        # Va composta con la matrice corrente, altrimenti una figura
-        # perfettamente dentro i margini risulta a otto millimetri dal bordo.
-        x = cm[0] * tm[4] + cm[2] * tm[5] + cm[4]
-        y = cm[1] * tm[4] + cm[3] * tm[5] + cm[5]
-        # Per il testo annidato in piu' livelli di SVG la coppia di matrici che
-        # arriva qui non basta a ricostruire la posizione: il punto composto
-        # cade fuori dal foglio, cioe' dove nessun glifo puo' essere stato
-        # disegnato. Misurato al raster, quel testo sta dentro i margini. Un
-        # campione impossibile non dice nulla, ne' a favore ne' contro: va
-        # scartato, altrimenti il controllo segnala a caso.
-        if not (0 <= x <= larghezza and 0 <= y <= altezza):
-            return
-        posizioni.append(x)
+    La misura viene dall'albero di caselle di WeasyPrint, non dal PDF gia'
+    scritto. Leggerla dal PDF significa ricomporre la posizione da due
+    matrici, e per il testo annidato in un SVG quella ricomposizione non
+    torna: il controllo segnalava a 12 e a 15 mm figure che, misurate al
+    raster, stanno a 16. Qui la posizione la dichiara il motore di
+    impaginazione, e le figure non compaiono affatto — un SVG e' una casella
+    sostituita, il suo testo non sta nell'albero. E' esattamente cio' che
+    serve: il margine da controllare e' quello del testo impaginato, non
+    quello degli elementi dentro un disegno, che dipende dalla larghezza
+    della figura.
+    """
+    from weasyprint import HTML
+    from weasyprint.formatting_structure import boxes
 
-    pagina.extract_text(visitor_text=visita)
-    return min(posizioni) / 72 * 25.4 if posizioni else None
+    from reporting import service as rs
+
+    def testi(casella):  # noqa: ANN001, ANN202
+        if isinstance(casella, boxes.TextBox) and casella.text.strip():
+            yield casella
+        for figlia in getattr(casella, "children", ()):
+            yield from testi(figlia)
+
+    documento = HTML(string=rs.render_html(contesto, modello)).render()
+    bordi: list[float] = []
+    for pagina in documento.pages:
+        trovati = [casella.position_x for casella in testi(pagina._page_box)]
+        # WeasyPrint lavora in pixel CSS: 96 per pollice.
+        bordi.append(min(trovati) / 96 * 25.4 if trovati else MARGINE_MM)
+    return bordi
 
 
 def test_l_allegato_tecnico_rispetta_i_margini():
     """Senza la correzione il testo dell'allegato partiva da 0 mm: attaccato al
     bordo del foglio."""
-    import pypdf
-
-    from reporting import service as rs
-
-    pdf = rs.generate_pdf(_context(), include_technical=True)
-    lettore = pypdf.PdfReader(io.BytesIO(pdf.content))
-
-    pagina_allegato = next(
-        (p for p in lettore.pages if "Allegato tecnico" in (p.extract_text() or "")), None)
-    assert pagina_allegato is not None, "l'allegato tecnico non e' nel documento"
-
-    bordo = _bordo_sinistro_mm(pagina_allegato)
-    assert bordo is not None
-    assert bordo >= MARGINE_MM - 0.5, (
-        f"il testo dell'allegato inizia a {bordo:.1f} mm invece di almeno {MARGINE_MM} mm")
+    for numero, bordo in enumerate(_bordi_sinistri_mm(_context(), "technical.html.j2"), 1):
+        assert bordo >= MARGINE_MM - 0.5, (
+            f"pagina {numero} dell'allegato: il testo inizia a {bordo:.1f} mm "
+            f"invece di almeno {MARGINE_MM} mm")
 
 
 def test_tutte_le_pagine_di_contenuto_rispettano_i_margini():
-    """La copertina e' l'unica eccezione ammessa: occupa l'intera pagina."""
-    import pypdf
+    """La copertina e' l'unica eccezione ammessa: occupa l'intera pagina e ha
+    un suo margine interno."""
+    bordi = _bordi_sinistri_mm(_context(), "executive.html.j2")
 
-    from reporting import service as rs
-
-    pdf = rs.generate_pdf(_context(), include_technical=True)
-    lettore = pypdf.PdfReader(io.BytesIO(pdf.content))
-
-    fuori_margine = []
-    for numero, pagina in enumerate(lettore.pages, 1):
-        testo = pagina.extract_text() or ""
-        if numero == 1 or "Security Rating" in testo[:120] and numero == 1:
-            continue  # copertina
-        bordo = _bordo_sinistro_mm(pagina)
-        if bordo is not None and bordo < MARGINE_MM - 0.5:
-            fuori_margine.append(f"pagina {numero}: {bordo:.1f} mm")
-
-    assert not fuori_margine, "pagine con testo oltre il margine: " + ", ".join(fuori_margine)
+    fuori = [f"pagina {numero}: {bordo:.1f} mm"
+             for numero, bordo in enumerate(bordi, 1)
+             if numero > 1 and bordo < MARGINE_MM - 0.5]
+    assert not fuori, "pagine con testo oltre il margine: " + ", ".join(fuori)
 
 
-def test_nessuna_regola_legata_alla_prima_pagina():
-    """I due documenti sono concatenati e ne hanno una ciascuno: una regola
-    scritta come `:first` colpirebbe anche la prima pagina dell'allegato."""
+def test_la_copertina_usa_una_pagina_denominata():
+    """La regola dev'essere legata alla copertina, non alla prima pagina del
+    documento: i due documenti concatenati ne hanno una ciascuno."""
     from pathlib import Path
 
     css = (Path(__file__).resolve().parents[1]
            / "reporting" / "templates" / "base.css").read_text(encoding="utf-8")
+    assert "@page copertina" in css
+    assert ".cover { page: copertina; }" in css
     assert "@page :first" not in css, (
         "`:first` colpisce anche la prima pagina dell'allegato tecnico")
 
 
-def test_la_prima_pagina_e_gia_contenuto():
-    """La copertina a pagina intera e' stata tolta.
+def test_l_apertura_sta_in_una_pagina():
+    """Dopo la copertina, l'apertura del rapporto deve stare in un foglio
+    solo: risultato, aree e perimetro.
 
-    Era un foglio che diceva nome, data e voto, e rimandava tutto il resto
-    alla pagina dopo: in un documento di sei pagine e' un ottavo del totale
-    speso per un frontespizio. Ora la prima pagina porta gia' il risultato,
-    le aree e il perimetro."""
+    E' il punto in cui la pagina e' piena. Se un giorno non ci sta piu', va
+    accorciata, non lasciata sbordare su un foglio quasi vuoto."""
     import pypdf
 
     from reporting import service as rs
 
-    lettore = pypdf.PdfReader(io.BytesIO(rs.generate_pdf(_context(), include_technical=False).content))
-    prima = lettore.pages[0].extract_text() or ""
+    lettore = pypdf.PdfReader(
+        io.BytesIO(rs.generate_pdf(_context(), include_technical=False).content))
+    apertura = lettore.pages[1].extract_text() or ""
 
-    assert "ACME Test S.p.A." in prima
-    assert "Il risultato in due righe" in prima
-    # L'apertura sta in una pagina sola, perimetro compreso: e' il punto in
-    # cui la pagina e' piena. Se un giorno non ci sta piu', va accorciata,
-    # non lasciata sbordare su un foglio quasi vuoto.
-    assert "Il perimetro osservato" in prima, "l'apertura non sta piu' in una pagina"
+    assert "ACME Test S.p.A." in apertura
+    assert "Il risultato in due righe" in apertura
+    assert "Il perimetro osservato" in apertura, "l'apertura non sta piu' in una pagina"
 
 
 def test_il_foglio_di_stile_non_passa_dall_autoescape():
@@ -156,6 +140,8 @@ def test_ogni_pagina_e_numerata_e_intestata():
     piedi = []
     for numero, pagina in enumerate(lettore.pages, 1):
         testo = " ".join((pagina.extract_text() or "").split())
+        if numero == 1:
+            continue  # la copertina non porta piede: e' una pagina a tutto sfondo
         assert "Documento riservato" in testo, f"pagina {numero} senza la riserva"
         assert "ACME" in testo, f"pagina {numero} senza il nome dell'organizzazione"
         piedi.append("Allegato tecnico - pagina" if "Allegato tecnico - pagina" in testo
