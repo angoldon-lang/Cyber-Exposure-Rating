@@ -428,6 +428,7 @@ il connettore e' open source.**
 | [`docs/LEGAL_AND_SCOPE.md`](docs/LEGAL_AND_SCOPE.md) | limiti del servizio, autorizzazioni, privacy |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | installazione, configurazione, hardening |
 | [`docs/OPERATIONS_RUNBOOK.md`](docs/OPERATIONS_RUNBOOK.md) | esercizio, backup, incidenti, manutenzione |
+| [`docs/ROADMAP_TPRM.md`](docs/ROADMAP_TPRM.md) | distanza da un TPRM vendibile, ordine di esecuzione, stima |
 
 ---
 
