@@ -14,6 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from app.core.config import settings  # noqa: E402
 from app.models import Base  # noqa: E402
 
+# Il registro dei moduli e' separato da quello del motore, perche' il motore
+# non deve dipendere dai moduli (vedi `app/moduli/__init__.py`). L'ambiente di
+# migrazione e' l'unico punto che conosce entrambe le meta', ed e' corretto
+# che sia lui: non e' codice di prodotto. Senza questo import le tabelle dei
+# moduli non finirebbero in `Base.metadata` e le migrazioni le ignorerebbero
+# in silenzio.
+import app.moduli  # noqa: E402,F401
+
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
 

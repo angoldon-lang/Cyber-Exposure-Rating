@@ -42,6 +42,11 @@ def db_session():
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
 
+    # Il registro dei moduli va importato accanto a quello del motore,
+    # altrimenti le tabelle dei moduli non sono su `Base.metadata` e il
+    # fixture non le crea. Vale la stessa ragione di `alembic/env.py`: questo
+    # e' codice di prova, non di prodotto, e puo' conoscere entrambe le meta'.
+    import app.moduli  # noqa: F401
     from app.models import Base
 
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False},

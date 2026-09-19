@@ -1,0 +1,309 @@
+# Catalogo di conformita': NIS2 e i framework che condividono i suoi controlli.
+#
+# La struttura e' quella descritta in `backend/app/moduli/conformita/models.py`:
+# i requisiti parlano la lingua del legislatore, i controlli parlano di cio'
+# che l'organizzazione fa, e il collegamento fra i due e' molti-a-molti.
+# Un controllo compare UNA volta e dichiara in `soddisfa` tutti i requisiti
+# che copre, di qualunque framework. Aggiungere DORA domani significa
+# aggiungere i suoi requisiti qui sotto e una riga in `soddisfa` dei controlli
+# che gia' esistono: non un modulo nuovo.
+#
+# `finding_types` e' il ponte verso il motore di rating: sono i tipi di
+# rilievo che, se presenti nella scansione, dimostrano che il controllo NON e'
+# implementato. Vale in una direzione sola — la scansione risponde al
+# controllo, il controllo non tocca il punteggio.
+#
+# `evidenza_attesa_it` serve ai controlli che dall'esterno non si vedono: e'
+# la prova da chiedere all'organizzazione. Senza, «implementato» resta una
+# parola detta da chi ha interesse a dirla.
+version: "1.0.0"
+
+frameworks:
+  - code: NIS2
+    name_it: "Direttiva NIS2 - D.Lgs. 138/2024"
+    authority: "Unione Europea / ACN"
+    version: "2024"
+    description_it: >-
+      Misure di gestione dei rischi di cibersicurezza per i soggetti
+      essenziali e importanti. I riferimenti seguono l'articolo 21, comma 2,
+      del decreto di recepimento.
+    requisiti:
+      - code: "art.21.2.a"
+        title_it: "Analisi dei rischi e politiche di sicurezza dei sistemi informativi"
+      - code: "art.21.2.b"
+        title_it: "Gestione degli incidenti"
+      - code: "art.21.2.c"
+        title_it: "Continuita' operativa, backup e gestione delle crisi"
+      - code: "art.21.2.d"
+        title_it: "Sicurezza della catena di approvvigionamento"
+        text_it: >-
+          Compresi gli aspetti di sicurezza dei rapporti fra il soggetto e i
+          suoi fornitori diretti o prestatori di servizi.
+      - code: "art.21.2.e"
+        title_it: >-
+          Sicurezza nell'acquisizione, sviluppo e manutenzione dei sistemi,
+          compresa la gestione delle vulnerabilita'
+      - code: "art.21.2.f"
+        title_it: "Valutazione dell'efficacia delle misure adottate"
+      - code: "art.21.2.g"
+        title_it: "Igiene informatica di base e formazione"
+      - code: "art.21.2.h"
+        title_it: "Crittografia e cifratura"
+      - code: "art.21.2.i"
+        title_it: "Sicurezza del personale, controllo degli accessi e gestione degli asset"
+      - code: "art.21.2.j"
+        title_it: >-
+          Autenticazione a piu' fattori e comunicazioni protette
+
+  # Un secondo framework serve a dimostrare che la mappatura incrociata non e'
+  # teorica: piu' di un controllo qui sotto risponde a entrambi.
+  - code: GDPR
+    name_it: "Regolamento (UE) 2016/679 - sicurezza del trattamento"
+    authority: "Unione Europea"
+    version: "2016"
+    requisiti:
+      - code: "art.32.1.a"
+        title_it: "Cifratura dei dati personali"
+      - code: "art.32.1.b"
+        title_it: >-
+          Capacita' di assicurare riservatezza, integrita' e disponibilita'
+          dei sistemi
+      - code: "art.32.1.d"
+        title_it: >-
+          Procedura per verificare e valutare regolarmente l'efficacia delle
+          misure
+      - code: "art.28.1"
+        title_it: >-
+          Ricorso a responsabili del trattamento che presentino garanzie
+          sufficienti
+
+controlli:
+  # ---------------------------------------------------------------- posta ---
+  - code: CTRL-POSTA-AUTENTICAZIONE
+    title_it: "Autenticazione del dominio di posta"
+    description_it: >-
+      Il dominio pubblica le regole che permettono ai server riceventi di
+      distinguere la posta legittima da quella contraffatta, e riceve i
+      rapporti sugli abusi.
+    area: email_dns_security
+    remediation: REM-EMAIL-DMARC
+    finding_types: [dmarc_missing, dmarc_policy_none, dmarc_syntax_error,
+                    dmarc_no_reporting, dmarc_subdomain_policy_weak,
+                    spf_missing, spf_invalid, spf_multiple_records,
+                    spf_too_many_lookups, dkim_no_selector_found,
+                    spoofing_possible]
+    soddisfa: ["NIS2:art.21.2.e", "NIS2:art.21.2.j", "GDPR:art.32.1.b"]
+
+  - code: CTRL-POSTA-TRASPORTO
+    title_it: "Cifratura del trasporto della posta"
+    description_it: >-
+      I messaggi in transito fra server viaggiano cifrati, e la consegna in
+      chiaro non e' ammessa silenziosamente.
+    area: email_dns_security
+    remediation: REM-EMAIL-MTASTS
+    finding_types: [mta_sts_missing, tls_rpt_missing, starttls_unsupported]
+    soddisfa: ["NIS2:art.21.2.h", "GDPR:art.32.1.a"]
+
+  - code: CTRL-DNS-INTEGRITA
+    title_it: "Integrita' della risoluzione del dominio"
+    description_it: >-
+      I dati che indicano dove si trovano sito e posta sono firmati, e
+      l'emissione di certificati per il dominio e' limitata ad autorita'
+      dichiarate.
+    area: email_dns_security
+    remediation: REM-DNS-DNSSEC
+    finding_types: [dnssec_missing, caa_missing, domain_expiry_near]
+    soddisfa: ["NIS2:art.21.2.e", "GDPR:art.32.1.b"]
+
+  # ------------------------------------------------------------------ web ---
+  - code: CTRL-WEB-CIFRATURA
+    title_it: "Cifratura e certificati dei servizi web"
+    description_it: >-
+      I servizi pubblicati rispondono solo su canale cifrato, con certificati
+      validi e protocolli non superati.
+    area: web_security
+    remediation: REM-WEB-HTTPS
+    finding_types: [https_not_available, mixed_content, tls_certificate_expired,
+                    tls_certificate_expiring, tls_certificate_hostname_mismatch,
+                    tls_legacy_protocol, tls_weak_cipher]
+    soddisfa: ["NIS2:art.21.2.h", "GDPR:art.32.1.a"]
+
+  - code: CTRL-WEB-IRROBUSTIMENTO
+    title_it: "Irrobustimento delle applicazioni web pubblicate"
+    description_it: >-
+      Le applicazioni dichiarano al browser i limiti entro cui operare, non
+      divulgano dettagli sulla propria composizione e proteggono le sessioni.
+    area: web_security
+    remediation: REM-WEB-HEADERS
+    finding_types: [hsts_missing, csp_missing, clickjacking_protection_missing,
+                    x_content_type_options_missing, referrer_policy_missing,
+                    permissions_policy_missing, cookie_insecure,
+                    cors_permissive, version_disclosure, directory_listing]
+    soddisfa: ["NIS2:art.21.2.e", "GDPR:art.32.1.b"]
+
+  # -------------------------------------------------------- superficie -------
+  - code: CTRL-ACCESSO-REMOTO
+    title_it: "Protezione degli accessi remoti e amministrativi"
+    description_it: >-
+      Pannelli di gestione, ambienti non produttivi e servizi di accesso
+      remoto non sono raggiungibili da internet senza protezione.
+    area: attack_surface
+    remediation: REM-WEB-ADMIN
+    evidenza_attesa_it: >-
+      Elenco degli accessi remoti con indicazione del secondo fattore di
+      autenticazione richiesto.
+    finding_types: [admin_panel_exposed, non_production_environment_exposed,
+                    remote_admin_service_exposed, legacy_vpn_or_firewall_exposed,
+                    sensitive_service_exposed]
+    soddisfa: ["NIS2:art.21.2.i", "NIS2:art.21.2.j", "GDPR:art.32.1.b"]
+
+  - code: CTRL-INVENTARIO-ESPOSIZIONE
+    title_it: "Inventario di cio' che e' esposto su internet"
+    description_it: >-
+      Esiste un elenco aggiornato dei servizi raggiungibili dall'esterno, con
+      un responsabile per ciascuno, e i nomi non piu' in uso vengono rimossi.
+    area: attack_surface
+    remediation: REM-AS-INVENTORY
+    evidenza_attesa_it: >-
+      Inventario degli asset esposti, con data dell'ultimo aggiornamento e
+      responsabile.
+    finding_types: [large_exposed_footprint, dangling_dns_record, abandoned_subdomain]
+    soddisfa: ["NIS2:art.21.2.i", "NIS2:art.21.2.a"]
+
+  # ------------------------------------------------------ vulnerabilita' -----
+  - code: CTRL-VULNERABILITA
+    title_it: "Gestione delle vulnerabilita' note"
+    description_it: >-
+      Le correzioni di sicurezza sui sistemi raggiungibili da internet sono
+      applicate entro tempi definiti, e il software non piu' mantenuto viene
+      sostituito.
+    area: technical_vulnerabilities
+    remediation: REM-VULN-PATCH
+    evidenza_attesa_it: >-
+      Procedura di aggiornamento con i tempi massimi previsti per gravita', e
+      registro delle ultime applicazioni.
+    finding_types: [vulnerability, outdated_software, end_of_life_software]
+    soddisfa: ["NIS2:art.21.2.e", "NIS2:art.21.2.f", "GDPR:art.32.1.d"]
+
+  # ---------------------------------------------------------- credenziali ----
+  - code: CTRL-CREDENZIALI
+    title_it: "Governo delle credenziali aziendali"
+    description_it: >-
+      Le credenziali comparse in furti di dati vengono cambiate, e l'accesso
+      ai servizi aziendali richiede un secondo fattore.
+    area: darkweb_breach
+    remediation: REM-CRED-ROTATION
+    evidenza_attesa_it: >-
+      Politica delle password e prova che il secondo fattore e' attivo su
+      posta, VPN e accessi amministrativi.
+    finding_types: [stealer_log_credentials, breach_credentials_recent,
+                    breach_credentials_old, email_credentials_recently_exposed,
+                    email_exposed_in_breach, email_in_public_paste]
+    soddisfa: ["NIS2:art.21.2.j", "NIS2:art.21.2.i", "GDPR:art.32.1.b"]
+
+  - code: CTRL-MARCHIO
+    title_it: "Sorveglianza sull'uso abusivo del marchio"
+    description_it: >-
+      I domini registrati per somigliare a quello aziendale vengono
+      individuati e, quando usati per ingannare, rimossi.
+    area: darkweb_breach
+    remediation: REM-BRAND-TAKEDOWN
+    finding_types: [lookalike_domain_registered, lookalike_domain_with_mx, darkweb_mention]
+    soddisfa: ["NIS2:art.21.2.b"]
+
+  # ------------------------------------------------------------ incidenti ----
+  - code: CTRL-INCIDENTI
+    title_it: "Gestione e notifica degli incidenti"
+    description_it: >-
+      Esiste una procedura per rilevare, classificare e notificare gli
+      incidenti significativi nei termini previsti dalla normativa.
+    area: darkweb_breach
+    remediation: REM-IR-RANSOMWARE
+    evidenza_attesa_it: >-
+      Procedura di gestione degli incidenti con i termini di notifica ad ACN
+      (preallarme 24 ore, notifica 72 ore) e recapiti del referente.
+    finding_types: [ransomware_leak_publication, organisation_data_on_leak_site]
+    soddisfa: ["NIS2:art.21.2.b", "GDPR:art.32.1.b"]
+
+  - code: CTRL-SEGNALAZIONI
+    title_it: "Recapito per le segnalazioni di sicurezza"
+    description_it: >-
+      Chi individua un problema sui sistemi aziendali sa a chi comunicarlo.
+    area: web_security
+    remediation: REM-WEB-SECURITYTXT
+    finding_types: [security_txt_missing]
+    soddisfa: ["NIS2:art.21.2.b"]
+
+  # ------------------------------- controlli che dall'esterno non si vedono ---
+  # Restano «non valutati» finche' qualcuno non risponde. E' la parte che
+  # giustifica il questionario, e dichiararla e' piu' onesto che ometterla.
+  - code: CTRL-ANALISI-RISCHI
+    title_it: "Analisi dei rischi e politica di sicurezza"
+    description_it: >-
+      L'organizzazione ha censito i propri rischi e ha una politica di
+      sicurezza approvata dalla direzione.
+    area: null
+    evidenza_attesa_it: >-
+      Documento di analisi dei rischi e politica di sicurezza, con data di
+      approvazione e organo che l'ha approvata.
+    finding_types: []
+    soddisfa: ["NIS2:art.21.2.a", "NIS2:art.21.2.f"]
+
+  - code: CTRL-CONTINUITA
+    title_it: "Continuita' operativa e copie di sicurezza"
+    description_it: >-
+      Le copie di sicurezza esistono, sono separate dai sistemi che
+      proteggono, e il ripristino e' stato provato.
+    area: null
+    evidenza_attesa_it: >-
+      Piano di continuita', politica dei backup e verbale dell'ultima prova di
+      ripristino.
+    finding_types: []
+    soddisfa: ["NIS2:art.21.2.c", "GDPR:art.32.1.b"]
+
+  - code: CTRL-FORMAZIONE
+    title_it: "Igiene informatica e formazione del personale"
+    description_it: >-
+      Il personale riceve formazione periodica sui rischi informatici, e la
+      direzione sulla propria responsabilita'.
+    area: null
+    evidenza_attesa_it: >-
+      Registro delle formazioni degli ultimi dodici mesi, compresa quella
+      degli organi di amministrazione.
+    finding_types: []
+    soddisfa: ["NIS2:art.21.2.g"]
+
+  - code: CTRL-FORNITORI
+    title_it: "Sicurezza della catena di fornitura"
+    description_it: >-
+      I fornitori rilevanti sono censiti, classificati per criticita' e
+      valutati; i contratti contengono obblighi di sicurezza.
+    area: null
+    evidenza_attesa_it: >-
+      Elenco dei fornitori con criticita' assegnata, e clausole di sicurezza
+      nei contratti dei fornitori critici.
+    finding_types: []
+    soddisfa: ["NIS2:art.21.2.d", "GDPR:art.28.1"]
+
+  - code: CTRL-ACCESSI-PERSONALE
+    title_it: "Controllo degli accessi e gestione del personale"
+    description_it: >-
+      I permessi sono assegnati per ruolo, rivisti periodicamente e revocati
+      alla cessazione del rapporto.
+    area: null
+    evidenza_attesa_it: >-
+      Procedura di assegnazione e revoca dei permessi, e verbale dell'ultima
+      revisione periodica.
+    finding_types: []
+    soddisfa: ["NIS2:art.21.2.i", "GDPR:art.32.1.b"]
+
+  - code: CTRL-EFFICACIA
+    title_it: "Verifica dell'efficacia delle misure"
+    description_it: >-
+      L'efficacia delle misure adottate viene verificata periodicamente, e gli
+      esiti alimentano il piano di miglioramento.
+    area: null
+    evidenza_attesa_it: >-
+      Piano delle verifiche e ultimo rapporto di audit o di test tecnico.
+    finding_types: []
+    soddisfa: ["NIS2:art.21.2.f", "GDPR:art.32.1.d"]

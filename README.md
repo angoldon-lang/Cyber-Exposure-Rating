@@ -343,22 +343,47 @@ del tenant, in **Amministrazione → Personalizzazione**.
 
 ---
 
+## Un repository, due prodotti
+
+Il motore di rating si vende da solo come **Defenix Security Rating**. Sopra
+di esso crescono moduli che si vendono separatamente — conformita' e NIS2
+Starter, TPRM in seguito — e stanno nello stesso repository perche' duplicare
+il motore significherebbe applicare ogni correzione due volte.
+
+Perche' «stesso repository» non diventi «stessa cosa» vale una regola, e non
+e' affidata alla memoria: **i moduli importano dal motore, il motore non
+importa mai dai moduli**, e `tests/test_confini_moduli.py` lo verifica
+leggendo gli import di ogni file sorgente.
+
+Il fondamento comune e' `backend/app/moduli/conformita/`, che tiene separati i
+**requisiti** (che appartengono a un framework: «art. 21, comma 2, lettera d»)
+dai **controlli** (cio' che l'organizzazione fa, indipendente dal framework) e
+li collega molti-a-molti. E' li' che vive la proprieta' che conta: un
+controllo implementato una volta vale ovunque si applichi. Il catalogo sta in
+`config/framework_nis2.yaml`; oggi copre NIS2 e GDPR art. 32 con 18 controlli,
+di cui 12 la scansione sa gia' rispondere da sola.
+
+Dettaglio in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) sezione 8.
+
+---
+
 ## Struttura del progetto
 
 ```
 ├── README.md                  ├── config/                 YAML versionati del modello
-├── docker-compose.yml         │   ├── scoring.yaml            57 regole, 5 categorie
+├── docker-compose.yml         │   ├── scoring.yaml            61 regole, 5 categorie
 ├── .env.example               │   ├── tool_profiles.yaml      22 tool, 3 profili
 ├── Makefile                   │   ├── remediation_catalog.yaml
 ├── backend/                   │   ├── narrativa_direzione.yaml
-│   ├── app/                   │   ├── rating_caps.yaml
-│   │   ├── api/routers/       │   ├── evidence_confidence.yaml
-│   │   ├── core/              │   └── nuclei_allowlist.yaml
+│   ├── app/                   │   ├── framework_nis2.yaml
+│   │   ├── api/routers/       │   ├── rating_caps.yaml
+│   │   ├── core/              │   ├── evidence_confidence.yaml
+│   │   ├── moduli/            │   └── nuclei_allowlist.yaml
 │   │   ├── models/            ├── reporting/              Jinja2, PDF, DOCX, JSON, CSV
 │   │   ├── schemas/           ├── frontend/               React + TypeScript + Vite
 │   │   ├── services/          ├── workers/                immagini e wrapper dei tool
 │   │   └── workers/           ├── deploy/                 configurazioni di runtime
-│   └── alembic/               ├── tests/                  373 test
+│   └── alembic/               ├── tests/                  794 test
                                ├── docs/                   ARCHITECTURE, SCORING_MODEL,
 ├── adapters/                  │                           SCAN_PROFILES, SECURITY_MODEL,
 │   ├── runner.py              │                           LEGAL_AND_SCOPE, DEPLOYMENT,
@@ -393,7 +418,7 @@ Dettaglio in [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md).
 ## Test
 
 ```bash
-make test        # 373 test
+make test        # 794 test
 make coverage    # con report di copertura
 make lint        # ruff + tsc --noEmit
 ```

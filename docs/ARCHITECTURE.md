@@ -175,11 +175,13 @@ backend/
     services/     scope guard, ownership, normalizzazione, scoring, confidence,
                   autorizzazione, verifica dominio, revisione, remediation, diff
     workers/      Celery e orchestratore della pipeline
+    moduli/       contesti applicativi costruiti SOPRA il motore (sezione 8)
+      conformita/ framework, requisiti, controlli, stato per azienda
   alembic/        migrazioni (RLS, trigger di immutabilita' dell'audit)
 adapters/         un modulo per strumento, piu' runner sicuro e registro
 reporting/        contesto, template Jinja2, generatori PDF/Word/JSON/CSV
 frontend/         React + TypeScript + Vite
-tests/            373 test: scoring, sicurezza, adapter, API, report, pipeline
+tests/            794 test: scoring, sicurezza, adapter, API, report, pipeline
 docs/             questa documentazione
 ```
 
@@ -240,7 +242,71 @@ espliciti di CPU e memoria. La sola capability aggiunta e' `NET_RAW`, e serve
 unicamente al SYN scan di Naabu nel profilo esteso: chi non usa quel profilo
 puo' rimuoverla.
 
-## 8. Evoluzione prevista
+## 8. Un repository, due prodotti
+
+Il motore di rating si vende da solo come **Defenix Security Rating**, e sopra
+di esso crescono moduli che si vendono separatamente: conformita' e NIS2
+Starter oggi, TPRM domani. Stanno nello stesso repository, e la ragione e'
+pratica: questo codice contiene correzioni costate care — la collisione del
+binario `httpx`, il parser di `testssl`, la contabilita' della copertura — e
+774 test che le tengono ferme. In due copie ogni correzione andrebbe applicata
+due volte, e le basi divergerebbero in poche settimane.
+
+Perche' «stesso repository» non diventi «stessa cosa», vale una regola:
+
+> I moduli importano dal motore. Il motore non importa mai dai moduli.
+
+Il motore e' `app/core`, `app/models`, `app/services`, `app/api`,
+`app/schemas`, `app/workers`, piu' `adapters/` e `reporting/`. I moduli stanno
+sotto `app/moduli/`. La regola non e' affidata alla memoria: la verifica
+`tests/test_confini_moduli.py`, leggendo gli import di ogni file sorgente.
+
+Due punti conoscono legittimamente entrambe le meta', e nessuno dei due e'
+codice di prodotto: `alembic/env.py`, perche' le migrazioni devono vedere
+tutte le tabelle, e `tests/conftest.py`, per la stessa ragione. Da qui la
+scelta di tenere due registri di modelli separati — `app/models/__init__.py`
+per il motore, `app/moduli/__init__.py` per i moduli — invece di un registro
+unico che avrebbe rotto la regola alla prima riga.
+
+### La conformita' e' un fondamento, non un modulo fra gli altri
+
+`app/moduli/conformita/` non e' il modulo NIS2: e' la struttura su cui NIS2
+Starter e TPRM si appoggiano entrambi. Il modello tiene separati i **requisiti**
+(che appartengono a un framework e ne parlano la lingua: «art. 21, comma 2,
+lettera d») dai **controlli** (cio' che l'organizzazione fa davvero, che non
+appartiene ad alcun framework), e li collega con una relazione molti-a-molti.
+
+E' li' che vive la proprieta' che conta: *un controllo implementato una volta
+vale ovunque si applichi*. Aggiungere DORA significa aggiungere i suoi
+requisiti in `config/framework_*.yaml` e collegarli ai controlli esistenti,
+non scrivere un modulo nuovo. La struttura alternativa — una lista di spunte
+per normativa — sembra piu' semplice il primo giorno e si paga a ogni
+direttiva successiva.
+
+Il catalogo sta in configurazione, come il modello di scoring: e' contenuto,
+si corregge in una revisione leggibile. Le tabelle ne sono il riflesso, e
+servono perche' lo stato *per azienda* abbia un aggancio e perche' «quali
+controlli coprono l'articolo 21 lettera d, e come stanno sui miei quaranta
+fornitori» sia una join.
+
+### Cio' che la scansione puo' dire da sola, e cio' che non puo'
+
+`conformita/valutazione.py` deduce lo stato dei controlli dai rilievi gia'
+raccolti, e applica al risultato la stessa disciplina del rating: **l'assenza
+di rilievi non e' prova di conformita'**. Un controllo senza rilievi contrari
+risulta implementato solo se gli strumenti che coprono quell'area hanno
+davvero girato, e con evidenza *dedotta*, non confermata; altrimenti resta
+«non valutato». E' la distinzione che un cruscotto disonesto colorerebbe di
+verde.
+
+Dei 18 controlli del catalogo attuale, 12 sono osservabili dall'esterno e 6
+no: quei sei sono la ragione per cui serve il questionario, e vanno mostrati
+come non valutati invece che taciuti. Quando il questionario arrivera', la
+stessa funzione confrontera' il dichiarato con l'osservato: dove i due
+divergono, la contraddizione e' essa stessa un risultato — ed e' cio' che una
+piattaforma fatta di soli questionari non puo' produrre.
+
+## 9. Evoluzione prevista
 
 | Fase | Contenuto | Stato |
 |---|---|---|

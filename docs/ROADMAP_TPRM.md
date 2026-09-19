@@ -31,13 +31,14 @@ compratore chiama «TPRM».
 | # | Blocco | Stato | Nota |
 |---|---|---|---|
 | 1 | Rating esterno continuo | **fatto** | l'asset della piattaforma |
+| 1b | Rating di filiera dell'azienda madre | assente | il punteggio del cliente derivato da quelli dei suoi fornitori: mancava in questo documento fino alla revisione del 19/09 |
 | 2 | Anagrafica fornitori e ciclo di vita | assente | `Company` e' piatta: manca «fornitore *di chi*», criticita', referente interno, contratto, scadenze, on/offboarding |
 | 3 | Questionari e assessment | assente | e' il cuore del TPRM: senza, e' uno scanner |
 | 4 | Portale fornitore | assente | il fornitore deve rispondere e caricare evidenze da solo |
 | 5 | Registro rischi e trattamento | parziale | il piano di rimedio si genera ma non si traccia: niente owner, scadenza, SLA, accettazione, riverifica |
 | 6 | Monitoraggio ricorrente e allerta | quasi | `next_scan_due_at` si mostra ma nessuno lo aggiorna e niente lo fa scattare; nessun canale di notifica |
 | 7 | Quarta parte e concentrazione | assente | ricavabile in gran parte dai dati gia' raccolti (ASN, hosting, CDN) |
-| 8 | Mappatura normativa NIS2/DORA/GDPR/ISO | assente | e' la ragione per cui in Italia oggi si compra |
+| 8 | Mappatura normativa NIS2/DORA/GDPR/ISO | **fondamenta posate** | modello a mappatura incrociata, catalogo e valutazione dedotta: `app/moduli/conformita/` |
 | 9 | Dati non-cyber sul fornitore | assente | salute finanziaria, visura, sanzioni, adverse media |
 | 10 | Workflow, task, collaborazione | assente | assegnazioni, approvazioni, escalation, solleciti |
 | 11 | Integrazioni | parziale | OIDC c'e'; mancano API pubblica, webhook, ticketing, SAML/SCIM |
@@ -82,6 +83,98 @@ Il minimo per firmare contratti ricorrenti invece di consulenze una tantum.
 
 Insieme: **≈ 31.500 righe**, cioe' il raddoppio della base di codice attuale.
 
+## 3-bis. Il rating di filiera
+
+L'analisi originale trattava il rating come per-azienda e non lo aggregava
+mai. E' il pezzo che rende il portafoglio piu' di un elenco.
+
+**Non e' un'entita' nuova, e' una relazione.** Madre e fornitore sono entrambi
+`Company`; serve `RapportoDiFornitura(madre, fornitore, criticita', dati
+trattati, livello di accesso, contratto)`. Due cose arrivano gratis: la quarta
+parte e' la stessa relazione un livello piu' giu', e lo stesso fornitore che
+serve piu' clienti si scansiona una volta sola.
+
+**L'aggregazione non e' una media.** Una media pesata nasconde l'unico
+fornitore critico a 30 fra quaranta buoni, che e' il caso che conta. Il motore
+ha gia' il meccanismo: somma pesata piu' cap. `rating_caps.yaml` dice
+«ransomware confermato, massimo 39»; un `supply_chain.yaml` dira' «un fornitore
+critico in classe E, filiera massimo 49».
+
+**Il peso non e' solo la criticita'.** Il rating esterno di un fornitore misura
+l'esposizione *sua*, non il rischio *tuo*: il rischio tuo e' la sua esposizione
+per quanto dipendi da lui. Per questo i dati trattati e il livello di accesso
+stanno sulla relazione, non sul fornitore — e quando il cliente contesta il
+voto, quella e' la risposta.
+
+**Due numeri, di nuovo.** Il rating di filiera ha la sua affidabilita', che
+crolla quando i fornitori non sono stati scansionati di recente o non hanno
+risposto. Cinquanta fornitori di cui sei hanno risposto non fanno un verde.
+
+**Il vincolo legale da' forma al resto.** Non si scansiona attivamente un
+fornitore senza autorizzazione. Il profilo passivo non ne richiede, perche'
+legge solo fonti pubbliche: fornitore non ingaggiato, solo passivo; fornitore
+che aderisce, profilo verificato, che alza la sua affidabilita' e quella della
+madre. E' pulito giuridicamente ed e' il meccanismo commerciale — la madre ha
+un motivo per spingere i fornitori ad aderire, e ogni fornitore che aderisce e'
+un cliente in potenza.
+
+Costo: ≈ 1.500 righe.
+
+## 3-ter. NIS2 Starter, e cinque decisioni prese dal mercato
+
+### NIS2 Starter non e' un modulo software, e' un servizio
+
+Il prodotto di riferimento e' un percorso di due settimane con tre
+deliverable: valutazione strutturata della postura, gap analysis NIS2 con
+priorita', roadmap a 90 giorni con responsabili e budget. Di quei tre, il
+primo e' cio' che la piattaforma gia' produce, e il piano di rimedio con
+priorita' e impegno e' meta' del terzo.
+
+| Pezzo | Righe | Stato |
+|---|---:|---|
+| Modello framework → controllo → requisito, mappatura incrociata | 700 | **fatto** |
+| Contenuto NIS2 art. 21 + GDPR art. 32, 18 controlli | ~800 | **prima tranche fatta** |
+| Valutazione dedotta dai rilievi, con la regola sull'assenza di prove | 500 | **fatto** |
+| Autovalutazione guidata (prima fetta del motore questionari) | 1.200 | da fare |
+| Roadmap 90 giorni: fasi, responsabile, fascia di budget | 400 | da fare |
+| Report «NIS2 Starter» | 400 | da fare |
+
+Il collo di bottiglia non e' il codice: e' il contenuto. Mappare l'articolo 21
+e le determinazioni ACN in controlli verificabili e' lavoro di dominio legale,
+e nessuna quantita' di token lo compra. La prima tranche (18 controlli, 12
+osservabili dalla scansione) e' in `config/framework_nis2.yaml` e va rivista
+da chi ha quella competenza.
+
+Nota commerciale: **il servizio si vende gia' oggi**, con la piattaforma
+attuale e la roadmap scritta a mano. Il modulo serve a farlo dieci volte
+invece che una, e a validare il contenuto sui primi clienti prima di
+programmarlo.
+
+### Cinque decisioni prese guardando chi vende gia'
+
+Sono schemi di settore, non proprieta' di nessuno. Due sono decisioni di
+architettura da prendere subito; tre sono funzioni da mettere in ordine.
+
+1. **Mappatura incrociata dei framework.** Controllo ↔ requisito ↔ framework
+   come relazione molti-a-molti, non una lista di spunte per normativa.
+   *Presa: `app/moduli/conformita/`.* Sbagliarla avrebbe significato
+   riscrivere il modulo a ogni direttiva.
+2. **Il confine fra motore e moduli**, verificato da un test.
+   *Presa: `tests/test_confini_moduli.py`.*
+3. **Solleciti automatici sui questionari.** Rincorrere i fornitori e' il
+   dolore operativo numero uno del TPRM, ed e' la prima cosa che i concorrenti
+   mettono in vetrina. Va progettato insieme al questionario, non dopo.
+4. **Libreria di questionari**, pubblici piu' personalizzabili, invece di un
+   questionario fisso. Cambia il modello dati del questionario: modello →
+   istanza, non un solo insieme di domande.
+5. **Scoperta automatica degli asset del fornitore** all'ingaggio, da un solo
+   dominio. La macchina c'e' gia' — subfinder, certificate transparency, DNS:
+   manca farla partire da li'.
+
+Il rating che si aggiorna da solo, che i concorrenti vendono come
+caratteristica principale, e' gia' il punto 1 dell'ordine di esecuzione qui
+sotto.
+
 ## 4. Ordine di esecuzione consigliato
 
 Non l'ordine della tabella: l'ordine del rapporto valore/costo.
@@ -89,15 +182,22 @@ Non l'ordine della tabella: l'ordine del rapporto valore/costo.
 1. **Scansione ricorrente e notifiche** (1.500 righe). Oggi si vende una
    fotografia; con questo si vende un abbonamento. E' il cambiamento che
    trasforma il modello di ricavo, ed e' il piu' economico della lista.
-2. **Criticita' del fornitore e referente interno** (600 righe). Piccolo, e
-   senza di esso il portafoglio non si sa ordinare.
-3. **Questionario e portale fornitore** (4.000 righe). Il pezzo grosso, ma e'
-   quello che fa dire «e' un TPRM».
-4. **Registro rischi con scadenze**. Chiude il cerchio: rilevo, chiedo,
+2. **Registro fornitori con criticita' e rating di filiera** (2.700 righe).
+   I rating dei fornitori esistono gia': aggregarli e' un incremento vendibile
+   *prima* dei questionari, e senza criticita' il portafoglio non si sa
+   ordinare.
+3. **NIS2 Starter** (2.000 righe residue). Le fondamenta sono posate; mancano
+   autovalutazione, roadmap a 90 giorni e report. Vendibile per conto suo, e
+   paga il primo tratto del TPRM.
+4. **Questionario e portale fornitore** (4.000 righe). Il pezzo grosso, ma e'
+   quello che fa dire «e' un TPRM». Con la libreria e i solleciti dal primo
+   giorno.
+5. **Registro rischi con scadenze**. Chiude il cerchio: rilevo, chiedo,
    assegno, verifico.
 
-Il blocco normativo (NIS2, DORA) va dopo il punto 3, non prima: senza
-questionari non c'e' dove agganciare le evidenze di conformita'.
+DORA e ISO 27001 si agganciano al punto 3 aggiungendo requisiti al catalogo
+esistente: e' esattamente il lavoro che la mappatura incrociata rende
+economico.
 
 ## 5. Quello che non si risolve scrivendo codice
 
