@@ -446,6 +446,7 @@ il connettore e' open source.**
 
 | Documento | Contenuto |
 |---|---|
+| [`docs/PROGETTO.md`](docs/PROGETTO.md) | **documento maestro**: che cos'e', come funziona, stato, limiti, dove va |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | componenti, flussi, diagrammi Mermaid, modello dati |
 | [`docs/SCORING_MODEL.md`](docs/SCORING_MODEL.md) | regole, pesi, cap, decadimento, confidenza |
 | [`docs/SCAN_PROFILES.md`](docs/SCAN_PROFILES.md) | profili, tool ammessi, azioni vietate |

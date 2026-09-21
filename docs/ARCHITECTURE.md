@@ -169,7 +169,8 @@ config/           modello di scoring, profili, remediation, cap, allowlist Nucle
 backend/
   app/
     core/         configurazione, database, sicurezza, RBAC, logging, redazione
-    models/       30 tabelle SQLAlchemy, tutte con tenant_id
+    models/       tabelle del motore; quelle con dati di cliente
+                  portano tenant_id e sono protette da RLS
     schemas/      contratti Pydantic dell'API
     api/          dipendenze e router REST
     services/     scope guard, ownership, normalizzazione, scoring, confidence,

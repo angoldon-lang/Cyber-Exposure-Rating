@@ -17,7 +17,7 @@ la parte piu' debole e il § 6 dice perche'.
 | Frontend | 3.919 righe, 10 pagine |
 | Configurazione versionata | 2.862 righe YAML |
 | API | 71 endpoint, 8 router |
-| Modello dati | 24 tabelle, 6 migrazioni |
+| Modello dati | 37 tabelle, 6 migrazioni |
 | Motore di rating | 61 regole, 5 aree, 5 classi, 4 cap, 27 remediation |
 | Raccolta | 28 strumenti, 3 profili, 20 servizi in compose |
 
