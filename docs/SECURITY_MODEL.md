@@ -61,7 +61,10 @@ servono ai dati sintetici; in esecuzione reale sono negate.
   anche l'*argument injection*, che `shell=False` da sola non impedisce (un
   hostname `--output=/etc/passwd` sarebbe interpretato come opzione);
 - limiti di risorse applicati nel processo figlio prima dell'exec
-  (`RLIMIT_AS`, `RLIMIT_CPU`, `RLIMIT_NPROC`, `RLIMIT_FSIZE`), `setsid()`;
+  (`RLIMIT_AS`, `RLIMIT_CPU`, `RLIMIT_FSIZE`), `setsid()`; il tetto ai
+  processi sta sul contenitore (`pids_limit`) e non fra questi, perche'
+  `RLIMIT_NPROC` conta i thread dell'utente su tutto il contenitore e non
+  quelli del processo a cui viene applicato;
 - ambiente minimale: al figlio arrivano solo `PATH`, `HOME`, `LANG`,
   `TMPDIR` e i certificati. Le API key non vengono ereditate;
 - timeout obbligatorio e output troncato al limite configurato;

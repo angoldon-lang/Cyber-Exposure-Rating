@@ -49,3 +49,36 @@ def test_la_soglia_resta_sopra_il_minimo_misurato():
     fallirebbe senza una causa leggibile.
     """
     assert MINIMO_SPAZIO_INDIRIZZI_MB >= 1024
+
+
+# --------------------------------------------------------------------------
+def test_il_tetto_ai_processi_non_e_un_limite_per_strumento():
+    """`RLIMIT_NPROC` non e' un limite per processo: il kernel lo conta sui
+    thread dell'UTENTE REALE, in tutto il contenitore.
+
+    Applicato al singolo strumento sembrava una protezione e non lo era: il
+    budget risultava gia' speso da Celery, dai suoi worker e dagli strumenti
+    di un'altra scansione in corso, e il binario Go appena partito moriva
+    creando il proprio terzo thread. Misurato: con 240 thread dello stesso
+    utente aperti altrove, un figlio con limite 256 ne crea 14 e poi
+    fallisce; con l'utente libero ne crea 60 senza errori.
+
+    La protezione contro la moltiplicazione resta, ma sul contenitore, dove
+    puo' funzionare e dall'interno non si alza.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    radice = Path(__file__).resolve().parents[1]
+    runner = (radice / "adapters" / "runner.py").read_text(encoding="utf-8")
+    righe_attive = [r for r in runner.splitlines()
+                    if "RLIMIT_NPROC" in r and not r.strip().startswith("#")]
+
+    assert not righe_attive, (
+        "RLIMIT_NPROC e' tornato fra i limiti del singolo strumento: "
+        f"{righe_attive}")
+
+    compose = yaml.safe_load((radice / "docker-compose.yml").read_text(encoding="utf-8"))
+    assert compose["services"]["worker"].get("pids_limit"), (
+        "tolto il limite per strumento, il contenitore resta senza tetto ai processi")

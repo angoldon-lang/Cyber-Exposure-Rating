@@ -121,6 +121,13 @@ services:
     # NET_RAW serve soltanto al SYN scan di naabu nel profilo esteso.
     # Rimuovere questa capability se il profilo esteso non viene usato.
     cap_add: [NET_RAW]
+    # Tetto ai processi del contenitore. E' qui e non fra i limiti del
+    # singolo strumento perche' RLIMIT_NPROC conta i thread dell'utente su
+    # tutto il contenitore, non quelli del processo a cui lo si applica:
+    # usato per strumento uccideva i binari Go appena due scansioni
+    # giravano insieme. Questo e' un limite del cgroup, vale per tutti e
+    # dall'interno non si alza.
+    pids_limit: 4096
     deploy:
       resources:
         limits: { cpus: "2.0", memory: 2G }

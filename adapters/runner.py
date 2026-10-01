@@ -131,7 +131,22 @@ def _child_limits(memory_mb: int, cpu_seconds: int) -> None:  # pragma: no cover
     """Applica i limiti di risorse nel processo figlio prima dell'exec."""
     resource.setrlimit(resource.RLIMIT_AS, (memory_mb * 1024 * 1024,) * 2)
     resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
-    resource.setrlimit(resource.RLIMIT_NPROC, (256, 256))
+    # Qui c'era RLIMIT_NPROC a 256, nell'intenzione di impedire a uno
+    # strumento compromesso di moltiplicarsi. Non puo' farlo, perche' non e'
+    # un limite per processo: il kernel lo conta sui thread dell'UTENTE
+    # REALE, in tutto il contenitore. Il budget era quindi gia' speso da
+    # Celery, dai suoi worker e dagli strumenti dell'altra scansione in
+    # corso, e il binario Go appena partito moriva creando il proprio terzo
+    # thread — «failed to create new OS thread (have 3 already; errno=11)»,
+    # un messaggio che indica un numero piccolo e manda a cercare nel posto
+    # sbagliato. Misurato: con 240 thread dello stesso utente aperti altrove,
+    # un figlio con limite 256 ne crea 14 e poi fallisce; con l'utente libero
+    # ne crea 60 senza errori.
+    #
+    # La protezione contro la moltiplicazione resta, ma dove puo' funzionare:
+    # `pids_limit` sul servizio worker nel compose. E' un limite del cgroup,
+    # vale per tutti i processi del contenitore a prescindere dall'utente, e
+    # dall'interno non si puo' alzare.
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     resource.setrlimit(resource.RLIMIT_FSIZE, (DEFAULT_MAX_OUTPUT_BYTES,) * 2)
     # La sessione separata la crea `start_new_session=True`, che agisce prima
