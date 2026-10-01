@@ -24,7 +24,12 @@ factors:
     description_it: "Numero di fonti indipendenti effettivamente interrogate"
   tool_success_rate:
     weight: 16
-    description_it: "Rapporto tra tool completati e tool pianificati"
+    # Il denominatore esclude le assenze previste: uno strumento sostituito da
+    # un altro che nella stessa scansione e' riuscito, e uno che aspetta un
+    # dato dall'analista e non l'ha ricevuto. Non sono guasti, e contarli
+    # toglieva al fattore il significato di indicatore di salute. L'area che
+    # non hanno verificato resta comunque dichiarata non verificata.
+    description_it: "Rapporto tra tool completati e tool pianificati (escluse le assenze previste)"
   profile_depth:
     weight: 10
     description_it: "Profondita' del profilo (passive < standard < extended)"

@@ -169,6 +169,8 @@ tools:
 
   theharvester:
     label: "theHarvester (indirizzi e sottodomini da fonti pubbliche)"
+    compose_service: theharvester
+    compose_profile: osint
     kind: http_api
     passive: true
     phase: 1
@@ -197,6 +199,8 @@ tools:
 
   spiderfoot:
     label: "SpiderFoot"
+    compose_service: spiderfoot
+    compose_profile: osint
     kind: http_api
     passive: true
     phase: 1
@@ -268,6 +272,7 @@ tools:
 
   checkdmarc:
     label: "checkdmarc"
+    python_module: checkdmarc
     kind: python_library
     passive: true
     phase: 1
@@ -448,6 +453,8 @@ tools:
 
   zap_baseline:
     label: "OWASP ZAP Baseline"
+    compose_service: zap
+    compose_profile: zap
     kind: docker
     passive: false
     phase: 2
@@ -485,6 +492,11 @@ tools:
     label: "Naabu"
     kind: external_binary
     binary: naabu
+    # Non esistono binari di naabu per arm64 (usa libpcap tramite CGO). La
+    # stessa area e' coperta da `port_scan`, integrato nella piattaforma:
+    # dichiararlo qui evita che l'assenza su quell'architettura venga contata
+    # come un buco di copertura, perche' un buco non c'e'.
+    replaced_by: port_scan
     passive: false
     phase: 2
     timeout_seconds: 900
@@ -537,6 +549,7 @@ tools:
 
   dnstwist_passive:
     label: "DNSTwist (solo registrati)"
+    python_module: dnstwist
     kind: python_library
     passive: true
     phase: 2
@@ -548,6 +561,7 @@ tools:
 
   dnstwist:
     label: "DNSTwist"
+    python_module: dnstwist
     kind: python_library
     passive: true
     phase: 2
@@ -558,6 +572,12 @@ tools:
     coverage_weight: 1.0
 
   email_header:
+    # Aspetta l'intestazione completa di un messaggio, che la incolla un
+    # analista all'avvio: saltarlo non e' un guasto, e contarlo fra gli
+    # strumenti non riusciti abbassava la fiducia per un'assenza prevista.
+    # L'area resta non verificata e il suo peso continua a pesare: e' la
+    # verita'. Cio' che cambia e' che non risulta piu' un insuccesso.
+    requires_input: true
     label: "Email header analyzer"
     kind: builtin
     passive: true

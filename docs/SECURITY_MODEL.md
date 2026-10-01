@@ -51,6 +51,25 @@ Cosa e' bloccato in concreto:
 Le reti di documentazione RFC 5737 sono ammesse solo in mock mode, dove
 servono ai dati sintetici; in esecuzione reale sono negate.
 
+Il ScopeGuard vale per i **bersagli**. Un servizio di infrastruttura non e' un
+bersaglio: SpiderFoot, theHarvester e ZAP girano accanto al worker su un
+indirizzo privato, e il loro indirizzo lo scrive un amministratore nella
+configurazione, come quello del database. Farli passare da quel controllo li
+rendeva inutilizzabili proprio nella distribuzione tipica. Verso di loro vale
+una protezione diversa, in `adapters/http_sicuro.py`: i redirect non possono
+uscire dall'origine configurata, cosi' un servizio compromesso non puo' usare
+la piattaforma per raggiungere qualcos'altro. I parametri si aggiungono con
+`copy_merge_params` e non concatenandoli all'indirizzo, perche' un valore che
+contenga `&` non diventi un parametro in piu'.
+
+La verifica di prontezza (`app/services/verifica_strumenti.py`, esposta come
+`make strumenti`) apre connessioni verso gli stessi servizi e solo verso quelli:
+un `connect` TCP che chiude subito, senza inviare ne' leggere nulla. Gli
+indirizzi arrivano dall'elenco chiuso delle variabili configurabili, mai dai
+dati di un'azienda, e le fonti commerciali di terze parti non vengono
+contattate. E' un comando, non un endpoint: una richiesta HTTP non puo'
+scatenare quelle connessioni.
+
 ## 3. Esecuzione degli strumenti esterni
 
 `adapters/runner.py`:

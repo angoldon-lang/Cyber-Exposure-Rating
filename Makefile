@@ -140,9 +140,32 @@ build: require-env ## Costruisce le immagini container
 
 .PHONY: up
 up: require-env ## Avvia lo stack completo
+	@# Un servizio sotto profilo non esiste se il profilo non e' attivo, e
+	@# Compose lo fa in silenzio: nessun avviso, nessun container, e in
+	@# scansione gli adapter dicono soltanto «connection refused». Chi ha
+	@# installato prima che COMPOSE_PROFILES comparisse in .env.example ha un
+	@# .env che non la contiene, e non ha modo di accorgersene.
+	@grep -qE '^COMPOSE_PROFILES=' .env || { \
+		echo "AVVISO: .env non contiene COMPOSE_PROFILES."; \
+		echo "  SpiderFoot e theHarvester non verranno avviati, e la copertura"; \
+		echo "  delle scansioni ne risentira' senza dirne il motivo."; \
+		echo "  Aggiungere a .env:  COMPOSE_PROFILES=osint"; \
+		echo; }
 	$(COMPOSE) up -d
 	@echo "Frontend: http://localhost:$${FRONTEND_PORT:-8080}"
 	@echo "API docs: http://localhost:$${API_PORT:-8000}/api/v1/docs"
+
+.PHONY: up-osint
+up-osint: require-env ## Avvia SpiderFoot e theHarvester (profilo osint)
+	@# Utile a chi ha un .env senza COMPOSE_PROFILES e non vuole modificarlo
+	@# subito: `--profile` vale per questo comando e basta.
+	$(COMPOSE) --profile osint up -d
+	@echo
+	@echo "SpiderFoot e theHarvester avviati. In .env (o in Personalizzazione ->"
+	@echo "Strumenti) devono risultare impostati:"
+	@echo "  SPIDERFOOT_URL=http://spiderfoot:5001"
+	@echo "  THEHARVESTER_URL=http://theharvester:5000"
+	@echo "Per non ripetere il comando a ogni avvio: COMPOSE_PROFILES=osint in .env."
 
 .PHONY: down
 down: ## Ferma lo stack
@@ -250,6 +273,15 @@ aggiorna: require-env ## Aggiorna tutto: codice, immagini, database
 	@echo "riconvalidare. Dalle volte successive non serve piu'."
 	@echo "In fondo alla barra laterale c'e' la data di compilazione: se non"
 	@echo "cambia, si sta ancora guardando una copia in cache."
+
+.PHONY: strumenti
+strumenti: require-env ## Dice quali strumenti sono utilizzabili e cosa manca agli altri
+	@# Nel worker e non nell'API: i binari stanno nella sua immagine e i servizi
+	@# facoltativi rispondono sulla rete interna. Eseguito nell'API ogni binario
+	@# risulterebbe assente -- correttamente, e senza alcuna utilita'.
+	@$(COMPOSE) exec -T worker python -m app.cli strumenti \
+		$(if $(DA_SISTEMARE),--da-sistemare,) \
+		|| echo "Il worker non risponde: make worker-start"
 
 .PHONY: diagnosi
 diagnosi: ## Dice cosa sta davvero girando: versioni, schede, binari

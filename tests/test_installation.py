@@ -424,3 +424,87 @@ def test_il_controllo_delle_versioni_verifica_anche_i_digest():
     digest = re.compile(r"^\s*image:\s*(\S+)@(sha256:[0-9a-f]{64})\s*$", re.MULTILINE)
     trovate = digest.findall(compose)
     assert trovate, "nessuna immagine fissata per digest: il caso non e' coperto"
+
+
+# ---------------------------------------------------------------------------
+# I servizi facoltativi: esistono solo se il profilo e' attivo
+# ---------------------------------------------------------------------------
+def test_ogni_variabile_configurabile_compare_nell_esempio():
+    """Uno strumento nuovo si aggiunge in tre posti: il catalogo, l'elenco
+    delle variabili configurabili, e `.env.example`. Dimenticare il terzo non
+    rompe nulla e non si vede: lo strumento resta semplicemente non
+    configurato per sempre, e in scansione risulta saltato. E' accaduto con
+    `THEHARVESTER_URL`.
+    """
+    from app.services.tool_config import VARIABILI
+
+    presenti = set(_entries())
+    mancanti = sorted(v.nome for v in VARIABILI if v.nome not in presenti)
+
+    assert not mancanti, (
+        f"variabili configurabili assenti da .env.example: {mancanti}")
+
+
+def test_i_profili_attivi_sono_dichiarati_nell_esempio():
+    """Compose legge `COMPOSE_PROFILES` da `.env`, e senza quella riga i
+    servizi sotto profilo non vengono creati: nessun avviso, nessun
+    contenitore, e in scansione soltanto «connection refused».
+    """
+    profili = _entries().get("COMPOSE_PROFILES")
+
+    assert profili, "COMPOSE_PROFILES assente: i servizi sotto profilo non partiranno"
+    assert "osint" in profili.split(","), (
+        "il profilo `osint` non e' attivo: SpiderFoot e theHarvester non "
+        "esisteranno, e la copertura cala senza che il motivo sia visibile")
+
+
+def test_i_servizi_che_chiedono_una_chiave_restano_spenti():
+    """Avviare per default un servizio che senza chiave non funziona
+    sposterebbe soltanto il guasto: il contenitore parte e rifiuta ogni
+    richiesta. `zap` e `oidc` si avviano con il loro target, che la chiave la
+    controlla.
+    """
+    import yaml
+
+    profili_attivi = set(_entries()["COMPOSE_PROFILES"].split(","))
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+    for nome, definizione in compose["services"].items():
+        suoi = set(definizione.get("profiles") or [])
+        if not suoi & profili_attivi:
+            continue
+        testo = yaml.safe_dump(definizione)
+        chiavi = re.findall(r"\$\{([A-Z][A-Z0-9_]*(?:_API_KEY|_PASSWORD))", testo)
+        assert not chiavi, (
+            f"il servizio '{nome}' e' attivo per default ma richiede {chiavi}")
+
+
+def test_l_indirizzo_nell_esempio_corrisponde_al_servizio_nel_compose():
+    """Un indirizzo predefinito sbagliato e' peggio di uno assente: lo
+    strumento risulta configurato, la scansione lo prova, e il guasto arriva
+    come errore di rete a meta' lavoro invece che come «non configurato»
+    prima di partire.
+    """
+    import yaml
+    from urllib.parse import urlsplit
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+    servizi = compose["services"]
+    verificati = 0
+
+    for chiave, valore in _entries().items():
+        if not chiave.endswith("_URL") or not valore.startswith("http://"):
+            continue
+        parti = urlsplit(valore)
+        if parti.hostname not in servizi:
+            continue  # indirizzo esterno o personalizzato: non ci riguarda
+        definizione = servizi[parti.hostname]
+        porte = {int(p) for p in definizione.get("expose", [])}
+        porte |= {int(str(p).rsplit(":", 1)[-1]) for p in definizione.get("ports", [])}
+        porte |= {int(p) for p in re.findall(r"-p[ort]*[= ](\d{2,5})",
+                                            str(definizione.get("command", "")))}
+        assert parti.port in porte, (
+            f"{chiave}={valore} ma il servizio '{parti.hostname}' espone {sorted(porte)}")
+        verificati += 1
+
+    assert verificati >= 2, (
+        "nessun indirizzo di servizio verificato: il test non sta guardando nulla")

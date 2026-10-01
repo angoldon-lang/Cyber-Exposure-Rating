@@ -227,6 +227,7 @@ class ScanPipeline:
                                       stage="vulnerability_intelligence", base_percent=80)
 
         all_results = discovery_results + perimeter_results + analysis_results + intel_results
+        _azzera_la_copertura_dei_sostituiti(all_results, self.request.profile)
         output = normalization.run(all_results)
 
         # --- Fase 5: scoring deterministico ---
@@ -340,6 +341,7 @@ class ScanPipeline:
     def _confidence_input(self, results: Sequence[AdapterResult],
                           output: NormalizationOutput) -> ConfidenceInput:
         matrix = {entry["tool"]: entry for entry in coverage_matrix(self.request.profile)}
+        riusciti = {r.tool for r in results if r.status is AdapterStatus.SUCCESS}
         summaries = [
             ToolRunSummary(
                 tool_key=result.tool, status=result.status.value,
@@ -347,6 +349,9 @@ class ScanPipeline:
                 coverage_weight=float(matrix.get(result.tool, {}).get("weight", 1.0)),
                 areas=tuple(matrix.get(result.tool, {}).get("areas", [])),
                 optional=bool(matrix.get(result.tool, {}).get("optional", False)),
+                requires_input=bool(matrix.get(result.tool, {}).get("requires_input", False)),
+                replaced_successfully=(
+                    matrix.get(result.tool, {}).get("replaced_by") in riusciti),
                 was_mocked=result.was_mocked, error_message=result.error_message)
             for result in results
         ]
@@ -380,6 +385,43 @@ class ScanPipeline:
             scan_partial=any(r.status is AdapterStatus.FAILED for r in results),
             scope_is_empty=not (self.request.domains or self.request.ip_addresses
                                 or self.request.network_ranges))
+
+
+# ---------------------------------------------------------------------------
+def _azzera_la_copertura_dei_sostituiti(results: list[AdapterResult],
+                                        profile: str) -> None:
+    """Toglie il costo di copertura a uno strumento il cui sostituto e' riuscito.
+
+    naabu non ha binari per arm64, e sulla stessa area lavora `port_scan`,
+    integrato nella piattaforma. Il catalogo lo dichiara (`replaced_by`), e
+    l'adapter si salta da se' con un messaggio che lo spiega -- ma dichiarava
+    comunque un impatto di copertura pieno. Il risultato era una piattaforma
+    che si scontava la fiducia, e metteva fra le «aree non verificate» un'area
+    che aveva verificato, per un buco inesistente.
+
+    Si interviene qui e non nell'adapter perche' e' il solo punto che ha
+    davanti tutta la scansione: se il sostituto sia riuscito o no, lo strumento
+    sostituito non puo' saperlo.
+
+    L'impatto si azzera soltanto quando il sostituto e' riuscito davvero. Se e'
+    fallito anche lui, l'area e' scoperta per davvero e il costo resta: non
+    fosse cosi', bastera' dichiarare una sostituzione per far sparire una
+    lacuna.
+    """
+    matrice = {voce["tool"]: voce for voce in coverage_matrix(profile)}
+    riusciti = {r.tool for r in results if r.status is AdapterStatus.SUCCESS}
+    for result in results:
+        sostituto = matrice.get(result.tool, {}).get("replaced_by")
+        if not sostituto or sostituto not in riusciti or result.coverage_impact == 0.0:
+            continue
+        result.coverage_impact = 0.0
+        spiegazione = (f"la stessa area e' stata verificata da `{sostituto}`, "
+                       "che in questa scansione e' riuscito: nessuna area resta "
+                       "scoperta")
+        result.error_message = (f"{result.error_message}; {spiegazione}"
+                                if result.error_message else spiegazione)
+        logger.info("coverage_gap_covered_by_substitute", tool=result.tool,
+                    substitute=sostituto)
 
 
 # ---------------------------------------------------------------------------

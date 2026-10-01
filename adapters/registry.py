@@ -173,6 +173,12 @@ def coverage_matrix(profile_key: str) -> list[dict]:
             "areas": definition.get("coverage_areas", []),
             "weight": float(definition.get("coverage_weight", 1.0)),
             "optional": bool(definition.get("optional", False)),
+            # Non eseguito, ma non per un guasto: lo strumento aspetta un dato
+            # dall'analista, oppure su questa piattaforma e' sostituito da un
+            # altro. Chi calcola la fiducia deve poterli distinguere da un
+            # insuccesso, e per farlo deve riceverli.
+            "requires_input": bool(definition.get("requires_input", False)),
+            "replaced_by": definition.get("replaced_by"),
             "commercial": bool(definition.get("commercial", False)),
             "requires_api_key": bool(definition.get("requires_api_key", False)),
             "phase": definition.get("phase", 1),

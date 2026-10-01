@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+import textwrap
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -588,6 +589,76 @@ def scansioni(chiudi: bool = False) -> dict:
             "orphans": sum(1 for r in righe if r["orphan"])}
 
 
+def strumenti(solo_da_sistemare: bool = False, sonda_rete: bool = True) -> dict:
+    """Dice quali strumenti sono utilizzabili e cosa manca agli altri.
+
+    Finora la risposta si otteneva in un solo modo: lanciare una scansione e
+    leggere la matrice di copertura a cose fatte. Con quattordici strumenti
+    non eseguiti su ventinove, distinguere il guasto vero dall'assenza
+    prevista richiedeva di leggere i log del worker riga per riga.
+
+    Va eseguito nel worker (`make strumenti`): e' il contenitore che contiene
+    i binari e che parla ai servizi sulla rete interna. Dall'API i binari
+    risultano assenti, e correttamente: per scelta non ci sono.
+    """
+    from app.core.config import load_yaml_config
+    from app.services.verifica_strumenti import BINARIO_ASSENTE, verifica_strumenti
+
+    con_dipendenza_esterna = {
+        chiave for chiave, definizione
+        in load_yaml_config("tool_profiles").get("tools", {}).items()
+        if definizione.get("binary") or definizione.get("python_module")}
+
+    # Le chiavi impostate dall'interfaccia stanno nel database e hanno la
+    # precedenza su `.env`: senza sessione si vedrebbe una configurazione
+    # diversa da quella che userebbe la scansione. Se il database non c'e' si
+    # prosegue sull'ambiente, dicendolo.
+    database = True
+    try:
+        with session_scope() as db:
+            esiti = verifica_strumenti(db, sonda_rete=sonda_rete)
+    except Exception:  # noqa: BLE001
+        database = False
+        esiti = verifica_strumenti(None, sonda_rete=sonda_rete)
+
+    da_sistemare = [v for v in esiti if v.richiede_intervento]
+    mostrati = da_sistemare if solo_da_sistemare else esiti
+
+    larghezza = max((len(v.chiave) for v in mostrati), default=10)
+    rientro = " " * (2 + larghezza + 2 + 18 + 2)
+    for v in mostrati:
+        righe = textwrap.wrap(v.dettaglio, width=92) or [""]
+        print(f"  {v.chiave:<{larghezza}}  {v.esito:<18}  {righe[0]}")
+        for riga in righe[1:]:
+            print(rientro + riga)
+        if v.rimedio:
+            print(rientro + "-> " + v.rimedio)
+
+    peso_perso = sum(v.peso for v in da_sistemare if not v.facoltativo)
+    print()
+    print(f"  {len(esiti) - len(da_sistemare)} strumenti su {len(esiti)} "
+          f"utilizzabili; {len(da_sistemare)} richiedono un intervento.")
+    if peso_perso:
+        print(f"  Copertura in gioco: {peso_perso:.1f} punti di peso, che l'indice "
+              "di fiducia sconta a ogni scansione finche' l'intervento manca.")
+    if not database:
+        print("  Nota: database non raggiungibile, si e' guardato solo `.env`. Le "
+              "chiavi impostate dall'interfaccia non sono state considerate.")
+    # Nessuno strumento esterno presente non significa un'installazione rotta:
+    # significa che il comando sta girando nel posto sbagliato. Dirlo evita di
+    # mandare qualcuno a ricostruire un'immagine che va benissimo.
+    con_dipendenza = [v for v in esiti if v.chiave in con_dipendenza_esterna]
+    if con_dipendenza and all(v.esito == BINARIO_ASSENTE for v in con_dipendenza):
+        print("  Nota: nessuno strumento esterno risulta presente. Questo comando "
+              "sta girando in un contenitore che non li contiene (l'API, per "
+              "scelta: gli strumenti di scansione non devono poter girare li'). "
+              "Rilanciarlo nel worker con `make strumenti`.")
+
+    return {"tools": [v.to_dict() for v in esiti],
+            "needs_action": len(da_sistemare),
+            "coverage_weight_at_risk": round(peso_perso, 2),
+            "database_consulted": database}
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="defenix", description="CLI Defenix Security Rating")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -613,6 +684,16 @@ def main() -> None:
     scansioni_parser.add_argument(
         "--chiudi", action="store_true",
         help="chiude tutte le scansioni non concluse, senza attendere la soglia")
+    strumenti_parser = subparsers.add_parser(
+        "strumenti", help="dice quali strumenti sono utilizzabili e cosa manca agli altri")
+    strumenti_parser.add_argument(
+        "--da-sistemare", action="store_true",
+        help="mostra soltanto gli strumenti su cui c'e' qualcosa da fare")
+    strumenti_parser.add_argument(
+        "--senza-rete", action="store_true",
+        help="non apre connessioni: salta la verifica che i servizi rispondano")
+    strumenti_parser.add_argument(
+        "--json", action="store_true", help="esito leggibile da un programma")
 
     args = parser.parse_args()
     if args.command == "init-db":
@@ -638,6 +719,11 @@ def main() -> None:
         print(json.dumps(run_queued(args.scan_id), indent=2, ensure_ascii=False))
     elif args.command == "scansioni":
         print(json.dumps(scansioni(chiudi=args.chiudi), indent=2, ensure_ascii=False))
+    elif args.command == "strumenti":
+        esito = strumenti(solo_da_sistemare=args.da_sistemare,
+                          sonda_rete=not args.senza_rete)
+        if args.json:
+            print(json.dumps(esito, indent=2, ensure_ascii=False))
     elif args.command == "show-credentials":
         show_credentials()
 

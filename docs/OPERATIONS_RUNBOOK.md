@@ -71,6 +71,58 @@ Ogni azione e' registrata nell'audit log con stato precedente e successivo.
 
 ## 3. Diagnostica
 
+### Prima di qualunque altra cosa: che cosa e' utilizzabile
+
+```bash
+make strumenti                   # elenco completo, con il rimedio per ciascuno
+make strumenti DA_SISTEMARE=1    # solo cio' su cui c'e' qualcosa da fare
+```
+
+Risponde alla domanda «perche' tanti strumenti non vengono eseguiti» senza
+dover lanciare una scansione e leggere la matrice di copertura a cose fatte.
+Per ogni strumento del catalogo dice in quale dei sette stati si trova:
+
+| Esito | Significato | Rimedio |
+|---|---|---|
+| `operativo` | presente, configurato, e il servizio risponde | nessuno |
+| `su richiesta` | pronto, ma aspetta qualcosa (un'intestazione da incollare, domini verificati, indirizzi e-mail individuati) | nessuno: non e' un guasto |
+| `sostituito` | assente per scelta, e la sua area la copre un altro strumento | nessuno |
+| `a pagamento` | richiede un abbonamento che non c'e' | si acquista, o si rinuncia all'area |
+| `da configurare` | manca una variabile | Personalizzazione -> Strumenti, oppure `.env` |
+| `non raggiungibile` | l'indirizzo c'e', il servizio non risponde | il comando che lo avvia, stampato accanto |
+| `binario assente` | manca dall'immagine del worker | `make aggiorna` |
+
+Va eseguito nel worker, ed e' cio' che fa il target: i binari stanno nella sua
+immagine e i servizi facoltativi rispondono sulla rete interna. Eseguito
+nell'API ogni binario risulterebbe assente -- correttamente, perche' per
+scelta li' non ci sono.
+
+La verifica apre connessioni soltanto verso i servizi che ospita chi installa
+(SpiderFoot, theHarvester, ZAP), e un `connect` TCP che chiude subito: nessun
+bersaglio di scansione entra nel comando, e le fonti commerciali non vengono
+contattate. `--senza-rete` salta anche quelle.
+
+### Molti strumenti risultano «non eseguiti»
+
+Nell'ordine in cui conviene guardare:
+
+1. **I servizi facoltativi non sono stati avviati.** `docker compose up`
+   NON crea i servizi sotto profilo, e non lo dice: SpiderFoot e theHarvester
+   semplicemente non esistono, e in scansione si vede solo
+   `Connection refused`. Serve `COMPOSE_PROFILES=osint` in `.env` (una volta
+   sola), oppure `make up-osint` ogni volta.
+2. **Il binario non c'e' nell'immagine del worker.** `make strumenti` lo dice
+   per nome; il rimedio e' `make aggiorna`.
+3. **Due scansioni insieme.** Fino alla 0.17.1 ogni strumento riceveva un
+   `RLIMIT_NPROC` di 256 come se fosse un limite per processo: e' per *utente*
+   e su tutto il contenitore, quindi con due scansioni in parallelo i binari
+   Go morivano con `failed to create new OS thread (errno=11)` e testssl con
+   `fork: retry: Resource temporarily unavailable`. Se si vedono ancora quei
+   messaggi, il worker sta girando su un'immagine precedente: `make aggiorna`.
+4. **Manca un abbonamento.** HIBP e la fonte sulle credenziali esposte sono
+   commerciali: restano `skipped`, riducono la copertura, e non c'e' niente da
+   riparare.
+
 ### Scansione ferma in `queued`
 
 ```bash
@@ -93,7 +145,8 @@ docker compose exec worker which subfinder httpx testssl.sh
 ```
 
 Un tool mancante produce `skipped`, non `failed`, e riduce la confidence: e'
-il comportamento previsto, non un guasto.
+il comportamento previsto, non un guasto. `make strumenti` lo dice prima, per
+tutti e ventinove, senza doverne indovinare i nomi.
 
 ### Confidence inaspettatamente bassa
 
@@ -101,6 +154,13 @@ il comportamento previsto, non un guasto.
 contributo e le penalita' applicate. Cause tipiche: dominio non verificato
 (−15), tool falliti, poche fonti disponibili, evidenze datate, finding critici
 non ancora validati.
+
+Il fattore `tool_success_rate` non conta gli strumenti la cui assenza non e' un
+guasto: uno sostituito da un altro che nella stessa scansione e' riuscito, e
+uno che aspetta un dato dall'analista e non l'ha ricevuto. La nota del fattore
+li elenca per nome, perche' un denominatore che cambia senza spiegazione e'
+peggio di una penalita'. L'area che quegli strumenti non hanno verificato resta
+invece dichiarata non verificata: quello e' vero, e continua a pesare.
 
 ### Rating peggiorato senza cambiamenti evidenti
 

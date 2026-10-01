@@ -24,10 +24,37 @@ class ToolRunSummary:
     optional: bool = False
     was_mocked: bool = False
     error_message: str | None = None
+    # Lo strumento aspetta un dato che gli deve dare un analista (per ora:
+    # l'intestazione di un messaggio): senza, resta saltato per sempre, e non
+    # c'e' nulla da riparare.
+    requires_input: bool = False
+    # Sostituito da uno strumento che nella stessa scansione e' riuscito,
+    # sulle stesse aree. La sostituzione la dichiara il catalogo; che il
+    # sostituto sia riuscito lo sa soltanto chi ha davanti tutta la scansione.
+    replaced_successfully: bool = False
 
     @property
     def succeeded(self) -> bool:
         return self.status == ToolRunStatus.SUCCESS.value
+
+    @property
+    def mancato_senza_guasto(self) -> bool:
+        """Non eseguito, ma non per un difetto della piattaforma.
+
+        La quota di strumenti riusciti e' un indicatore di salute: deve
+        scendere quando qualcosa non funziona. Contarci dentro uno strumento
+        sostituito da un altro che e' riuscito, o uno che aspetta un dato mai
+        fornito, la fa scendere senza che ci sia niente da sistemare -- e
+        toglie all'indicatore il solo significato che aveva.
+
+        Non vale quando lo strumento e' stato eseguito ed e' fallito: un
+        guasto resta un guasto anche in uno strumento che aspetta un dato.
+        """
+        if self.succeeded:
+            return False
+        if self.replaced_successfully:
+            return True
+        return self.requires_input and self.status == ToolRunStatus.SKIPPED.value
 
     @property
     def contributed(self) -> bool:
@@ -120,10 +147,22 @@ class ConfidenceEngine:
                                    float(self.config.get("source_diversity_target", 8))),
                             f"{data.distinct_sources} fonti indipendenti interrogate")
 
-        planned = [r for r in data.tool_runs if not r.optional]
+        planned = [r for r in data.tool_runs
+                   if not r.optional and not r.mancato_senza_guasto]
         succeeded = [r for r in planned if r.succeeded]
-        total += contribute("tool_success_rate", _ratio(len(succeeded), len(planned)),
-                            f"{len(succeeded)}/{len(planned)} tool completati con successo")
+        esclusi = [r for r in data.tool_runs if r.mancato_senza_guasto]
+        nota = f"{len(succeeded)}/{len(planned)} tool completati con successo"
+        if esclusi:
+            nota += (f" ({len(esclusi)} non conteggiati: "
+                     + ", ".join(sorted(r.tool_key for r in esclusi)) + ")")
+        # Senza nessuno strumento da conteggiare il fattore non dice niente:
+        # azzerarlo sottrarrebbe il suo peso a una scansione che non ha fatto
+        # nulla di male. Non puo' succedere con i profili attuali, e se un
+        # giorno succedesse non deve diventare una penalita' inspiegabile.
+        total += contribute("tool_success_rate",
+                            _ratio(len(succeeded), len(planned)) if planned else 1.0,
+                            nota if planned else "nessuno strumento da conteggiare: "
+                                                 "fattore non penalizzante")
 
         depth = float(self.config["profile_depth_values"].get(data.profile, 0.5))
         total += contribute("profile_depth", depth, f"profilo {data.profile}")

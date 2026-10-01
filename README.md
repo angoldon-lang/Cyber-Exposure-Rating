@@ -84,6 +84,7 @@ make up
 make compose-migrate
 make compose-seed
 make harden-db        # revoca UPDATE/DELETE sull'audit log
+make strumenti        # dice quali strumenti sono utilizzabili e cosa manca
 ```
 
 Se l'avvio fallisce con `port is already allocated`, un altro programma occupa
@@ -116,6 +117,8 @@ make web              # http://127.0.0.1:5173
 | `make env` | crea `.env` generando i segreti (`FORCE=1` rigenera, `KEYCLOAK=1` include OIDC) |
 | `make up` / `make down` | avvia / ferma lo stack completo |
 | `make up-oidc` | avvia lo stack con Keycloak (profilo `oidc`) |
+| `make up-osint` | avvia SpiderFoot e theHarvester (profilo `osint`) |
+| `make up-zap` | avvia il demone OWASP ZAP (profilo `zap`) |
 | `make api` | API FastAPI con ricarica automatica |
 | `make worker` | worker Celery sulle code `scans` e `maintenance` |
 | `make web` | frontend Vite in sviluppo |
@@ -127,6 +130,7 @@ make web              # http://127.0.0.1:5173
 | `make check-versions` | verifica che le versioni fissate nei Dockerfile esistano ancora |
 | `make check-ports` | verifica che le porte pubblicate dallo stack siano libere |
 | `make doctor` | raccoglie stato, porte e log dello stack per la diagnosi |
+| `make strumenti` | dice quali strumenti sono utilizzabili e cosa manca agli altri (`DA_SISTEMARE=1` per il solo elenco di cose da fare) |
 | `make fix-evidence-perms` | corregge i permessi del volume delle evidenze creato prima della correzione |
 | `make worker-start` | costruisce, avvia e verifica il worker: serve per le scansioni reali |
 | `make scan-now` | esegue subito le scansioni in coda senza attendere il worker (solo in modalita' simulata) |

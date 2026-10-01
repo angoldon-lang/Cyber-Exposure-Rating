@@ -120,3 +120,64 @@ def test_confidence_non_modifica_il_rating(scoring_engine, confidence_engine, ma
     for data in (_base(), _base(domains_verified=0, tool_runs=_runs(0, failed=8))):
         confidence_engine.compute(data)
         assert scoring_engine.score(findings).overall_score == score
+
+
+# ---------------------------------------------------------------------------
+# Assenze che non sono guasti
+# ---------------------------------------------------------------------------
+def test_uno_strumento_sostituito_non_abbassa_la_quota_di_riusciti(confidence_engine):
+    """naabu non esiste per arm64 e la stessa area la copre `port_scan`. La
+    quota di strumenti riusciti e' un indicatore di salute della piattaforma:
+    contarci dentro un'assenza prevista la fa scendere senza che ci sia niente
+    da sistemare, e le toglie il significato che aveva."""
+    sano = confidence_engine.compute(_base(tool_runs=_runs(8))).value
+    con_sostituito = confidence_engine.compute(_base(tool_runs=_runs(8) + [
+        ToolRunSummary("naabu", "skipped", replaced_successfully=True)])).value
+
+    assert con_sostituito == sano
+
+
+def test_un_sostituto_fallito_lascia_la_lacuna_dov_era(confidence_engine):
+    """Altrimenti basterebbe dichiarare una sostituzione per far sparire una
+    lacuna: la sostituzione vale solo se il sostituto e' riuscito davvero."""
+    sano = confidence_engine.compute(_base(tool_runs=_runs(8))).value
+    con_lacuna = confidence_engine.compute(_base(tool_runs=_runs(8) + [
+        ToolRunSummary("naabu", "skipped", coverage_impact=1.0,
+                       replaced_successfully=False)])).value
+
+    assert con_lacuna < sano
+
+
+def test_uno_strumento_in_attesa_di_un_dato_non_e_un_insuccesso(confidence_engine):
+    """`email_header` esamina l'intestazione di un messaggio, che la incolla un
+    analista: senza, resta saltato per sempre. L'area resta non verificata e il
+    suo peso continua a contare; cio' che non deve contare e' il guasto, perche'
+    non c'e'."""
+    sano = confidence_engine.compute(_base(tool_runs=_runs(8))).value
+    in_attesa = confidence_engine.compute(_base(tool_runs=_runs(8) + [
+        ToolRunSummary("email_header", "skipped", requires_input=True)])).value
+
+    assert in_attesa == sano
+
+
+def test_uno_strumento_in_attesa_che_pero_fallisce_resta_un_guasto(confidence_engine):
+    """Il dato e' arrivato e l'analisi e' andata male: e' un guasto come un
+    altro, e deve pesare come tale."""
+    sano = confidence_engine.compute(_base(tool_runs=_runs(8))).value
+    guasto = confidence_engine.compute(_base(tool_runs=_runs(8) + [
+        ToolRunSummary("email_header", "failed", requires_input=True,
+                       coverage_impact=0.7)])).value
+
+    assert guasto < sano
+
+
+def test_la_nota_dice_quali_strumenti_non_sono_stati_conteggiati(confidence_engine):
+    """Un denominatore che cambia senza spiegazione e' peggio di una penalita':
+    chi legge il fattore deve poter vedere che cosa e' stato escluso."""
+    esito = confidence_engine.compute(_base(tool_runs=_runs(8) + [
+        ToolRunSummary("naabu", "skipped", replaced_successfully=True),
+        ToolRunSummary("email_header", "skipped", requires_input=True)]))
+
+    nota = esito.factors["tool_success_rate"]["note"]
+
+    assert "naabu" in nota and "email_header" in nota

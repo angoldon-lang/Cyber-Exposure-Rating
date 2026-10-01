@@ -122,12 +122,54 @@ movimento laterale.
 |---|---|---|
 | CISA KEV, EPSS | attivi per impostazione predefinita | gratuiti |
 | Certificate Transparency, RDAP | attivi | gratuiti |
-| SpiderFoot | `docker compose --profile osint up -d spiderfoot` + `SPIDERFOOT_URL` | gratuito, alcune fonti a pagamento |
+| SpiderFoot | profilo `osint` + `SPIDERFOOT_URL` | gratuito, alcune fonti a pagamento |
+| theHarvester | profilo `osint` + `THEHARVESTER_URL` | gratuito, alcune fonti a pagamento |
+| OWASP ZAP | profilo `zap` + `ZAP_URL` e `ZAP_API_KEY` | gratuito |
 | Have I Been Pwned | `HIBP_API_KEY` | **a pagamento** |
+| Fonte su credenziali esposte | `CREDENTIAL_EXPOSURE_URL` e `..._API_KEY` | **a pagamento** |
 | Ransomware.live | attivo | API pubblica |
 
 Le chiavi non vanno mai inserite nel codice: `APIKeyReference` conserva solo
 metadati per rotazione e audit, il valore vive nel secret manager.
+
+### 6.1 I profili compose: due passi, non uno
+
+Un servizio dichiarato sotto un profilo **non esiste** se il profilo non e'
+attivo, e Compose non emette alcun avviso: `docker compose up -d` avvia lo
+stack e tace. SpiderFoot e theHarvester non vengono creati, i loro adapter
+trovano un indirizzo che non risponde, e il motivo vero -- «il contenitore non
+e' mai stato avviato» -- non compare da nessuna parte: in scansione si legge
+soltanto `Connection refused`, e la copertura cala.
+
+Compose legge `COMPOSE_PROFILES` da `.env`, e quello e' il posto giusto:
+
+```
+COMPOSE_PROFILES=osint          # predefinito in .env.example
+COMPOSE_PROFILES=osint,zap      # anche il demone ZAP
+```
+
+Da li' in avanti `make up` avvia tutto. Chi ha installato prima che la riga
+comparisse in `.env.example` ha un `.env` che non la contiene: `make up` lo
+segnala, e `make up-osint` avvia i due servizi senza modificare nulla.
+
+`osint` e' attivo per impostazione predefinita perche' quei due servizi sono
+gratuiti, locali e non richiedono chiavi. `zap` e `oidc` no: senza la loro
+chiave il contenitore parte e rifiuta ogni richiesta, e avviarlo per default
+sposterebbe il guasto senza risolverlo. Si avviano con `make up-zap` e
+`make up-oidc`, che la chiave la controllano prima.
+
+### 6.2 Verificare che tutto sia a posto
+
+```bash
+make strumenti
+```
+
+Dice, strumento per strumento, se e' utilizzabile e cosa gli manca: binario
+assente, variabile non impostata, servizio che non risponde, abbonamento
+mancante, oppure niente da fare. E' il controllo da eseguire dopo
+l'installazione e dopo ogni `make aggiorna`, prima di dedurre dalla matrice di
+copertura di una scansione che qualcosa sia rotto. Il dettaglio degli esiti e'
+in `docs/OPERATIONS_RUNBOOK.md`, sezione 3.
 
 ## 7. Backup e ripristino
 
