@@ -213,6 +213,28 @@ services:
     networks: [backend, frontend]
     logging: *logging
 
+  # theHarvester: enumera indirizzi e-mail e sottodomini da fonti pubbliche.
+  # Contenitore a se' e non binario nell'immagine dei worker: richiede Python
+  # 3.12 (i worker girano su 3.11) e pinna httpx, fastapi e playwright a
+  # versioni che confliggono con quelle dell'applicazione.
+  #
+  # L'immagine e' fissata per digest e non per tag: il progetto non pubblica
+  # tag di versione sul registro, e `latest` si sposta sotto i piedi.
+  theharvester:
+    image: ghcr.io/laramies/theharvester@sha256:8cb9cb51f52e5d31e50b805197a13e22dde1295e8300b42ec81c0a1f11e4941a
+    profiles: ["osint"]
+    restart: unless-stopped
+    # Il limite predefinito dell'API e' 5 richieste al minuto, troppo basso
+    # per una scansione con piu' domini in perimetro.
+    command: ["restfulHarvest", "-H", "0.0.0.0", "-p", "5000", "--rate-limit", "60/minute"]
+    expose: ["5000"]
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 1G }
+    logging: *logging
+
   spiderfoot:
     image: ghcr.io/smicallef/spiderfoot:v4.0
     profiles: ["osint"]

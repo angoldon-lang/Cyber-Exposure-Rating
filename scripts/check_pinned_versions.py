@@ -30,6 +30,12 @@ COMPOSE = "docker-compose.yml"
 # `stable`) sono esclusi: per definizione esistono sempre, e fissarli non e'
 # il problema che questo controllo previene.
 IMMAGINE = re.compile(r"^\s*image:\s*(\S+):(\S+)\s*$", re.MULTILINE)
+# Un'immagine fissata per digest: `repo@sha256:...`. E' il pin piu' stretto
+# che esista — immutabile per costruzione — ed e' l'unico possibile quando il
+# progetto a monte non pubblica tag di versione. Va riconosciuto a parte,
+# perche' l'espressione qui sopra spezzerebbe sull'ultimo due punti e
+# chiederebbe al registro un manifest di nome «8cb9...».
+DIGEST = re.compile(r"^\s*image:\s*(\S+)@(sha256:[0-9a-f]{64})\s*$", re.MULTILINE)
 TAG_MOBILI = {"latest", "stable", "main", "master"}
 
 # Rilascio ProjectDiscovery scaricato da `scarica <nome> "${<NOME>_VERSION}"`,
@@ -129,24 +135,33 @@ def main() -> int:
             if arg in args:
                 da_verificare.append((nome, repo, args[arg]))
 
-    immagini: list[tuple[str, str]] = []
-    for riferimento, tag in IMMAGINE.findall((REPO_ROOT / COMPOSE).read_text(encoding="utf-8")):
-        if tag not in TAG_MOBILI:
-            immagini.append((riferimento, tag))
+    compose = (REPO_ROOT / COMPOSE).read_text(encoding="utf-8")
+    # `separatore` serve solo a ristampare il riferimento com'e' scritto.
+    immagini: list[tuple[str, str, str]] = []
+    fissate_per_digest = {riferimento for riferimento, _ in DIGEST.findall(compose)}
+    for riferimento, digest in DIGEST.findall(compose):
+        immagini.append((riferimento, digest, "@"))
+    for riferimento, tag in IMMAGINE.findall(compose):
+        # Un riferimento con digest cade anche in questa espressione, spezzato
+        # nel punto sbagliato: e' gia' stato raccolto sopra.
+        nome = riferimento.rsplit("@", 1)[0]
+        if nome in fissate_per_digest or tag in TAG_MOBILI:
+            continue
+        immagini.append((riferimento, tag, ":"))
 
     if not da_verificare:
         print("nessuna versione fissata da verificare", file=sys.stderr)
         return 1
 
     problemi = 0
-    for riferimento, tag in immagini:
+    for riferimento, tag, separatore in immagini:
         esiste, nota = _immagine_esiste(riferimento, tag)
+        scritto = f"{riferimento}{separatore}{tag}"
         if esiste:
-            print(f"  ok   {COMPOSE}: {riferimento}:{tag}"
-                  + (f"  [{nota}]" if nota else ""))
+            print(f"  ok   {COMPOSE}: {scritto}" + (f"  [{nota}]" if nota else ""))
         else:
             problemi += 1
-            print(f"  NO   {COMPOSE}: {riferimento}:{tag} -> {nota}")
+            print(f"  NO   {COMPOSE}: {scritto} -> {nota}")
 
     for nome, repo, tag in da_verificare:
         try:

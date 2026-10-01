@@ -15,7 +15,7 @@ indicata in `VERSION`, non stimati a memoria.
 
 Defenix Security Rating osserva un'organizzazione **dall'esterno**, come la
 vedrebbe un estraneo prima di qualsiasi contatto, e ne ricava un punteggio
-0-100 con classe A-E. Raccoglie evidenze da 28 strumenti, le normalizza, le
+0-100 con classe A-E. Raccoglie evidenze da 29 strumenti, le normalizza, le
 correla e le passa a un motore deterministico che applica 61 regole scritte in
 configurazione. Produce due documenti: un rapporto per la direzione, scritto
 in italiano corrente, e un allegato tecnico con le evidenze puntuali.
@@ -344,8 +344,8 @@ processo giornaliero, con cancellazione completa su richiesta.
 
 ## 13. Esercizio
 
-Venti servizi in `docker-compose.yml`, di cui quattro dietro profilo
-opzionale: ZAP, Keycloak, SpiderFoot, proxy Tor.
+11 servizi in `docker-compose.yml`, di cui 5 dietro profilo
+opzionale: ZAP, Keycloak, SpiderFoot, theHarvester, proxy Tor.
 
 | Comando | Cosa fa |
 |---|---|
@@ -378,7 +378,7 @@ Dettaglio in [`DEPLOYMENT.md`](DEPLOYMENT.md) e
 | API | 71 endpoint, 8 router |
 | Modello dati | 37 tabelle, 6 migrazioni |
 | Motore | 61 regole, 5 aree, 5 classi, 4 tetti, 27 rimedi |
-| Raccolta | 28 strumenti, 3 profili |
+| Raccolta | 29 strumenti, 3 profili |
 | Conformita' | 2 framework, 14 requisiti, 18 controlli |
 
 Il motore di rating e' completo e in esercizio. Il fondamento della

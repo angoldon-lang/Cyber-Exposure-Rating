@@ -407,3 +407,20 @@ def test_il_controllo_delle_versioni_copre_gli_zip_scaricati():
     script = (REPO_ROOT / "scripts" / "check_pinned_versions.py").read_text(encoding="utf-8")
 
     assert "ZIP_TOOL" in script
+
+def test_il_controllo_delle_versioni_verifica_anche_i_digest():
+    """Un'immagine fissata per `repo@sha256:...` e' il pin piu' stretto che
+    esista, ed e' l'unico possibile quando il progetto a monte non pubblica
+    tag di versione. L'espressione sui tag la spezzava sull'ultimo due punti e
+    chiedeva al registro un manifest inesistente: il controllo rispondeva «non
+    verificabile» proprio sul riferimento piu' solido del file."""
+    import re
+
+    script = (REPO_ROOT / "scripts" / "check_pinned_versions.py").read_text(encoding="utf-8")
+    compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+    assert "DIGEST" in script, "il controllo non riconosce le immagini fissate per digest"
+
+    digest = re.compile(r"^\s*image:\s*(\S+)@(sha256:[0-9a-f]{64})\s*$", re.MULTILINE)
+    trovate = digest.findall(compose)
+    assert trovate, "nessuna immagine fissata per digest: il caso non e' coperto"

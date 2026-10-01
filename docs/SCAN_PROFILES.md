@@ -261,3 +261,28 @@ Validi per qualunque strumento, indipendentemente dal profilo
 | Memoria per processo | 2048 MB |
 | CPU per processo | 3000 s |
 | Quota della directory temporanea | 512 MB |
+
+## theHarvester
+
+Enumera indirizzi e-mail e sottodomini da fonti pubbliche. **Non e' uno
+strumento dark web e non verifica le violazioni**: serve perche' la verifica
+sulle violazioni ha bisogno di indirizzi da cercare, e le fonti DNS da sole ne
+danno troppo pochi.
+
+Gira come contenitore a se' (`docker compose --profile osint up -d`), non come
+binario nell'immagine dei worker: richiede Python 3.12 — i worker girano su
+3.11 — e pinna `httpx`, `fastapi` e `playwright` a versioni che confliggono
+con quelle dell'applicazione.
+
+All'API REST vengono chiesti **soltanto** `source`, `domain` e `limit`.
+L'endpoint `/query` accetterebbe anche forzatura DNS, verifica dei takeover,
+scansione delle API e interrogazione di Shodan: sono attivita' attive sul
+bersaglio, fuori da un profilo passivo, e l'adapter costruisce la richiesta da
+una lista chiusa di parametri perche' non possano arrivarci per errore di
+configurazione.
+
+Le fonti predefinite sono solo quelle senza chiave. Le altre — fra cui
+`hunter` e `intelx` — si attivano dalla configurazione degli strumenti quando
+il cliente ha l'abbonamento; una fonte richiesta senza chiave viene scartata e
+l'esito lo dichiara, invece di produrre un risultato vuoto che sembrerebbe
+assenza di esposizione.

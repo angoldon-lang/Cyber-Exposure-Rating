@@ -22,7 +22,7 @@ profiles:
       - fuzzing
       - intrusive_checks
     tools: [dns, rdap, certificate_transparency, ip_perimeter, email_discovery,
-            subfinder, spiderfoot, checkdmarc, ransomware_live, hibp,
+            subfinder, spiderfoot, theharvester, checkdmarc, ransomware_live, hibp,
             credential_exposure, xposedornot, dnstwist_passive, kev, epss]
 
   verified_standard:
@@ -40,7 +40,7 @@ profiles:
       - data_modification
       - fuzzing
     tools: [dns, rdap, certificate_transparency, ip_perimeter, email_discovery,
-            subfinder, spiderfoot, checkdmarc, ransomware_live, hibp,
+            subfinder, spiderfoot, theharvester, checkdmarc, ransomware_live, hibp,
             credential_exposure, xposedornot, dnstwist, kev, epss,
             httpx, testssl, zap_baseline, amass_passive, email_header, email_harvest]
 
@@ -66,7 +66,7 @@ profiles:
       - destructive_exploits
       - third_party_scanning
     tools: [dns, rdap, certificate_transparency, ip_perimeter, email_discovery,
-            subfinder, spiderfoot, checkdmarc, ransomware_live, hibp,
+            subfinder, spiderfoot, theharvester, checkdmarc, ransomware_live, hibp,
             credential_exposure, xposedornot, dnstwist, kev, epss,
             httpx, testssl, zap_baseline, amass, email_header, email_harvest,
             naabu, port_scan, nmap, nuclei]
@@ -166,6 +166,34 @@ tools:
     coverage_areas: [attack_surface]
     coverage_weight: 1.0
     args_template: ["-silent", "-json", "-all", "-d", "{domain}"]
+
+  theharvester:
+    label: "theHarvester (indirizzi e sottodomini da fonti pubbliche)"
+    kind: http_api
+    passive: true
+    phase: 1
+    timeout_seconds: 300
+    max_targets: 5
+    limit: 200
+    coverage_areas: [darkweb_breach, attack_surface]
+    coverage_weight: 0.8
+    repository: "https://github.com/laramies/theHarvester"
+    license: "GPL-2.0-only"
+    # Solo le fonti che non richiedono una chiave. Le altre si aggiungono qui
+    # e in `sources_con_chiave` quando il cliente ha l'abbonamento: una fonte
+    # richiesta senza chiave viene scartata e dichiarata, non produce
+    # silenzio.
+    sources: [certspotter, crtsh, duckduckgo, otx, rapiddns, subdomaincenter, urlscan, yahoo]
+    sources_con_chiave: []
+    notes: >-
+      Non e' uno strumento dark web e non verifica le violazioni: enumera
+      indirizzi e-mail e sottodomini da fonti pubbliche. Serve perche' la
+      verifica sulle violazioni ha bisogno di indirizzi da cercare, e le
+      fonti DNS da sole ne danno troppo pochi. Gira come servizio a se'
+      (`docker compose --profile osint up -d`) perche' richiede Python 3.12 e
+      pinna dipendenze che confliggono con quelle dell'applicazione. All'API
+      vengono chiesti soltanto `source`, `domain` e `limit`: forzatura DNS,
+      verifica dei takeover e scansione delle API restano irraggiungibili.
 
   spiderfoot:
     label: "SpiderFoot"

@@ -33,6 +33,7 @@ from adapters.rdap_adapter import RDAPAdapter
 from adapters.spiderfoot_adapter import SpiderFootAdapter
 from adapters.subfinder_adapter import SubfinderAdapter
 from adapters.testssl_adapter import TestSSLAdapter
+from adapters.theharvester_adapter import TheHarvesterAdapter
 from adapters.vulnintel_adapter import VulnerabilityIntelligenceAdapter
 from adapters.xposedornot_adapter import XposedOrNotAdapter
 from app.core.config import load_yaml_config
@@ -50,6 +51,7 @@ ADAPTER_CLASSES: dict[str, type[BaseAdapter]] = {
     EmailHarvestAdapter.key: EmailHarvestAdapter,
     SubfinderAdapter.key: SubfinderAdapter,
     SpiderFootAdapter.key: SpiderFootAdapter,
+    TheHarvesterAdapter.key: TheHarvesterAdapter,
     CheckDMARCAdapter.key: CheckDMARCAdapter,
     HTTPXAdapter.key: HTTPXAdapter,
     TestSSLAdapter.key: TestSSLAdapter,

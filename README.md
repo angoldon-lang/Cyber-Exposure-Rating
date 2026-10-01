@@ -372,7 +372,7 @@ Dettaglio in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) sezione 8.
 ```
 ├── README.md                  ├── config/                 YAML versionati del modello
 ├── docker-compose.yml         │   ├── scoring.yaml            61 regole, 5 categorie
-├── .env.example               │   ├── tool_profiles.yaml      22 tool, 3 profili
+├── .env.example               │   ├── tool_profiles.yaml      29 tool, 3 profili
 ├── Makefile                   │   ├── remediation_catalog.yaml
 ├── backend/                   │   ├── narrativa_direzione.yaml
 │   ├── app/                   │   ├── framework_nis2.yaml

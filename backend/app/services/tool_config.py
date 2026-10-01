@@ -48,6 +48,14 @@ VARIABILI: tuple[Variabile, ...] = (
              "`docker run -p 5001:5001 ghcr.io/smicallef/spiderfoot` e si indica "
              "come http://spiderfoot:5001"),
     Variabile(
+        nome="THEHARVESTER_URL", strumento="theharvester",
+        etichetta="Indirizzo del servizio theHarvester", segreto=False, gratuito=True,
+        dove="https://github.com/laramies/theHarvester",
+        nota="Con il compose e' http://theharvester:5000, e si avvia con "
+             "`docker compose --profile osint up -d`. Gira come contenitore a se' "
+             "perche' richiede Python 3.12 e pinna dipendenze che confliggono con "
+             "quelle dell'applicazione."),
+    Variabile(
         nome="ZAP_URL", strumento="zap_baseline",
         etichetta="Indirizzo del demone ZAP", segreto=False, gratuito=True,
         dove="https://www.zaproxy.org/docs/api/",

@@ -95,6 +95,7 @@ def destinazione_consentita(url: str) -> tuple[bool, str]:
 
 
 def get_da_servizio_configurato(client: httpx.Client, url: str, *, base: str,
+                                parametri: dict[str, str] | None = None,
                                 intestazioni: dict[str, str] | None = None,
                                 max_salti: int = MAX_SALTI) -> httpx.Response:
     """GET verso un servizio indicato dall'operatore, non verso un bersaglio.
@@ -115,6 +116,11 @@ def get_da_servizio_configurato(client: httpx.Client, url: str, *, base: str,
     per raggiungere qualcos'altro.
     """
     origine = httpx.URL(base)
+    # I parametri si aggiungono qui e non concatenandoli all'indirizzo: la
+    # codifica la fa la libreria, e un valore che contenga `&` o `#` non puo'
+    # diventare un parametro in piu'.
+    if parametri:
+        url = str(httpx.URL(url).copy_merge_params(parametri))
 
     def stessa_origine(indirizzo: str) -> bool:
         altro = httpx.URL(indirizzo)
