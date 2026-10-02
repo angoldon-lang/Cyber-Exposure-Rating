@@ -44,9 +44,12 @@ VARIABILI: tuple[Variabile, ...] = (
         nome="SPIDERFOOT_URL", strumento="spiderfoot",
         etichetta="Indirizzo dell'istanza SpiderFoot", segreto=False, gratuito=True,
         dove="https://github.com/smicallef/spiderfoot",
-        nota="Istanza raggiungibile dal worker. Si avvia con "
-             "`docker run -p 5001:5001 ghcr.io/smicallef/spiderfoot` e si indica "
-             "come http://spiderfoot:5001"),
+        nota="Lo stack non avvia piu' SpiderFoot: il progetto non pubblica "
+             "un'immagine container utilizzabile (il registro risponde "
+             "«denied», e l'unica raggiungibile e' un fork di terzi solo "
+             "amd64). Le sue aree le copre theHarvester. Resta configurabile: "
+             "chi ospita una propria istanza raggiungibile dal worker ne mette "
+             "qui l'indirizzo e lo strumento torna a funzionare."),
     Variabile(
         nome="THEHARVESTER_URL", strumento="theharvester",
         etichetta="Indirizzo del servizio theHarvester", segreto=False, gratuito=True,

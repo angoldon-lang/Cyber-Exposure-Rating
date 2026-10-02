@@ -63,6 +63,19 @@ def _tag_esiste(repo: str, tag: str) -> tuple[bool, list[str]]:
     return tag in tags, tags[-5:]
 
 
+def _diniego(codice: int) -> str:
+    """Perche' un diniego del registro e' un pin rotto, non un dubbio.
+
+    ghcr risponde allo stesso modo per un pacchetto che non esiste e per uno
+    privato: non li distingue. Per chi installa e' la stessa cosa — `docker
+    pull` si fermera' con «denied» — e un'immagine che non si puo' scaricare
+    anonimamente non e' un'immagine su cui fondare un'installazione.
+    """
+    return (f"HTTP {codice}: il registro nega l'accesso. L'immagine non esiste "
+            "piu', oppure non e' piu' pubblica: in entrambi i casi "
+            "`docker pull` non riuscira'")
+
+
 def _immagine_esiste(riferimento: str, tag: str) -> tuple[bool, str]:
     """Interroga il registro per un manifest, senza scaricare l'immagine.
 
@@ -71,6 +84,7 @@ def _immagine_esiste(riferimento: str, tag: str) -> tuple[bool, str]:
     modo lento di rispondere a una domanda semplice.
     """
     import json
+    import urllib.error
     import urllib.request
 
     pezzi = riferimento.split("/")
@@ -99,6 +113,15 @@ def _immagine_esiste(riferimento: str, tag: str) -> tuple[bool, str]:
                              f"https://{registro}/token?service={registro}&scope=repository:{repo}:pull")
     try:
         token = json.loads(_leggi(url_token, {})).get("token", "")
+    except urllib.error.HTTPError as errore:
+        # Anche il rilascio del token puo' essere negato, e su ghcr e' qui che
+        # arriva il diniego per un pacchetto che non esiste: trattarlo come
+        # «non verificabile» e' il motivo per cui
+        # ghcr.io/smicallef/spiderfoot:v4.0 e' rimasto nel compose dichiarato
+        # valido, fino a bloccare `make up` di chi installava.
+        if errore.code in {401, 403}:
+            return False, _diniego(errore.code)
+        return True, f"non verificabile (HTTP {errore.code})"
     except Exception as errore:  # noqa: BLE001
         # Registro non interrogabile: non e' un tag mancante, e dichiararlo
         # tale renderebbe il controllo inutile — chi lo esegue imparerebbe a
@@ -110,11 +133,18 @@ def _immagine_esiste(riferimento: str, tag: str) -> tuple[bool, str]:
                 "Accept": ("application/vnd.oci.image.index.v1+json,"
                            "application/vnd.docker.distribution.manifest.list.v2+json,"
                            "application/vnd.docker.distribution.manifest.v2+json")})
-    except Exception as errore:  # noqa: BLE001
-        testo = str(errore)
-        if "404" in testo or "MANIFEST_UNKNOWN" in testo:
+    except urllib.error.HTTPError as errore:
+        # Il registro ha risposto, e la sua risposta si crede.
+        if errore.code == 404 or "MANIFEST_UNKNOWN" in str(errore):
             return False, "tag inesistente"
-        return True, f"non verificabile ({testo[:80]})"
+        if errore.code in {401, 403}:
+            return False, _diniego(errore.code)
+        return True, f"non verificabile (HTTP {errore.code})"
+    except Exception as errore:  # noqa: BLE001
+        # Qui finiscono i guasti di rete: il registro non ha detto niente, e
+        # dichiarare mancante un tag per un tunnel caduto renderebbe il
+        # controllo inutile -- chi lo esegue imparerebbe a ignorarne le righe.
+        return True, f"non verificabile ({str(errore)[:80]})"
     return True, ""
 
 

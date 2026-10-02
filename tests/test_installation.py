@@ -454,8 +454,8 @@ def test_i_profili_attivi_sono_dichiarati_nell_esempio():
 
     assert profili, "COMPOSE_PROFILES assente: i servizi sotto profilo non partiranno"
     assert "osint" in profili.split(","), (
-        "il profilo `osint` non e' attivo: SpiderFoot e theHarvester non "
-        "esisteranno, e la copertura cala senza che il motivo sia visibile")
+        "il profilo `osint` non e' attivo: theHarvester non esistera', e la "
+        "copertura cala senza che il motivo sia visibile")
 
 
 def test_i_servizi_che_chiedono_una_chiave_restano_spenti():
@@ -572,6 +572,6 @@ def test_i_servizi_del_profilo_predefinito_includono_quelli_dichiarati(tmp_path)
 
     servizi = set(esito.stdout.split())
 
-    assert {"spiderfoot", "theharvester"} <= servizi, (
+    assert "theharvester" in servizi, (
         "il profilo `osint` di .env.example non porta i suoi servizi fra quelli "
         f"avviati da `make up`: {sorted(servizi)}")

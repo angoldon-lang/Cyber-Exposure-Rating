@@ -147,8 +147,8 @@ up: require-env ## Avvia lo stack completo
 	@# .env che non la contiene, e non ha modo di accorgersene.
 	@grep -qE '^COMPOSE_PROFILES=' .env || { \
 		echo "AVVISO: .env non contiene COMPOSE_PROFILES."; \
-		echo "  SpiderFoot e theHarvester non verranno avviati, e la copertura"; \
-		echo "  delle scansioni ne risentira' senza dirne il motivo."; \
+		echo "  theHarvester non verra' avviato, e la copertura delle"; \
+		echo "  scansioni ne risentira' senza dirne il motivo."; \
 		echo "  Aggiungere a .env:  COMPOSE_PROFILES=osint"; \
 		echo; }
 	$(COMPOSE) up -d
@@ -156,14 +156,13 @@ up: require-env ## Avvia lo stack completo
 	@echo "API docs: http://localhost:$${API_PORT:-8000}/api/v1/docs"
 
 .PHONY: up-osint
-up-osint: require-env ## Avvia SpiderFoot e theHarvester (profilo osint)
+up-osint: require-env ## Avvia theHarvester (profilo osint)
 	@# Utile a chi ha un .env senza COMPOSE_PROFILES e non vuole modificarlo
 	@# subito: `--profile` vale per questo comando e basta.
 	$(COMPOSE) --profile osint up -d
 	@echo
-	@echo "SpiderFoot e theHarvester avviati. In .env (o in Personalizzazione ->"
-	@echo "Strumenti) devono risultare impostati:"
-	@echo "  SPIDERFOOT_URL=http://spiderfoot:5001"
+	@echo "theHarvester avviato. In .env (o in Personalizzazione -> Strumenti)"
+	@echo "deve risultare impostato:"
 	@echo "  THEHARVESTER_URL=http://theharvester:5000"
 	@echo "Per non ripetere il comando a ogni avvio: COMPOSE_PROFILES=osint in .env."
 

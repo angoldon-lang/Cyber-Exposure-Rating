@@ -99,6 +99,9 @@ rilascio: possono cambiare fra versioni.
 ### SpiderFoot
 - **Versione:** 4.0 · **Licenza:** MIT
 - **Repository:** <https://github.com/smicallef/spiderfoot>
+- **Nota:** non distribuito nello stack. Il progetto non pubblica
+  un'immagine container utilizzabile; l'integrazione resta disponibile per
+  chi ospita una propria istanza. Vedere `docs/DEPLOYMENT.md`, sezione 6.3.
 - **Uso:** servizio esterno interrogato via API HTTP
 - **Rischio: MEDIO sul piano dei costi, non della licenza.** Molte fonti
   usate dai moduli SpiderFoot **non sono gratuite**: richiedono API key con

@@ -117,7 +117,7 @@ make web              # http://127.0.0.1:5173
 | `make env` | crea `.env` generando i segreti (`FORCE=1` rigenera, `KEYCLOAK=1` include OIDC) |
 | `make up` / `make down` | avvia / ferma lo stack completo |
 | `make up-oidc` | avvia lo stack con Keycloak (profilo `oidc`) |
-| `make up-osint` | avvia SpiderFoot e theHarvester (profilo `osint`) |
+| `make up-osint` | avvia theHarvester (profilo `osint`) |
 | `make up-zap` | avvia il demone OWASP ZAP (profilo `zap`) |
 | `make api` | API FastAPI con ricarica automatica |
 | `make worker` | worker Celery sulle code `scans` e `maintenance` |

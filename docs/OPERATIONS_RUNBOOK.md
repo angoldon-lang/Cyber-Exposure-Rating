@@ -98,7 +98,8 @@ nell'API ogni binario risulterebbe assente -- correttamente, perche' per
 scelta li' non ci sono.
 
 La verifica apre connessioni soltanto verso i servizi che ospita chi installa
-(SpiderFoot, theHarvester, ZAP), e un `connect` TCP che chiude subito: nessun
+(theHarvester, ZAP, e SpiderFoot per chi ne ospita uno), con un `connect`
+TCP che chiude subito: nessun
 bersaglio di scansione entra nel comando, e le fonti commerciali non vengono
 contattate. `--senza-rete` salta anche quelle.
 
@@ -107,8 +108,8 @@ contattate. `--senza-rete` salta anche quelle.
 Nell'ordine in cui conviene guardare:
 
 1. **I servizi facoltativi non sono stati avviati.** `docker compose up`
-   NON crea i servizi sotto profilo, e non lo dice: SpiderFoot e theHarvester
-   semplicemente non esistono, e in scansione si vede solo
+   NON crea i servizi sotto profilo, e non lo dice: theHarvester
+   semplicemente non esiste, e in scansione si vede solo
    `Connection refused`. Serve `COMPOSE_PROFILES=osint` in `.env` (una volta
    sola), oppure `make up-osint` ogni volta.
 2. **Il binario non c'e' nell'immagine del worker.** `make strumenti` lo dice
@@ -122,6 +123,12 @@ Nell'ordine in cui conviene guardare:
 4. **Manca un abbonamento.** HIBP e la fonte sulle credenziali esposte sono
    commerciali: restano `skipped`, riducono la copertura, e non c'e' niente da
    riparare.
+5. **Un'immagine non si scarica piu'.** `make check-versions` interroga i
+   registri e dice quali riferimenti fissati nel compose e nei Dockerfile non
+   esistono piu'. Un diniego del registro (`denied`) conta come mancante: su
+   ghcr e' la stessa risposta per un pacchetto cancellato e per uno diventato
+   privato, e per chi installa sono la stessa cosa. E' il controllo che va
+   eseguito prima di un aggiornamento, non dopo che `make up` si e' fermato.
 
 ### Scansione ferma in `queued`
 

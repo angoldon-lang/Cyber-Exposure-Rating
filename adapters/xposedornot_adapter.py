@@ -61,8 +61,9 @@ class XposedOrNotAdapter(BaseAdapter):
     def check_available(self) -> tuple[bool, str]:
         if not self._indirizzi():
             return False, ("nessun indirizzo e-mail dell'organizzazione noto: "
-                           "servono i moduli di raccolta e-mail di SpiderFoot o "
-                           "indirizzi dichiarati nel perimetro")
+                           "li raccolgono theHarvester, la scoperta da DNS "
+                           "(DMARC e SOA) e la raccolta dal sito, oppure si "
+                           "dichiarano nel perimetro")
         return True, "disponibile"
 
     # ------------------------------------------------------------------

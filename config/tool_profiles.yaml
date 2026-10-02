@@ -199,8 +199,11 @@ tools:
 
   spiderfoot:
     label: "SpiderFoot"
-    compose_service: spiderfoot
-    compose_profile: osint
+    # Non e' piu' un servizio dello stack: il progetto non pubblica
+    # un'immagine container raggiungibile (vedere la nota in fondo alla voce).
+    # Resta utilizzabile da chi ospita una propria istanza e ne indica
+    # l'indirizzo in SPIDERFOOT_URL.
+    replaced_by: theharvester
     kind: http_api
     passive: true
     phase: 1
@@ -263,12 +266,21 @@ tools:
       - sfp_tool_nmap
       - sfp_tool_nuclei
     notes: >-
-      Alcune fonti usate da SpiderFoot richiedono API key a pagamento
-      (sfp_haveibeenpwned, sfp_dehashed, sfp_hunter, sfp_intelx): senza key il
-      modulo non produce eventi e non fa fallire la scansione. I moduli
-      gratuiti su indirizzi e violazioni sono sfp_skymem, sfp_emailformat,
-      sfp_psbdmp e sfp_ahmia. Le key sono gestite dal Connector registry,
-      non hardcoded.
+      Lo stack non avvia piu' SpiderFoot: il progetto non pubblica
+      un'immagine container utilizzabile. `ghcr.io/smicallef/spiderfoot`
+      non esiste (il registro risponde «denied»), su Docker Hub non c'e'
+      nulla, e la sola immagine raggiungibile e' un fork di terzi,
+      pubblicato solo per amd64 e solo con tag mobili: non e' qualcosa su
+      cui fondare un'installazione, tanto meno di una piattaforma che
+      fissa ogni immagine per digest. Le sue due aree le copre
+      theHarvester, che e' pinnato per digest e gira su entrambe le
+      architetture. Lo strumento resta integrato: chi ospita una propria
+      istanza indica SPIDERFOOT_URL e torna a funzionare, senza altre
+      modifiche. Alcune fonti usate da SpiderFoot richiedono API key a
+      pagamento (sfp_haveibeenpwned, sfp_dehashed, sfp_hunter,
+      sfp_intelx): senza key il modulo non produce eventi e non fa
+      fallire la scansione. I moduli gratuiti su indirizzi e violazioni
+      sono sfp_skymem, sfp_emailformat, sfp_psbdmp e sfp_ahmia.
 
   checkdmarc:
     label: "checkdmarc"

@@ -155,9 +155,23 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
                                   rimedio=None, **comune))
             continue
 
-        # 2. Configurazione incompleta. A pagamento o gratuita cambia il
-        #    rimedio: nell'un caso si compra, nell'altro si imposta.
+        # 2. Non configurato, ma il catalogo dichiara chi ne copre le aree:
+        #    non c'e' niente da fare, e presentarlo fra le cose da sistemare
+        #    manda a cercare un problema che non esiste. Vale solo se non e'
+        #    configurato: chi ospita una propria istanza la usa, e allora lo
+        #    strumento va verificato come tutti gli altri.
         mancanti = [r for r in stato.get("requirements", []) if not r.get("present")]
+        sostituto = definizione.get("replaced_by")
+        if sostituto and mancanti:
+            esiti.append(Verifica(
+                esito=SOSTITUITO,
+                dettaglio=(f"non configurato: le sue aree le copre `{sostituto}`. "
+                           "Si configura solo per usare una propria istanza."),
+                rimedio=None, **comune))
+            continue
+
+        # 3. Configurazione incompleta. A pagamento o gratuita cambia il
+        #    rimedio: nell'un caso si compra, nell'altro si imposta.
         if mancanti:
             a_pagamento = any(not r.get("free") for r in mancanti)
             nomi = ", ".join(str(r.get("variable")) for r in mancanti)
@@ -169,7 +183,7 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
                 **comune))
             continue
 
-        # 3. Il binario, o la libreria, dichiarati dal catalogo devono
+        # 4. Il binario, o la libreria, dichiarati dal catalogo devono
         #    esserci davvero. Sono la stessa classe di guasto: lo strumento
         #    e' configurato a dovere e non c'e'.
         binario = definizione.get("binary")
@@ -189,7 +203,7 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
                 **comune))
             continue
 
-        # 4. Il servizio configurato deve rispondere.
+        # 5. Il servizio configurato deve rispondere.
         if chiave in da_sondare:
             variabile, indirizzo = da_sondare[chiave]
             risponde, come = servizio_risponde(indirizzo)

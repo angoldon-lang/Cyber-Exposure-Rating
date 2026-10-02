@@ -249,18 +249,6 @@ services:
         limits: { cpus: "1.0", memory: 1G }
     logging: *logging
 
-  spiderfoot:
-    image: ghcr.io/smicallef/spiderfoot:v4.0
-    profiles: ["osint"]
-    restart: unless-stopped
-    ports:
-      - "${SPIDERFOOT_PORT:-5001}:5001"
-    networks: [backend]
-    security_opt: ["no-new-privileges:true"]
-    deploy:
-      resources:
-        limits: { cpus: "1.0", memory: 1G }
-    logging: *logging
 
   # Rete separata per gli strumenti che usano Tor (AIL Framework, fase 3).
   tor-proxy:

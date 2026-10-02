@@ -6,7 +6,7 @@
 |---|---|---|
 | Docker Engine | 24.0 | con il plugin Compose v2 |
 | CPU | 4 core | 8 consigliati con il profilo esteso |
-| RAM | 8 GB | 16 con SpiderFoot e Keycloak |
+| RAM | 8 GB | 16 con ZAP e Keycloak |
 | Disco | 50 GB | cresce con evidenze e report |
 
 Per lo sviluppo senza container servono Python 3.11+, Node.js 22+,
@@ -122,8 +122,8 @@ movimento laterale.
 |---|---|---|
 | CISA KEV, EPSS | attivi per impostazione predefinita | gratuiti |
 | Certificate Transparency, RDAP | attivi | gratuiti |
-| SpiderFoot | profilo `osint` + `SPIDERFOOT_URL` | gratuito, alcune fonti a pagamento |
 | theHarvester | profilo `osint` + `THEHARVESTER_URL` | gratuito, alcune fonti a pagamento |
+| SpiderFoot | istanza propria + `SPIDERFOOT_URL` (vedere 6.3) | gratuito, alcune fonti a pagamento |
 | OWASP ZAP | profilo `zap` + `ZAP_URL` e `ZAP_API_KEY` | gratuito |
 | Have I Been Pwned | `HIBP_API_KEY` | **a pagamento** |
 | Fonte su credenziali esposte | `CREDENTIAL_EXPOSURE_URL` e `..._API_KEY` | **a pagamento** |
@@ -136,10 +136,10 @@ metadati per rotazione e audit, il valore vive nel secret manager.
 
 Un servizio dichiarato sotto un profilo **non esiste** se il profilo non e'
 attivo, e Compose non emette alcun avviso: `docker compose up -d` avvia lo
-stack e tace. SpiderFoot e theHarvester non vengono creati, i loro adapter
-trovano un indirizzo che non risponde, e il motivo vero -- «il contenitore non
-e' mai stato avviato» -- non compare da nessuna parte: in scansione si legge
-soltanto `Connection refused`, e la copertura cala.
+stack e tace. theHarvester non viene creato, il suo adapter trova un
+indirizzo che non risponde, e il motivo vero -- «il contenitore non e' mai
+stato avviato» -- non compare da nessuna parte: in scansione si legge soltanto
+`Connection refused`, e la copertura cala.
 
 Compose legge `COMPOSE_PROFILES` da `.env`, e quello e' il posto giusto:
 
@@ -152,8 +152,8 @@ Da li' in avanti `make up` avvia tutto. Chi ha installato prima che la riga
 comparisse in `.env.example` ha un `.env` che non la contiene: `make up` lo
 segnala, e `make up-osint` avvia i due servizi senza modificare nulla.
 
-`osint` e' attivo per impostazione predefinita perche' quei due servizi sono
-gratuiti, locali e non richiedono chiavi. `zap` e `oidc` no: senza la loro
+`osint` e' attivo per impostazione predefinita perche' theHarvester e'
+gratuito, locale e non richiede chiavi. `zap` e `oidc` no: senza la loro
 chiave il contenitore parte e rifiuta ogni richiesta, e avviarlo per default
 sposterebbe il guasto senza risolverlo. Si avviano con `make up-zap` e
 `make up-oidc`, che la chiave la controllano prima.
@@ -170,6 +170,24 @@ mancante, oppure niente da fare. E' il controllo da eseguire dopo
 l'installazione e dopo ogni `make aggiorna`, prima di dedurre dalla matrice di
 copertura di una scansione che qualcosa sia rotto. Il dettaglio degli esiti e'
 in `docs/OPERATIONS_RUNBOOK.md`, sezione 3.
+
+### 6.3 SpiderFoot non fa piu' parte dello stack
+
+Il progetto non pubblica un'immagine container utilizzabile:
+`ghcr.io/smicallef/spiderfoot` non esiste (il registro risponde `denied`), su
+Docker Hub non c'e' nulla, e la sola immagine raggiungibile e' un fork di terzi
+pubblicato solo per amd64 e solo con tag mobili. Non e' qualcosa su cui fondare
+un'installazione, tanto meno di una piattaforma che fissa ogni immagine per
+digest, e su arm64 non partirebbe nemmeno.
+
+Lo stack percio' non lo avvia. Le sue due aree -- superficie d'attacco e dark
+web -- le copre **theHarvester**, che e' pinnato per digest e gira su entrambe
+le architetture: il catalogo lo dichiara (`replaced_by: theharvester`), e
+l'assenza di SpiderFoot non costa copertura finche' theHarvester riesce.
+
+Lo strumento resta integrato. Chi ospita una propria istanza raggiungibile dal
+worker ne indica l'indirizzo in `SPIDERFOOT_URL` (o da Personalizzazione ->
+Strumenti) e torna a funzionare, senza altre modifiche.
 
 ## 7. Backup e ripristino
 

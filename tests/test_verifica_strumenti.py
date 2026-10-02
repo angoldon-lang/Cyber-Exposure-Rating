@@ -38,24 +38,36 @@ def _per_chiave(esiti):
 # Il servizio configurato ma non avviato
 # --------------------------------------------------------------------------
 def test_un_servizio_configurato_ma_spento_non_risulta_operativo(monkeypatch):
-    """E' il caso di SpiderFoot e theHarvester: l'indirizzo c'e', il
-    contenitore no, perche' `docker compose up` non crea i servizi sotto
-    profilo. Dichiararli operativi e' precisamente l'errore che fa arrivare
-    il guasto a scansione iniziata."""
+    """E' il caso di theHarvester: l'indirizzo c'e', il contenitore no, perche'
+    `docker compose up` non crea i servizi sotto profilo. Dichiararlo operativo
+    e' precisamente l'errore che fa arrivare il guasto a scansione iniziata."""
     monkeypatch.setattr(
         "app.services.tool_config.valori_effettivi",
-        lambda db: {"SPIDERFOOT_URL": "http://spiderfoot:5001",
-                    "THEHARVESTER_URL": "http://theharvester:5000"})
+        lambda db: {"THEHARVESTER_URL": "http://theharvester:5000"})
     monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
                         lambda indirizzo, timeout=2.0: (False, "connessione rifiutata"))
 
-    esiti = _per_chiave(verifica_strumenti(None))
+    esito = _per_chiave(verifica_strumenti(None))["theharvester"]
 
-    for chiave in ("spiderfoot", "theharvester"):
-        assert esiti[chiave].esito == NON_RAGGIUNGIBILE, chiave
-        assert esiti[chiave].richiede_intervento
-        assert "osint" in (esiti[chiave].rimedio or ""), (
-            "il rimedio non dice quale profilo compose attivare")
+    assert esito.esito == NON_RAGGIUNGIBILE
+    assert esito.richiede_intervento
+    assert "osint" in (esito.rimedio or ""), (
+        "il rimedio non dice quale profilo compose attivare")
+
+
+def test_un_servizio_ospitato_in_proprio_viene_sondato_come_gli_altri(monkeypatch):
+    """SpiderFoot non fa piu' parte dello stack, ma chi ne ospita uno e ne
+    configura l'indirizzo deve sapere se risponde: una sostituzione dichiarata
+    non e' una scusa per non guardare cio' che e' stato configurato."""
+    monkeypatch.setattr("app.services.tool_config.valori_effettivi",
+                        lambda db: {"SPIDERFOOT_URL": "http://mio-spiderfoot:5001"})
+    monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
+                        lambda indirizzo, timeout=2.0: (False, "connessione rifiutata"))
+
+    esito = _per_chiave(verifica_strumenti(None))["spiderfoot"]
+
+    assert esito.esito == NON_RAGGIUNGIBILE
+    assert "mio-spiderfoot" in esito.dettaglio
 
 
 def test_un_servizio_che_risponde_e_operativo(monkeypatch):
@@ -142,7 +154,7 @@ def test_cio_che_costa_e_distinto_da_cio_che_va_configurato():
 
     assert esiti["hibp"].esito == A_PAGAMENTO
     assert esiti["credential_exposure"].esito == A_PAGAMENTO
-    assert esiti["spiderfoot"].esito in {DA_CONFIGURARE, NON_RAGGIUNGIBILE}
+    assert esiti["zap_baseline"].esito == DA_CONFIGURARE
 
 
 def test_un_binario_assente_si_distingue_da_una_configurazione_mancante(monkeypatch):
@@ -193,7 +205,10 @@ def test_il_catalogo_dichiara_servizio_e_profilo_del_compose(campo):
                 f"{chiave}: profilo '{definizione['compose_profile']}' diverso da {profili}")
         verificati += 1
 
-    assert verificati >= 3, "il test non sta verificando nulla"
+    # Due: theHarvester e ZAP. SpiderFoot ne e' uscito quando lo stack ha
+    # smesso di avviarlo. La soglia serve solo a impedire che il test passi
+    # perche' non guarda niente.
+    assert verificati >= 2, "il test non sta verificando nulla"
 
 
 def test_ogni_strumento_con_un_servizio_ha_anche_la_variabile_per_indirizzarlo():
@@ -209,3 +224,15 @@ def test_ogni_strumento_con_un_servizio_ha_anche_la_variabile_per_indirizzarlo()
                    if d.get("compose_service") and chiave not in con_variabile)
 
     assert not senza, f"servizi senza variabile di indirizzo: {senza}"
+
+
+def test_uno_strumento_non_configurato_ma_sostituito_non_e_da_sistemare():
+    """SpiderFoot non e' piu' nello stack perche' il progetto non pubblica
+    un'immagine utilizzabile, e le sue aree le copre theHarvester. Presentarlo
+    fra le cose da configurare manderebbe a cercare un servizio che non si puo'
+    installare."""
+    esito = _per_chiave(verifica_strumenti(None, sonda_rete=False))["spiderfoot"]
+
+    assert esito.esito == SOSTITUITO
+    assert not esito.richiede_intervento
+    assert "theharvester" in esito.dettaglio
