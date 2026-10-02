@@ -508,3 +508,70 @@ def test_l_indirizzo_nell_esempio_corrisponde_al_servizio_nel_compose():
 
     assert verificati >= 2, (
         "nessun indirizzo di servizio verificato: il test non sta guardando nulla")
+
+
+# ---------------------------------------------------------------------------
+# Il file deve essere accettato da Compose, non solo essere YAML valido
+# ---------------------------------------------------------------------------
+def test_il_compose_e_accettato_da_docker_compose(tmp_path):
+    """Nessun test di questo file avrebbe intercettato un `pids_limit` che
+    Compose rifiuta: il YAML era valido, lo schema no, e l'errore arrivava a
+    `make up` -- cioe' a chi installa.
+
+    Qui si chiede il giudizio a Compose stesso. `config -q` non contatta il
+    demone e non avvia nulla: carica il progetto, lo valida, e tace se va bene.
+    Dove il CLI non c'e' il test si salta, perche' la sua assenza non dice
+    niente sul file.
+    """
+    import shutil
+    import subprocess
+
+    if shutil.which("docker") is None:
+        pytest.skip("docker CLI non disponibile: non si puo' chiedere a Compose")
+
+    # Compose interpola l'intero file: i segreti obbligatori devono avere un
+    # valore qualsiasi, altrimenti si ferma su quelli invece che sullo schema.
+    env = tmp_path / ".env"
+    env.write_text(
+        ENV_EXAMPLE.read_text(encoding="utf-8")
+        .replace("POSTGRES_PASSWORD=", "POSTGRES_PASSWORD=prova")
+        .replace("JWT_SECRET_KEY=", "JWT_SECRET_KEY=prova"),
+        encoding="utf-8")
+
+    esito = subprocess.run(  # noqa: S603
+        ["docker", "compose", "--env-file", str(env), "config", "-q"],  # noqa: S607
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=120, check=False)
+
+    if "docker compose" in (esito.stderr or "") and "not a docker command" in esito.stderr:
+        pytest.skip("il CLI non ha il plugin compose")
+    assert esito.returncode == 0, (
+        f"Compose rifiuta docker-compose.yml:\n{esito.stderr.strip()}")
+
+
+def test_i_servizi_del_profilo_predefinito_includono_quelli_dichiarati(tmp_path):
+    """COMPOSE_PROFILES in `.env` deve davvero far comparire i servizi: e' il
+    punto di tutta la riga, e si verifica solo chiedendolo a Compose."""
+    import shutil
+    import subprocess
+
+    if shutil.which("docker") is None:
+        pytest.skip("docker CLI non disponibile")
+
+    env = tmp_path / ".env"
+    env.write_text(
+        ENV_EXAMPLE.read_text(encoding="utf-8")
+        .replace("POSTGRES_PASSWORD=", "POSTGRES_PASSWORD=prova")
+        .replace("JWT_SECRET_KEY=", "JWT_SECRET_KEY=prova"),
+        encoding="utf-8")
+
+    esito = subprocess.run(  # noqa: S603
+        ["docker", "compose", "--env-file", str(env), "config", "--services"],  # noqa: S607
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=120, check=False)
+    if esito.returncode != 0:
+        pytest.skip(f"Compose non interrogabile: {esito.stderr.strip()[:120]}")
+
+    servizi = set(esito.stdout.split())
+
+    assert {"spiderfoot", "theharvester"} <= servizi, (
+        "il profilo `osint` di .env.example non porta i suoi servizi fra quelli "
+        f"avviati da `make up`: {sorted(servizi)}")

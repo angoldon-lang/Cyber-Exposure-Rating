@@ -127,10 +127,17 @@ services:
     # usato per strumento uccideva i binari Go appena due scansioni
     # giravano insieme. Questo e' un limite del cgroup, vale per tutti e
     # dall'interno non si alza.
+    #
+    # Il valore e' ripetuto in due posti perche' per Compose sono lo stesso
+    # campo, e dalla 5.x rifiuta il progetto se non coincidono: con il solo
+    # `pids_limit` legge «non impostato» nei limiti del deploy e si ferma con
+    # «can't set distinct values on 'pids_limit' and
+    # 'deploy.resources.limits.pids'». Scrivendolo in entrambi, qualunque dei
+    # due il motore legga, legge 4096. Un test verifica che restino uguali.
     pids_limit: 4096
     deploy:
       resources:
-        limits: { cpus: "2.0", memory: 2G }
+        limits: { cpus: "2.0", memory: 2G, pids: 4096 }
     logging: *logging
 
   beat:

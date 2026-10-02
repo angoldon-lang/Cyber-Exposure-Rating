@@ -80,5 +80,44 @@ def test_il_tetto_ai_processi_non_e_un_limite_per_strumento():
         f"{righe_attive}")
 
     compose = yaml.safe_load((radice / "docker-compose.yml").read_text(encoding="utf-8"))
-    assert compose["services"]["worker"].get("pids_limit"), (
+    assert tetto_ai_processi(compose["services"]["worker"]), (
         "tolto il limite per strumento, il contenitore resta senza tetto ai processi")
+
+
+def tetto_ai_processi(servizio: dict) -> int | None:
+    """Il tetto ai processi dichiarato da un servizio, da qualunque dei due posti.
+
+    Per Compose `pids_limit` e `deploy.resources.limits.pids` sono lo stesso
+    campo scritto in due modi.
+    """
+    nel_deploy = (servizio.get("deploy", {}).get("resources", {})
+                  .get("limits", {}).get("pids"))
+    return servizio.get("pids_limit") or nel_deploy
+
+
+def test_il_tetto_ai_processi_e_scritto_allo_stesso_valore_nei_due_posti():
+    """Compose considera `pids_limit` e `deploy.resources.limits.pids` lo stesso
+    campo, e dalla 5.x rifiuta l'intero progetto se non coincidono: con il solo
+    `pids_limit` legge «non impostato» nell'altro e si ferma con «can't set
+    distinct values», senza avviare niente.
+
+    Il valore sta percio' in entrambi. Il test controlla che restino uguali, e
+    che nessun altro servizio ne dichiari uno solo: una modifica a meta' non
+    rompe un test applicativo, rompe `make up`.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    radice = Path(__file__).resolve().parents[1]
+    compose = yaml.safe_load((radice / "docker-compose.yml").read_text(encoding="utf-8"))
+
+    for nome, servizio in compose["services"].items():
+        diretto = servizio.get("pids_limit")
+        nel_deploy = (servizio.get("deploy", {}).get("resources", {})
+                      .get("limits", {}).get("pids"))
+        if diretto is None and nel_deploy is None:
+            continue
+        assert diretto == nel_deploy, (
+            f"il servizio '{nome}' dichiara pids_limit={diretto} e "
+            f"deploy.resources.limits.pids={nel_deploy}: Compose rifiuta il progetto")
