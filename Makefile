@@ -278,9 +278,12 @@ strumenti: require-env ## Dice quali strumenti sono utilizzabili e cosa manca ag
 	@# Nel worker e non nell'API: i binari stanno nella sua immagine e i servizi
 	@# facoltativi rispondono sulla rete interna. Eseguito nell'API ogni binario
 	@# risulterebbe assente -- correttamente, e senza alcuna utilita'.
-	@$(COMPOSE) exec -T worker python -m app.cli strumenti \
-		$(if $(DA_SISTEMARE),--da-sistemare,) \
-		|| echo "Il worker non risponde: make worker-start"
+	@#
+	@# Passa da uno script perche' «non riuscito» qui ha due cause con due
+	@# rimedi opposti: il worker spento (riavviarlo) e il worker che gira su
+	@# un'immagine precedente (ricostruirlo). Dirle entrambe «il worker non
+	@# risponde» mandava a riavviare un servizio sano.
+	@bash scripts/strumenti.sh $(if $(DA_SISTEMARE),--da-sistemare,)
 
 .PHONY: diagnosi
 diagnosi: ## Dice cosa sta davvero girando: versioni, schede, binari

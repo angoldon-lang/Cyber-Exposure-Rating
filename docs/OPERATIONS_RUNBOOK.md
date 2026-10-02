@@ -112,18 +112,23 @@ Nell'ordine in cui conviene guardare:
    semplicemente non esiste, e in scansione si vede solo
    `Connection refused`. Serve `COMPOSE_PROFILES=osint` in `.env` (una volta
    sola), oppure `make up-osint` ogni volta.
-2. **Il binario non c'e' nell'immagine del worker.** `make strumenti` lo dice
-   per nome; il rimedio e' `make aggiorna`.
-3. **Due scansioni insieme.** Fino alla 0.17.1 ogni strumento riceveva un
+2. **Il worker gira su una versione precedente.** Un `git pull` non aggiorna
+   cio' che e' in esecuzione: le immagini contengono una copia del codice, e
+   senza `make build` i container restano dov'erano, in silenzio. `make
+   strumenti` lo riconosce e stampa le due versioni; il rimedio e' `make
+   aggiorna`.
+3. **Il binario non c'e' nell'immagine del worker.** `make strumenti` lo dice
+   per nome; il rimedio e' lo stesso.
+4. **Due scansioni insieme.** Fino alla 0.17.1 ogni strumento riceveva un
    `RLIMIT_NPROC` di 256 come se fosse un limite per processo: e' per *utente*
    e su tutto il contenitore, quindi con due scansioni in parallelo i binari
    Go morivano con `failed to create new OS thread (errno=11)` e testssl con
    `fork: retry: Resource temporarily unavailable`. Se si vedono ancora quei
    messaggi, il worker sta girando su un'immagine precedente: `make aggiorna`.
-4. **Manca un abbonamento.** HIBP e la fonte sulle credenziali esposte sono
+5. **Manca un abbonamento.** HIBP e la fonte sulle credenziali esposte sono
    commerciali: restano `skipped`, riducono la copertura, e non c'e' niente da
    riparare.
-5. **Un'immagine non si scarica piu'.** `make check-versions` interroga i
+6. **Un'immagine non si scarica piu'.** `make check-versions` interroga i
    registri e dice quali riferimenti fissati nel compose e nei Dockerfile non
    esistono piu'. Un diniego del registro (`denied`) conta come mancante: su
    ghcr e' la stessa risposta per un pacchetto cancellato e per uno diventato

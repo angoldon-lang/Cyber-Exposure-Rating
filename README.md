@@ -135,6 +135,8 @@ make web              # http://127.0.0.1:5173
 | `make worker-start` | costruisce, avvia e verifica il worker: serve per le scansioni reali |
 | `make scan-now` | esegue subito le scansioni in coda senza attendere il worker (solo in modalita' simulata) |
 | `make sbom` | genera la SBOM CycloneDX di backend e frontend |
+| `make aggiorna` | aggiorna tutto: codice, immagini, database. **`git pull` da solo non aggiorna cio' che e' in esecuzione**: il codice vive dentro le immagini |
+| `make diagnosi` | dice quale versione sta davvero girando in ciascun container |
 | `make backup` / `make restore DUMP=...` | backup e ripristino |
 
 ---

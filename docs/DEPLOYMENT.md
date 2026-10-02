@@ -228,12 +228,35 @@ gestiti da un secret manager esterno.
 ## 10. Aggiornamenti
 
 ```bash
+make aggiorna        # git pull + build + up + migrazioni, nell'ordine giusto
+make strumenti       # verifica che il nuovo codice sia davvero quello che gira
+```
+
+**`git pull` da solo non aggiorna niente di cio' che e' in esecuzione.** Le
+immagini contengono una copia del codice: il backend e gli adapter in quella
+dell'API e del worker, gli strumenti di scansione in quella del worker, il
+frontend compilato in quella sua. Dopo un `git pull` seguito da un `make up`,
+Compose non vede alcuna differenza — le immagini sono le stesse — e i container
+restano alla versione precedente senza dire nulla.
+
+Il sintomo e' sconcertante quanto innocuo: un comando nuovo che «non esiste»,
+una schermata che non cambia, una correzione che non ha effetto. `make
+strumenti` e `make diagnosi` confrontano la versione del repository con quella
+che gira dentro ciascun container e lo dicono; `make strumenti`, se il worker
+non conosce il comando, risponde con la versione attiva e il comando per
+ricostruirlo, invece di mandare a riavviare un servizio sano.
+
+A mano, l'equivalente di `make aggiorna`:
+
+```bash
 git pull
-make build
+make build            # <- il passo che manca a chi fa solo `git pull`
 make down && make up
 make compose-migrate
 ```
 
 Le migrazioni Alembic sono progressive. Prima di aggiornare in produzione:
-eseguire un backup, verificare le note di rilascio e provare l'aggiornamento
-su un ambiente di staging.
+eseguire un backup, verificare le note di rilascio, provare l'aggiornamento su
+un ambiente di staging, ed eseguire `make check-versions` -- che dice se un
+riferimento fissato a un'immagine o a un rilascio non esiste piu' a monte,
+prima che se ne accorga `make build`.
