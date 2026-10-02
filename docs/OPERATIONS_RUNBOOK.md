@@ -85,12 +85,23 @@ Per ogni strumento del catalogo dice in quale dei sette stati si trova:
 | Esito | Significato | Rimedio |
 |---|---|---|
 | `operativo` | presente, configurato, e il servizio risponde | nessuno |
+| `alias` | la voce non e' un'esecuzione a se': in scansione quella chiave esegue un altro strumento (`nmap` esegue naabu, `epss` esegue kev) | nessuno |
 | `su richiesta` | pronto, ma aspetta qualcosa (un'intestazione da incollare, domini verificati, indirizzi e-mail individuati) | nessuno: non e' un guasto |
-| `sostituito` | assente per scelta, e la sua area la copre un altro strumento | nessuno |
+| `non distribuito` | assente per scelta, tipicamente una licenza che non consente la redistribuzione | nessuno: `make aggiorna` non lo farebbe comparire |
+| `sostituito` | assente o non configurato, e la sua area la copre un altro strumento | nessuno |
 | `a pagamento` | richiede un abbonamento che non c'e' | si acquista, o si rinuncia all'area |
 | `da configurare` | manca una variabile | Personalizzazione -> Strumenti, oppure `.env` |
 | `non raggiungibile` | l'indirizzo c'e', il servizio non risponde | il comando che lo avvia, stampato accanto |
 | `binario assente` | manca dall'immagine del worker | `make aggiorna` |
+
+Un indirizzo di loopback (`127.0.0.1`, `localhost`) in una variabile di
+servizio e' l'errore piu' facile da commettere e il piu' difficile da vedere:
+dentro il contenitore quell'indirizzo e' il contenitore stesso, non la macchina
+che lo ospita, e il sistema operativo risponde `connection refused` — lo stesso
+messaggio che si otterrebbe se il servizio non fosse mai partito. Per un
+servizio avviato sulla macchina serve `http://host.docker.internal:<porta>`
+(Docker Desktop su macOS e Windows); per uno del compose, il nome del servizio.
+Il comando lo riconosce e lo dice.
 
 Va eseguito nel worker, ed e' cio' che fa il target: i binari stanno nella sua
 immagine e i servizi facoltativi rispondono sulla rete interna. Eseguito

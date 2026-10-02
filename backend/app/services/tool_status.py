@@ -110,12 +110,17 @@ AZIONI_DELL_ANALISTA = {
     "port_scan": "Nessuna configurazione. Sonda gli indirizzi IP pubblici che "
                  "risolvono da un dominio di cui e' stata verificata la "
                  "proprieta' e che non stanno su infrastruttura condivisa "
-                 "(CDN, reverse proxy). Se resta saltato, mancano domini "
-                 "verificati in Gestione azienda.",
+                 "(CDN, reverse proxy). Serve inoltre il profilo Verified "
+                 "Extended Check, il solo che ammette la rilevazione dei "
+                 "servizi. Se resta saltato: mancano domini verificati in "
+                 "Gestione azienda, oppure gli indirizzi risolti stanno tutti "
+                 "su infrastruttura di terzi, che non e' lecito sondare.",
     "xposedornot": "Nessuna configurazione: la fonte e' gratuita e senza "
                    "chiave. Esamina gli indirizzi e-mail dell'organizzazione "
-                   "gia' noti; se non ne e' stato individuato nessuno, non ha "
-                   "bersagli.",
+                   "gia' noti, e se non ne e' stato individuato nessuno non ha "
+                   "bersagli. Chi li trova: theHarvester, la scoperta da DNS "
+                   "(DMARC e SOA) e la raccolta dal sito dell'azienda. Se resta "
+                   "saltato, il primo da controllare e' theHarvester.",
 }
 
 

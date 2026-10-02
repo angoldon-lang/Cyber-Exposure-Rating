@@ -30,6 +30,7 @@ from __future__ import annotations
 import importlib.util
 import shutil
 import socket
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -45,6 +46,15 @@ TIMEOUT_CONNESSIONE = 2.0
 OPERATIVO = "operativo"
 SU_RICHIESTA = "su richiesta"
 SOSTITUITO = "sostituito"
+# La voce di catalogo non e' un'esecuzione a se': in scansione quella chiave
+# esegue un altro strumento. `nmap` esegue naabu, `epss` esegue kev. Finche'
+# non si distinguevano, la verifica contava ventinove strumenti dove le
+# esecuzioni distinte sono venticinque, e proponeva di installare un binario
+# che non verrebbe invocato comunque.
+ALIAS = "alias"
+# Assente per scelta, non per dimenticanza: tipicamente una licenza che non
+# consente la redistribuzione. `make aggiorna` non lo farebbe comparire.
+NON_DISTRIBUITO = "non distribuito"
 A_PAGAMENTO = "a pagamento"
 DA_CONFIGURARE = "da configurare"
 NON_RAGGIUNGIBILE = "non raggiungibile"
@@ -52,7 +62,8 @@ BINARIO_ASSENTE = "binario assente"
 
 _GRAVITA = {
     NON_RAGGIUNGIBILE: 0, BINARIO_ASSENTE: 1, DA_CONFIGURARE: 2,
-    A_PAGAMENTO: 3, SOSTITUITO: 4, SU_RICHIESTA: 5, OPERATIVO: 6,
+    A_PAGAMENTO: 3, SOSTITUITO: 4, NON_DISTRIBUITO: 5, SU_RICHIESTA: 6,
+    ALIAS: 7, OPERATIVO: 8,
 }
 
 
@@ -134,6 +145,8 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
     impostate = valori_effettivi(db)
     da_sondare = _indirizzi_da_sondare(impostate) if sonda_rete else {}
 
+    from adapters.registry import TOOL_ALIASES
+
     esiti: list[Verifica] = []
     for chiave, definizione in catalogo.items():
         stato = configurazione.get(chiave, {})
@@ -143,6 +156,22 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
             peso=peso, aree=list(definizione.get("coverage_areas", [])),
             facoltativo=bool(definizione.get("optional", False)))
         motivo = (stato.get("reason") or "").strip()
+
+        # 0. La voce non e' un'esecuzione a se': in scansione quella chiave
+        #    esegue un altro strumento, e cio' che le manca non la riguarda.
+        #    Senza questo, `nmap` compariva fra i binari assenti con il
+        #    rimedio «make aggiorna» -- che non lo farebbe comparire, perche'
+        #    per scelta non viene distribuito, e che non servirebbe comunque,
+        #    perche' quella chiave esegue naabu.
+        esegue = TOOL_ALIASES.get(chiave)
+        if esegue and esegue != chiave:
+            spiegazione = str(definizione.get("not_distributed") or "").strip()
+            esiti.append(Verifica(
+                esito=ALIAS,
+                dettaglio=(f"in scansione questa voce esegue `{esegue}`."
+                           + (f" {spiegazione}" if spiegazione else "")),
+                rimedio=None, **comune))
+            continue
 
         # 1. Sostituito o in attesa di un dato: non c'e' nulla da sistemare,
         #    e `tool_status` lo sa gia' perche' lo distingue per rimedio.
@@ -183,10 +212,20 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
                 **comune))
             continue
 
-        # 4. Il binario, o la libreria, dichiarati dal catalogo devono
+        # 4. Assente per scelta. Va prima del controllo sul binario, perche'
+        #    altrimenti si proporrebbe una ricostruzione che non puo'
+        #    cambiarne l'esito. Se il binario c'e', l'ha messo chi ha una
+        #    licenza propria, e allora lo strumento e' utilizzabile.
+        non_distribuito = str(definizione.get("not_distributed") or "").strip()
+        binario = definizione.get("binary")
+        if non_distribuito and binario and not shutil.which(str(binario)):
+            esiti.append(Verifica(esito=NON_DISTRIBUITO, dettaglio=non_distribuito,
+                                  rimedio=None, **comune))
+            continue
+
+        # 5. Il binario, o la libreria, dichiarati dal catalogo devono
         #    esserci davvero. Sono la stessa classe di guasto: lo strumento
         #    e' configurato a dovere e non c'e'.
-        binario = definizione.get("binary")
         if binario and not shutil.which(str(binario)):
             esiti.append(Verifica(
                 esito=BINARIO_ASSENTE,
@@ -203,15 +242,17 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
                 **comune))
             continue
 
-        # 5. Il servizio configurato deve rispondere.
+        # 6. Il servizio configurato deve rispondere.
         if chiave in da_sondare:
             variabile, indirizzo = da_sondare[chiave]
             risponde, come = servizio_risponde(indirizzo)
             if not risponde:
+                loopback = _e_loopback(indirizzo) and _dentro_un_contenitore()
                 esiti.append(Verifica(
                     esito=NON_RAGGIUNGIBILE,
                     dettaglio=f"{variabile}={indirizzo}: {come}.",
-                    rimedio=_rimedio_servizio(definizione),
+                    rimedio=(_rimedio_loopback(variabile) if loopback
+                             else _rimedio_servizio(definizione)),
                     **comune))
                 continue
 
@@ -219,6 +260,47 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
 
     esiti.sort(key=lambda v: (_GRAVITA[v.esito], -v.peso, v.chiave))
     return esiti
+
+
+def _e_loopback(indirizzo: str) -> bool:
+    """Vero se l'indirizzo punta al loopback.
+
+    E' l'errore piu' facile da commettere e il piu' difficile da vedere:
+    `127.0.0.1` dentro un container e' il container stesso, non la macchina che
+    lo ospita. Un servizio avviato sul portatile e indicato come
+    `http://127.0.0.1:5001` e' irraggiungibile dal worker, e il messaggio del
+    sistema operativo — «connection refused» — e' quello che si otterrebbe
+    anche se il servizio non fosse mai partito: indistinguibili, e con due
+    rimedi diversi.
+    """
+    import ipaddress
+    from urllib.parse import urlsplit
+
+    host = urlsplit(indirizzo).hostname or ""
+    if host in {"localhost", "localhost.localdomain", "ip6-localhost"}:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _dentro_un_contenitore() -> bool:
+    """Se siamo in un container, un indirizzo di loopback e' certamente un errore.
+
+    Fuori da un container puo' essere giusto (sviluppo in locale, worker e
+    servizio sulla stessa macchina), e dirlo sbagliato manderebbe a cercare un
+    problema che non c'e'.
+    """
+    return Path("/.dockerenv").exists()
+
+
+def _rimedio_loopback(variabile: str) -> str:
+    return (f"{variabile} punta al loopback: dentro il contenitore e' il "
+            "contenitore stesso, non la macchina che lo ospita. Per un servizio "
+            "avviato sulla macchina: http://host.docker.internal:<porta> "
+            "(Docker Desktop su macOS e Windows). Per un servizio del compose: "
+            "il nome del servizio, p.es. http://theharvester:5000")
 
 
 def _rimedio_servizio(definizione: dict[str, Any]) -> str:

@@ -179,6 +179,7 @@ def coverage_matrix(profile_key: str) -> list[dict]:
             # insuccesso, e per farlo deve riceverli.
             "requires_input": bool(definition.get("requires_input", False)),
             "replaced_by": definition.get("replaced_by"),
+            "not_distributed": definition.get("not_distributed"),
             "commercial": bool(definition.get("commercial", False)),
             "requires_api_key": bool(definition.get("requires_api_key", False)),
             "phase": definition.get("phase", 1),

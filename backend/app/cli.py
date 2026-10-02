@@ -602,7 +602,11 @@ def strumenti(solo_da_sistemare: bool = False, sonda_rete: bool = True) -> dict:
     risultano assenti, e correttamente: per scelta non ci sono.
     """
     from app.core.config import load_yaml_config
-    from app.services.verifica_strumenti import BINARIO_ASSENTE, verifica_strumenti
+    from app.services.verifica_strumenti import (
+        ALIAS,
+        BINARIO_ASSENTE,
+        verifica_strumenti,
+    )
 
     con_dipendenza_esterna = {
         chiave for chiave, definizione
@@ -635,9 +639,16 @@ def strumenti(solo_da_sistemare: bool = False, sonda_rete: bool = True) -> dict:
             print(rientro + "-> " + v.rimedio)
 
     peso_perso = sum(v.peso for v in da_sistemare if not v.facoltativo)
+    # Gli alias non sono esecuzioni: contarli gonfiava il totale di quattro
+    # voci, e metteva fra le cose da fare un binario che non verrebbe invocato.
+    alias = [v for v in esiti if v.esito == ALIAS]
+    esecuzioni = len(esiti) - len(alias)
     print()
-    print(f"  {len(esiti) - len(da_sistemare)} strumenti su {len(esiti)} "
+    print(f"  {esecuzioni - len(da_sistemare)} strumenti su {esecuzioni} "
           f"utilizzabili; {len(da_sistemare)} richiedono un intervento.")
+    if alias:
+        print(f"  ({len(alias)} voci di catalogo in piu' sono alias: in scansione "
+              "eseguono un altro strumento, e non si contano a parte.)")
     if peso_perso:
         print(f"  Copertura in gioco: {peso_perso:.1f} punti di peso, che l'indice "
               "di fiducia sconta a ogni scansione finche' l'intervento manca.")

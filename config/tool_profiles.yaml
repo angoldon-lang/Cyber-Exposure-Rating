@@ -547,6 +547,19 @@ tools:
     label: "Nmap"
     kind: external_binary
     binary: nmap
+    # Non viene distribuito nell'immagine, per scelta e non per dimenticanza:
+    # la NPSL limita la redistribuzione in prodotti commerciali, e questo e'
+    # un prodotto commerciale. La stessa area la copre `port_scan`, integrato.
+    # Dichiararlo qui evita che la verifica di prontezza proponga `make
+    # aggiorna`, che ricostruirebbe l'immagine senza che nmap vi compaia.
+    # Chi ha una licenza propria lo installa nell'immagine del worker e
+    # l'adapter lo usa senza altre modifiche.
+    not_distributed: >-
+      Non distribuito nell'immagine: la Nmap Public Source License limita la
+      redistribuzione in prodotti commerciali. La stessa area e' coperta da
+      `port_scan`. Chi dispone di una licenza OEM lo installa nell'immagine del
+      worker e l'adapter lo usa senza altre modifiche.
+    replaced_by: port_scan
     passive: false
     phase: 2
     timeout_seconds: 1800

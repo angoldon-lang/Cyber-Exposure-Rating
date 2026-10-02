@@ -236,3 +236,131 @@ def test_uno_strumento_non_configurato_ma_sostituito_non_e_da_sistemare():
     assert esito.esito == SOSTITUITO
     assert not esito.richiede_intervento
     assert "theharvester" in esito.dettaglio
+
+
+# --------------------------------------------------------------------------
+# Voci che non sono esecuzioni
+# --------------------------------------------------------------------------
+def test_una_voce_che_e_un_alias_non_chiede_niente():
+    """`nmap` non e' uno strumento che gira: in scansione quella chiave esegue
+    naabu, e non esiste alcun adapter Nmap. Compariva fra i binari assenti con
+    il rimedio «make aggiorna», che non lo farebbe comparire (per licenza non
+    viene distribuito) e che non servirebbe comunque (quella chiave esegue un
+    altro binario).
+    """
+    from adapters.registry import ADAPTER_CLASSES, TOOL_ALIASES
+    from app.services.verifica_strumenti import ALIAS
+
+    esiti = _per_chiave(verifica_strumenti(None, sonda_rete=False))
+
+    for chiave, esegue in TOOL_ALIASES.items():
+        if chiave == esegue:
+            continue
+        assert chiave not in ADAPTER_CLASSES, (
+            f"{chiave} ha un adapter proprio: non e' un alias")
+        assert esiti[chiave].esito == ALIAS, chiave
+        assert not esiti[chiave].richiede_intervento, chiave
+        assert esegue in esiti[chiave].dettaglio, (
+            f"la voce {chiave} non dice che cosa esegue davvero")
+
+
+def test_l_alias_riporta_anche_il_motivo_per_cui_non_e_distribuito():
+    """Per Nmap il motivo e' una licenza, e chi legge deve poterlo sapere senza
+    aprire il catalogo: altrimenti «alias» sembra una stranezza invece di una
+    decisione."""
+    from app.services.verifica_strumenti import ALIAS
+
+    esito = _per_chiave(verifica_strumenti(None, sonda_rete=False))["nmap"]
+
+    assert esito.esito == ALIAS
+    assert "licenza" in esito.dettaglio.lower() or "license" in esito.dettaglio.lower()
+    assert "port_scan" in esito.dettaglio
+
+
+def test_cio_che_non_viene_distribuito_non_propone_una_ricostruzione(monkeypatch):
+    """Un binario che l'immagine non contiene per scelta non si ottiene
+    ricostruendola: proporre `make aggiorna` manda a perdere dieci minuti per
+    ritrovarsi al punto di prima."""
+    from app.services.verifica_strumenti import NON_DISTRIBUITO, verifica_strumenti as vs
+
+    catalogo = {"finto": {"label": "Finto", "binary": "finto-che-non-esiste",
+                          "coverage_weight": 1.0, "coverage_areas": ["attack_surface"],
+                          "not_distributed": "Non distribuito: licenza X."}}
+    monkeypatch.setattr("app.services.verifica_strumenti.load_yaml_config",
+                        lambda _nome: {"tools": catalogo})
+
+    esito = _per_chiave(vs(None, sonda_rete=False))["finto"]
+
+    assert esito.esito == NON_DISTRIBUITO
+    assert esito.rimedio is None, "nessun rimedio: non c'e' nulla da fare"
+    assert "licenza" in esito.dettaglio.lower()
+
+
+def test_se_il_binario_c_e_lo_strumento_non_distribuito_e_utilizzabile(monkeypatch):
+    """Chi ha una licenza propria lo installa nell'immagine: dichiararlo
+    comunque assente ignorerebbe il lavoro fatto."""
+    from app.services.verifica_strumenti import verifica_strumenti as vs
+
+    catalogo = {"finto": {"label": "Finto", "binary": "finto",
+                          "coverage_weight": 1.0, "coverage_areas": ["attack_surface"],
+                          "not_distributed": "Non distribuito: licenza X."}}
+    monkeypatch.setattr("app.services.verifica_strumenti.load_yaml_config",
+                        lambda _nome: {"tools": catalogo})
+    monkeypatch.setattr("app.services.verifica_strumenti.shutil.which",
+                        lambda nome: f"/usr/bin/{nome}")
+
+    assert _per_chiave(vs(None, sonda_rete=False))["finto"].esito == OPERATIVO
+
+
+# --------------------------------------------------------------------------
+# L'indirizzo che sembra giusto e non lo e'
+# --------------------------------------------------------------------------
+def test_un_indirizzo_di_loopback_dentro_un_contenitore_viene_spiegato(monkeypatch):
+    """E' l'errore piu' facile da commettere e il piu' difficile da vedere: un
+    servizio avviato sul portatile e indicato come http://127.0.0.1:5001 e'
+    irraggiungibile dal worker, perche' li' quell'indirizzo e' il worker. Il
+    sistema operativo risponde «connection refused», lo stesso messaggio che si
+    otterrebbe se il servizio non fosse mai partito."""
+    monkeypatch.setattr("app.services.tool_config.valori_effettivi",
+                        lambda db: {"THEHARVESTER_URL": "http://127.0.0.1:5000/"})
+    monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
+                        lambda indirizzo, timeout=2.0: (False, "connessione rifiutata"))
+    monkeypatch.setattr("app.services.verifica_strumenti._dentro_un_contenitore",
+                        lambda: True)
+
+    esito = _per_chiave(verifica_strumenti(None))["theharvester"]
+
+    assert esito.esito == NON_RAGGIUNGIBILE
+    assert "host.docker.internal" in (esito.rimedio or ""), (
+        "il rimedio non dice come raggiungere la macchina che ospita")
+
+
+def test_fuori_da_un_contenitore_il_loopback_non_viene_corretto(monkeypatch):
+    """In sviluppo locale worker e servizio stanno sulla stessa macchina, e
+    127.0.0.1 e' giusto: dirlo sbagliato manderebbe a cercare un problema che
+    non c'e'."""
+    monkeypatch.setattr("app.services.tool_config.valori_effettivi",
+                        lambda db: {"THEHARVESTER_URL": "http://127.0.0.1:5000/"})
+    monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
+                        lambda indirizzo, timeout=2.0: (False, "connessione rifiutata"))
+    monkeypatch.setattr("app.services.verifica_strumenti._dentro_un_contenitore",
+                        lambda: False)
+
+    esito = _per_chiave(verifica_strumenti(None))["theharvester"]
+
+    assert "host.docker.internal" not in (esito.rimedio or "")
+
+
+@pytest.mark.parametrize("indirizzo,atteso", [
+    ("http://127.0.0.1:5001", True),
+    ("http://localhost:5001", True),
+    ("http://[::1]:5001", True),
+    ("http://127.1.2.3:5001", True),
+    ("http://host.docker.internal:5001", False),
+    ("http://theharvester:5000", False),
+    ("http://192.168.1.10:5001", False),
+])
+def test_il_riconoscimento_del_loopback(indirizzo, atteso):
+    from app.services.verifica_strumenti import _e_loopback
+
+    assert _e_loopback(indirizzo) is atteso
