@@ -89,7 +89,13 @@ export const auth = {
   },
 };
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+// Il 401 della richiesta di accesso NON e' una sessione scaduta: e' la
+// risposta a credenziali sbagliate. Tradurli allo stesso modo diceva
+// «sessione scaduta» a chi stava davanti alla schermata di accesso, dove
+// nessuna sessione esiste, e nascondeva la causa vera -- la password errata --
+// dietro un messaggio che manda a cercare un problema di token.
+async function request<T>(path: string, init: RequestInit = {},
+                          opzioni: { autenticazione?: boolean } = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
   if (init.body) headers.set('Content-Type', 'application/json');
@@ -97,9 +103,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const response = await fetch(`${BASE}${path}`, { ...init, headers });
-  if (response.status === 401) {
+  if (response.status === 401 && !opzioni.autenticazione) {
+    // Senza token non c'era niente da scadere: l'accesso serve e basta.
     auth.clear();
-    throw new ApiError(401, 'Sessione scaduta: e’ necessario autenticarsi di nuovo');
+    throw new ApiError(401, token
+      ? 'Sessione scaduta: e’ necessario autenticarsi di nuovo'
+      : 'Autenticazione richiesta.');
   }
   if (!response.ok) {
     let message = `Errore ${response.status}`;
@@ -121,7 +130,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   login: (email: string, password: string) =>
-    request<TokenResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    request<TokenResponse>('/auth/login',
+      { method: 'POST', body: JSON.stringify({ email, password }) },
+      { autenticazione: true }),
   me: () => request<UserProfile>('/auth/me'),
 
   health: () => request<Health>('/health'),

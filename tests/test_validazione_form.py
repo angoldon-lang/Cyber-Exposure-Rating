@@ -69,3 +69,41 @@ def test_il_client_traduce_il_dettaglio_di_validazione():
     assert "messaggioDiValidazione" in CLIENT
     for campo in ("legal_name", "slug", "country"):
         assert f"{campo}:" in CLIENT, f"manca il nome leggibile per {campo}"
+
+
+# ---------------------------------------------------------------------------
+# «Sessione scaduta» davanti alla schermata di accesso
+# ---------------------------------------------------------------------------
+def test_il_401_dell_accesso_non_viene_chiamato_sessione_scaduta():
+    """Il client traduceva ogni 401 in «Sessione scaduta», compreso quello di
+    `/auth/login` -- che e' la risposta a credenziali sbagliate.
+
+    Chi sbagliava la password leggeva «sessione scaduta» stando davanti alla
+    schermata di accesso, dove nessuna sessione esiste, e andava a cercare un
+    problema di token invece di una password errata. Il backend risponde
+    «Credenziali non valide», ed e' quel messaggio che deve arrivare.
+    """
+    chiamata = re.search(r"login:[^;]*?request<TokenResponse>\((.*?)\),\n",
+                         CLIENT, re.DOTALL)
+    assert chiamata, "la chiamata di accesso non e' piu' riconoscibile nel client"
+
+    assert "autenticazione: true" in chiamata.group(1), (
+        "la richiesta di accesso non si sottrae alla traduzione generica del 401: "
+        "il suo «credenziali non valide» tornerebbe a chiamarsi «sessione scaduta»")
+
+
+def test_il_401_senza_token_non_parla_di_scadenza():
+    """Senza token non c'era niente da scadere. Dirlo comunque confonde una
+    sessione mai aperta con una finita."""
+    assert "Autenticazione richiesta" in CLIENT, (
+        "il caso «nessun token» non e' distinto da quello della sessione scaduta")
+    # Il messaggio sulla scadenza deve restare condizionato alla presenza del token.
+    assert re.search(r"token\s*\n?\s*\?\s*'Sessione scaduta", CLIENT), (
+        "«Sessione scaduta» non e' piu' condizionato alla presenza di un token")
+
+
+def test_la_traduzione_generica_del_401_resta_per_le_altre_richieste():
+    """Il comportamento utile non va perso: un token scaduto durante l'uso deve
+    continuare a essere ripulito e dichiarato."""
+    assert "auth.clear()" in CLIENT
+    assert "Sessione scaduta" in CLIENT

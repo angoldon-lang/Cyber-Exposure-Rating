@@ -210,6 +210,13 @@ scan-now: require-env ## Esegue subito le scansioni in coda senza attendere il w
 	$(COMPOSE) exec -e SCAN_MOCK_MODE=true api \
 		python -m app.cli run-queued $(if $(SCAN),--scan-id $(SCAN),)
 
+.PHONY: utenze
+utenze: require-env ## Elenca le utenze (EMAIL=... per rigenerare la password di una)
+	@# `run --rm` e non `exec`: serve anche quando l'API non e' avviata, che e'
+	@# proprio la situazione di chi non riesce ad accedere.
+	$(COMPOSE) run --rm api python -m app.cli utenze \
+		$(if $(EMAIL),--reimposta $(EMAIL),)
+
 .PHONY: compose-credentials
 compose-credentials: require-env ## Ristampa le credenziali demo dal container API
 	$(COMPOSE) exec api python -m app.cli show-credentials

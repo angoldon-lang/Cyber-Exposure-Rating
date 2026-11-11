@@ -589,6 +589,75 @@ def scansioni(chiudi: bool = False) -> dict:
             "orphans": sum(1 for r in righe if r["orphan"])}
 
 
+def utenze(reimposta: str | None = None) -> dict:
+    """Elenca le utenze esistenti e, su richiesta, reimposta una password.
+
+    Le password non sono recuperabili: nel database ci sono solo hash. Il file
+    delle credenziali dimostrative serve a rileggerle una volta sola, dopo il
+    seed (`make compose-credentials`), e se quel volume se ne va la password
+    se ne va con lui. `seed` non aiuta: salta le utenze che esistono gia' e
+    non ne stampa nessuna.
+
+    Restava percio' una situazione senza uscita — utenze presenti, password
+    perduta — il cui unico rimedio era un UPDATE a mano sul database. Questo
+    comando e' quell'uscita, e prima di tutto risponde alla domanda che la
+    precede: quali utenze esistono.
+
+    Non e' un'elevazione di privilegio: per eseguirlo serve una shell sul
+    server, che da' gia' accesso al database. L'operazione viene registrata
+    nell'audit log, come ogni altra.
+    """
+    from app.services.audit import record_audit
+
+    righe: list[dict] = []
+    nuova: str | None = None
+    with session_scope() as db:
+        utenti = db.execute(
+            select(User).join(Tenant, User.tenant_id == Tenant.id)
+            .order_by(Tenant.slug, User.email)).scalars().all()
+
+        for utente in utenti:
+            righe.append({
+                "tenant": utente.tenant.slug if utente.tenant else "?",
+                "email": utente.email,
+                "full_name": utente.full_name,
+                "roles": sorted(utente.role_names),
+                "active": utente.is_active,
+                # Con `auth_mode=oidc` l'autenticazione la fa Keycloak e qui
+                # l'hash resta nullo: dirlo evita di cercare una password che
+                # per quell'utenza non esiste.
+                "local_password": utente.hashed_password is not None,
+                "last_login_at": (utente.last_login_at.isoformat()
+                                  if utente.last_login_at else None),
+            })
+
+        if reimposta is None:
+            return {"users": righe, "total": len(righe)}
+
+        bersaglio = next((u for u in utenti if u.email == reimposta), None)
+        if bersaglio is None:
+            note = (f"nessuna utenza con indirizzo {reimposta}. "
+                    f"Esistenti: {', '.join(r['email'] for r in righe) or 'nessuna'}")
+            return {"users": righe, "total": len(righe), "reset": None, "error": note}
+
+        if settings.auth_mode == "oidc":
+            return {"users": righe, "total": len(righe), "reset": None,
+                    "error": ("AUTH_MODE=oidc: l'autenticazione e' delegata a "
+                              "Keycloak e una password impostata qui non verrebbe "
+                              "usata. La si cambia nella console di Keycloak.")}
+
+        nuova = generate_secure_password()
+        bersaglio.hashed_password = hash_password(nuova)
+        bersaglio.is_active = True
+        record_audit(db, action="user_password_reset_cli",
+                     tenant_id=bersaglio.tenant_id, actor_user_id=bersaglio.id,
+                     actor_email=bersaglio.email,
+                     entity_type="user", entity_id=str(bersaglio.id),
+                     message="password reimpostata da riga di comando")
+
+    return {"users": righe, "total": len(righe),
+            "reset": {"email": reimposta, "password": nuova}}
+
 def strumenti(solo_da_sistemare: bool = False, sonda_rete: bool = True) -> dict:
     """Dice quali strumenti sono utilizzabili e cosa manca agli altri.
 
@@ -695,6 +764,11 @@ def main() -> None:
     scansioni_parser.add_argument(
         "--chiudi", action="store_true",
         help="chiude tutte le scansioni non concluse, senza attendere la soglia")
+    utenze_parser = subparsers.add_parser(
+        "utenze", help="elenca le utenze e, con --reimposta, ne rigenera la password")
+    utenze_parser.add_argument(
+        "--reimposta", metavar="EMAIL", default=None,
+        help="genera una nuova password per quell'indirizzo e la stampa una volta sola")
     strumenti_parser = subparsers.add_parser(
         "strumenti", help="dice quali strumenti sono utilizzabili e cosa manca agli altri")
     strumenti_parser.add_argument(
@@ -730,6 +804,36 @@ def main() -> None:
         print(json.dumps(run_queued(args.scan_id), indent=2, ensure_ascii=False))
     elif args.command == "scansioni":
         print(json.dumps(scansioni(chiudi=args.chiudi), indent=2, ensure_ascii=False))
+    elif args.command == "utenze":
+        esito = utenze(reimposta=args.reimposta)
+        if not esito["users"]:
+            print("Nessuna utenza nel database.")
+            print("  python -m app.cli seed    crea tenant, ruoli e utenze dimostrative")
+            sys.exit(1)
+        larghezza = max(len(r["email"]) for r in esito["users"])
+        for r in esito["users"]:
+            stato = "attiva" if r["active"] else "DISATTIVATA"
+            accesso = (r["last_login_at"] or "mai")[:19]
+            print(f"  {r['tenant']:12s} {r['email']:<{larghezza}}  {stato:11s} "
+                  f"{','.join(r['roles']):28s} ultimo accesso: {accesso}")
+            if not r["local_password"]:
+                print(f"  {'':12s} {'':<{larghezza}}  nessuna password locale: "
+                      "l'autenticazione passa dal provider OIDC")
+        print()
+        print(f"  {esito['total']} utenze.")
+        if esito.get("error"):
+            print(f"\n  {esito['error']}")
+            sys.exit(1)
+        if esito.get("reset"):
+            print()
+            print(f"  Nuova password per {esito['reset']['email']}:")
+            print(f"      {esito['reset']['password']}")
+            print()
+            print("  Compare una volta sola: nel database resta solo l'hash.")
+            print("  Va cambiata al primo accesso.")
+        elif args.reimposta is None:
+            print("  Le password non sono recuperabili: nel database ci sono solo hash.")
+            print("  Per rigenerarne una:  python -m app.cli utenze --reimposta <email>")
     elif args.command == "strumenti":
         esito = strumenti(solo_da_sistemare=args.da_sistemare,
                           sonda_rete=not args.senza_rete)

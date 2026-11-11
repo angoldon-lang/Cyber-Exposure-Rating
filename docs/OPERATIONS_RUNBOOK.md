@@ -146,6 +146,25 @@ Nell'ordine in cui conviene guardare:
    privato, e per chi installa sono la stessa cosa. E' il controllo che va
    eseguito prima di un aggiornamento, non dopo che `make up` si e' fermato.
 
+### Nessuno riesce ad accedere, o non si sa quali utenze esistano
+
+```bash
+make utenze                              # tenant, indirizzo, ruoli, stato, ultimo accesso
+make utenze EMAIL=admin@defenix.example  # rigenera la password e la stampa una volta
+```
+
+Le password **non sono recuperabili**: nel database ci sono solo hash. Il file
+scritto dal seed (`make compose-credentials`) le rilegge, ma vive sul volume
+`state-data`, in `/var/lib/defenix/state/.demo-credentials.json`: se quel volume
+se ne va, la password se ne va con lui. Rieseguire `make compose-seed` non
+aiuta, perche' salta le utenze che esistono gia' e non ne stampa nessuna.
+
+`make utenze EMAIL=...` e' l'uscita da quella situazione. Non e' un'elevazione
+di privilegio — per eseguirlo serve una shell sul server, che da' gia' accesso
+al database — e viene registrato nell'audit log come `user_password_reset_cli`.
+Con `AUTH_MODE=oidc` si rifiuta: l'autenticazione la fa Keycloak e una password
+impostata qui non verrebbe usata.
+
 ### Scansione ferma in `queued`
 
 ```bash

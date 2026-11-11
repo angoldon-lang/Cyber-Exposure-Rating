@@ -125,6 +125,7 @@ make web              # http://127.0.0.1:5173
 | `make demo` | scansione dimostrativa end-to-end su dati sintetici |
 | `make credentials` | ristampa le credenziali demo generate |
 | `make compose-credentials` | ristampa le credenziali demo dal container API |
+| `make utenze` | elenca le utenze esistenti; `EMAIL=...` rigenera la password di una |
 | `make test` / `make lint` | suite di test / analisi statica |
 | `make check-config` | valida i YAML di scoring e confidenza |
 | `make check-versions` | verifica che le versioni fissate nei Dockerfile esistano ancora |
