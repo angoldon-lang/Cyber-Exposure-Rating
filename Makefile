@@ -294,38 +294,11 @@ strumenti: require-env ## Dice quali strumenti sono utilizzabili e cosa manca ag
 
 .PHONY: diagnosi
 diagnosi: ## Dice cosa sta davvero girando: versioni, schede, binari
-	@echo "== versione attesa (questo repository) =="
-	@printf "  VERSION                %s\n" "$$(cat VERSION)"
-	@echo
-	@echo "== versione che sta girando =="
-	@printf "  api                    %s\n" \
-		"$$($(COMPOSE) exec -T api sh -c 'cat /srv/VERSION 2>/dev/null' || echo sconosciuta)"
-	@printf "  worker                 %s\n" \
-		"$$($(COMPOSE) exec -T worker sh -c 'cat /srv/VERSION 2>/dev/null' || echo sconosciuta)"
-	@$(COMPOSE) exec -T frontend sh -c "grep -ql '$$(cat VERSION)' /usr/share/nginx/html/assets/*.js" \
-		&& printf "  frontend (nel bundle)  %s\n" "$$(cat VERSION)" \
-		|| printf "  frontend (nel bundle)  diversa da %s -> ricostruire\n" "$$(cat VERSION)"
-	@echo
-	@echo "== interfaccia: come viene servita =="
-	@curl -sfI http://localhost:$${FRONTEND_PORT:-8080}/ 2>/dev/null \
-		| grep -i "^cache-control" \
-		|| echo "  NESSUN Cache-Control -> immagine del frontend non aggiornata"
-	@echo
-	@echo "== interfaccia: le schede sono nel bundle? =="
-	@$(COMPOSE) exec -T frontend sh -c \
-		"grep -ql 'Perimetro di rete' /usr/share/nginx/html/assets/*.js" \
-		&& echo "  Perimetro di rete (Gestione azienda): presente" \
-		|| echo "  Perimetro di rete: ASSENTE -> ricostruire il frontend"
-	@$(COMPOSE) exec -T frontend sh -c \
-		"grep -ql 'Dopo aver modificato' /usr/share/nginx/html/assets/*.js" \
-		&& echo "  Strumenti (Personalizzazione):      presente" \
-		|| echo "  Strumenti: ASSENTE -> ricostruire il frontend"
-	@echo
-	@echo "== worker: quale binario risponde =="
-	@$(COMPOSE) exec -T worker sh -c \
-		'for t in subfinder httpx nuclei testssl.sh; do printf "  %-12s %s\n" "$$t" "$$(command -v $$t || echo ASSENTE)"; done'
-	@echo
-	@echo "Se una riga dice ASSENTE o manca il Cache-Control: make aggiorna"
+	@# Passa da uno script perche' le frasi cercate nel bundle vanno dichiarate
+	@# in un posto solo, dove un test possa verificare che esistano ancora nel
+	@# codice del frontend: scritte a mano qui, invecchiavano in silenzio e la
+	@# scheda risultava assente per sempre.
+	@bash scripts/diagnosi.sh
 
 .PHONY: up-zap
 up-zap: require-env ## Avvia lo stack con il demone ZAP (profilo zap)
