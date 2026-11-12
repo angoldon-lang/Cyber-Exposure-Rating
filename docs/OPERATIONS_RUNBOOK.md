@@ -165,6 +165,34 @@ al database — e viene registrato nell'audit log come `user_password_reset_cli`
 Con `AUTH_MODE=oidc` si rifiuta: l'autenticazione la fa Keycloak e una password
 impostata qui non verrebbe usata.
 
+### «Credenziali non valide» ma le credenziali sono giuste
+
+`make utenze` stampa in coda gli ultimi dieci tentativi di accesso registrati
+nell'audit log. L'indirizzo che compare la' e' **quello arrivato al server**, e
+risolve il dubbio in un colpo:
+
+| Cosa si vede | Cosa significa |
+|---|---|
+| l'indirizzo e' diverso da quello che si credeva di scrivere | un carattere di troppo o di meno: la causa e' quella |
+| l'indirizzo e' giusto e il tentativo e' `respinto` | la password non e' quella di **questo** database: `make utenze EMAIL=...` |
+| l'indirizzo non e' fra le utenze elencate sopra | si sta usando un indirizzo che in questo database non esiste |
+| l'utenza risulta `DISATTIVATA` | `is_active` e' falso: il login viene rifiutato prima della password |
+| **nessun tentativo registrato** | la richiesta non arriva all'API: `make doctor` |
+
+L'ultimo caso e' il piu' difficile da indovinare e il piu' facile da
+verificare: se il tentativo appena fatto non compare, il problema non e' la
+password. Il frontend sta parlando con un indirizzo diverso, oppure l'API non
+risponde.
+
+Due cause che non c'entrano con la password, da escludere prima:
+
+- **il file delle credenziali non e' di questo database.** Se il volume
+  `postgres-data` e' stato ricreato dopo l'ultimo seed (o viceversa), il file
+  contiene la password di un database che non esiste piu'. Il reset risolve;
+- **AUTH_MODE non e' `local`.** In quel caso l'endpoint di accesso locale
+  risponde `400`, non `401`, e il messaggio lo dice: l'autenticazione passa
+  dall'identity provider.
+
 ### Scansione ferma in `queued`
 
 ```bash

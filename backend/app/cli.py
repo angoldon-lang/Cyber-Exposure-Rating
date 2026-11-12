@@ -17,7 +17,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
 from app.core.config import settings
 from app.core.db import engine, session_scope
@@ -607,9 +607,12 @@ def utenze(reimposta: str | None = None) -> dict:
     server, che da' gia' accesso al database. L'operazione viene registrata
     nell'audit log, come ogni altra.
     """
+    from app.models.audit import AuditLog
+    from app.models.enums import AuditAction
     from app.services.audit import record_audit
 
     righe: list[dict] = []
+    tentativi: list[dict] = []
     nuova: str | None = None
     with session_scope() as db:
         utenti = db.execute(
@@ -631,17 +634,38 @@ def utenze(reimposta: str | None = None) -> dict:
                                   if utente.last_login_at else None),
             })
 
+        # Gli ultimi tentativi di accesso. «Credenziali non valide» con le
+        # credenziali giuste ha tre cause che si somigliano: l'indirizzo
+        # arrivato al server non e' quello che si credeva di aver scritto, la
+        # password non e' quella di questo database, oppure la richiesta non
+        # arriva affatto -- e in quest'ultimo caso qui non compare nulla, che
+        # e' l'informazione piu' utile delle tre.
+        registrati = db.execute(
+            select(AuditLog)
+            .where(AuditLog.action.in_([AuditAction.LOGIN.value,
+                                        AuditAction.LOGIN_FAILED.value]))
+            .order_by(desc(AuditLog.occurred_at)).limit(10)).scalars().all()
+        for voce in registrati:
+            tentativi.append({
+                "at": voce.occurred_at.isoformat() if voce.occurred_at else None,
+                "email": voce.actor_email,
+                "outcome": voce.outcome,
+                "ip": voce.actor_ip,
+            })
+
         if reimposta is None:
-            return {"users": righe, "total": len(righe)}
+            return {"users": righe, "total": len(righe), "attempts": tentativi}
 
         bersaglio = next((u for u in utenti if u.email == reimposta), None)
         if bersaglio is None:
             note = (f"nessuna utenza con indirizzo {reimposta}. "
                     f"Esistenti: {', '.join(r['email'] for r in righe) or 'nessuna'}")
-            return {"users": righe, "total": len(righe), "reset": None, "error": note}
+            return {"users": righe, "total": len(righe), "attempts": tentativi,
+                    "reset": None, "error": note}
 
         if settings.auth_mode == "oidc":
-            return {"users": righe, "total": len(righe), "reset": None,
+            return {"users": righe, "total": len(righe), "attempts": tentativi,
+                    "reset": None,
                     "error": ("AUTH_MODE=oidc: l'autenticazione e' delegata a "
                               "Keycloak e una password impostata qui non verrebbe "
                               "usata. La si cambia nella console di Keycloak.")}
@@ -655,7 +679,7 @@ def utenze(reimposta: str | None = None) -> dict:
                      entity_type="user", entity_id=str(bersaglio.id),
                      message="password reimpostata da riga di comando")
 
-    return {"users": righe, "total": len(righe),
+    return {"users": righe, "total": len(righe), "attempts": tentativi,
             "reset": {"email": reimposta, "password": nuova}}
 
 def strumenti(solo_da_sistemare: bool = False, sonda_rete: bool = True) -> dict:
@@ -821,6 +845,22 @@ def main() -> None:
                       "l'autenticazione passa dal provider OIDC")
         print()
         print(f"  {esito['total']} utenze.")
+        tentativi = esito.get("attempts") or []
+        if tentativi:
+            print()
+            print("  Ultimi tentativi di accesso registrati:")
+            for voce in tentativi:
+                esiti = "RIUSCITO" if voce["outcome"] == "success" else "respinto"
+                print(f"    {(voce['at'] or '')[:19]}  {esiti:9s} "
+                      f"{voce['email'] or '(nessun indirizzo)'}"
+                      f"{'  da ' + voce['ip'] if voce['ip'] else ''}")
+            print("  L'indirizzo qui sopra e' quello arrivato al server: se non e'")
+            print("  quello che si credeva di scrivere, la causa e' quella.")
+        else:
+            print()
+            print("  Nessun tentativo di accesso registrato. Se ne hai appena fatto uno,")
+            print("  la richiesta non arriva all'API: il frontend sta parlando con un")
+            print("  altro indirizzo, oppure l'API non risponde.  ->  make doctor")
         if esito.get("error"):
             print(f"\n  {esito['error']}")
             sys.exit(1)

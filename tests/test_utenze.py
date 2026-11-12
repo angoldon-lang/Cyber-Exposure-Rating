@@ -176,3 +176,66 @@ def test_il_comando_e_raggiungibile_dal_makefile():
     # `run --rm` e non `exec`: serve anche quando l'API non e' avviata, che e'
     # proprio la situazione di chi non riesce ad accedere.
     assert "run --rm api python -m app.cli utenze" in makefile
+
+
+# --------------------------------------------------------------------------
+# «Credenziali non valide» con le credenziali giuste
+# --------------------------------------------------------------------------
+def _tentativo(db, *, email, riuscito, ip="172.18.0.1"):
+    from app.models.enums import AuditAction
+    from app.services.audit import record_audit
+
+    record_audit(db, action=(AuditAction.LOGIN.value if riuscito
+                             else AuditAction.LOGIN_FAILED.value),
+                 actor_email=email, actor_ip=ip,
+                 outcome="success" if riuscito else "failure")
+    db.commit()
+
+
+def test_mostra_l_indirizzo_arrivato_davvero_al_server(con_utenze):
+    """E' il modo piu' rapido di smentire «le credenziali sono giuste»: il
+    server ha ricevuto `prova.exemple`, non `prova.example`. Senza vederlo si
+    cerca altrove per mezz'ora.
+    """
+    _tentativo(con_utenze, email="analista@prova.exemple", riuscito=False)
+
+    tentativi = utenze()["attempts"]
+
+    assert tentativi, "i tentativi di accesso non vengono riportati"
+    assert tentativi[0]["email"] == "analista@prova.exemple"
+    assert tentativi[0]["outcome"] == "failure"
+    assert tentativi[0]["ip"] == "172.18.0.1"
+
+
+def test_i_tentativi_sono_dal_piu_recente(con_utenze):
+    """Chi guarda ha appena provato: il suo tentativo deve stare in cima."""
+    _tentativo(con_utenze, email="vecchio@prova.example", riuscito=False)
+    _tentativo(con_utenze, email="appena.ora@prova.example", riuscito=False)
+
+    assert utenze()["attempts"][0]["email"] == "appena.ora@prova.example"
+
+
+def test_un_accesso_riuscito_si_distingue_da_uno_respinto(con_utenze):
+    _tentativo(con_utenze, email="analista@prova.example", riuscito=True)
+
+    assert utenze()["attempts"][0]["outcome"] == "success"
+
+
+def test_nessun_tentativo_registrato_e_un_informazione(con_utenze):
+    """Se chi ha appena provato non trova il proprio tentativo, la richiesta
+    non e' arrivata all'API: e' una causa diversa da una password sbagliata, e
+    la piu' difficile da indovinare."""
+    esito = utenze()
+
+    assert esito["attempts"] == []
+
+
+def test_i_tentativi_compaiono_anche_quando_si_reimposta(con_utenze):
+    """Chi reimposta la password sta diagnosticando: togliergli il contesto
+    proprio in quel momento lo obbligherebbe a un secondo comando."""
+    _tentativo(con_utenze, email="analista@prova.example", riuscito=False)
+
+    esito = utenze(reimposta="analista@prova.example")
+
+    assert esito["reset"] is not None
+    assert esito["attempts"]
