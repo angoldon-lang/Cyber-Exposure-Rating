@@ -682,7 +682,8 @@ def utenze(reimposta: str | None = None) -> dict:
     return {"users": righe, "total": len(righe), "attempts": tentativi,
             "reset": {"email": reimposta, "password": nuova}}
 
-def strumenti(solo_da_sistemare: bool = False, sonda_rete: bool = True) -> dict:
+def strumenti(solo_da_sistemare: bool = False, sonda_rete: bool = True,
+              dimentica: str | None = None) -> dict:
     """Dice quali strumenti sono utilizzabili e cosa manca agli altri.
 
     Finora la risposta si otteneva in un solo modo: lanciare una scansione e
@@ -710,9 +711,28 @@ def strumenti(solo_da_sistemare: bool = False, sonda_rete: bool = True) -> dict:
     # precedenza su `.env`: senza sessione si vedrebbe una configurazione
     # diversa da quella che userebbe la scansione. Se il database non c'e' si
     # prosegue sull'ambiente, dicendolo.
+    # Una variabile salvata dall'interfaccia sta nel database e ha la
+    # precedenza su `.env`: modificare il file non ha effetto, per sempre e
+    # senza un segno. Cancellarla e' la via d'uscita, e senza un comando
+    # richiedeva di accedere all'interfaccia -- cioe' proprio cio' che una
+    # configurazione sbagliata puo' impedire.
+    dimenticata: str | None = None
+    errore_dimentica: str | None = None
     database = True
     try:
         with session_scope() as db:
+            if dimentica:
+                from app.services.tool_config import PER_NOME, rimuovi
+                if dimentica not in PER_NOME:
+                    errore_dimentica = (
+                        f"{dimentica} non e' una variabile configurabile. "
+                        f"Ammesse: {', '.join(sorted(PER_NOME))}")
+                elif rimuovi(db, dimentica):
+                    dimenticata = dimentica
+                else:
+                    errore_dimentica = (
+                        f"{dimentica} non era salvata nel database: il valore in "
+                        "vigore arriva da .env, e li' va corretto")
             esiti = verifica_strumenti(db, sonda_rete=sonda_rete)
     except Exception:  # noqa: BLE001
         database = False
@@ -758,7 +778,16 @@ def strumenti(solo_da_sistemare: bool = False, sonda_rete: bool = True) -> dict:
               "scelta: gli strumenti di scansione non devono poter girare li'). "
               "Rilanciarlo nel worker con `make strumenti`.")
 
+    if dimenticata:
+        print()
+        print(f"  {dimenticata} cancellata dal database: da adesso vale il valore")
+        print("  di .env (serve il riavvio dei contenitori: make up).")
+    if errore_dimentica:
+        print()
+        print(f"  {errore_dimentica}")
+
     return {"tools": [v.to_dict() for v in esiti],
+            "forgotten": dimenticata, "forget_error": errore_dimentica,
             "needs_action": len(da_sistemare),
             "coverage_weight_at_risk": round(peso_perso, 2),
             "database_consulted": database}
@@ -801,6 +830,10 @@ def main() -> None:
     strumenti_parser.add_argument(
         "--senza-rete", action="store_true",
         help="non apre connessioni: salta la verifica che i servizi rispondano")
+    strumenti_parser.add_argument(
+        "--dimentica", metavar="VARIABILE", default=None,
+        help="cancella una variabile salvata dall'interfaccia, cosi' che torni "
+             "a valere quella di .env (il database ha la precedenza)")
     strumenti_parser.add_argument(
         "--json", action="store_true", help="esito leggibile da un programma")
 
@@ -876,7 +909,8 @@ def main() -> None:
             print("  Per rigenerarne una:  python -m app.cli utenze --reimposta <email>")
     elif args.command == "strumenti":
         esito = strumenti(solo_da_sistemare=args.da_sistemare,
-                          sonda_rete=not args.senza_rete)
+                          sonda_rete=not args.senza_rete,
+                          dimentica=args.dimentica)
         if args.json:
             print(json.dumps(esito, indent=2, ensure_ascii=False))
     elif args.command == "show-credentials":

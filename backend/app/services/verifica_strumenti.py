@@ -137,12 +137,13 @@ def _indirizzi_da_sondare(impostate: dict[str, str]) -> dict[str, tuple[str, str
 
 def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verifica]:
     """Esito per ogni strumento del catalogo, con il rimedio quando serve."""
-    from app.services.tool_config import valori_effettivi
+    from app.services.tool_config import origine, valori_effettivi
     from app.services.tool_status import stato_strumenti
 
     catalogo = load_yaml_config("tool_profiles").get("tools", {})
     configurazione = {riga["key"]: riga for riga in stato_strumenti(db)}
     impostate = valori_effettivi(db)
+    fonti = origine(db)
     da_sondare = _indirizzi_da_sondare(impostate) if sonda_rete else {}
 
     from adapters.registry import TOOL_ALIASES
@@ -248,12 +249,26 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
             risponde, come = servizio_risponde(indirizzo)
             if not risponde:
                 loopback = _e_loopback(indirizzo) and _dentro_un_contenitore()
+                rimedio = (_rimedio_loopback(variabile) if loopback
+                           else _rimedio_servizio(definizione))
+                # Da dove arriva il valore decide DOVE si corregge, e lo
+                # decide in modo controintuitivo: il database ha la precedenza
+                # su `.env`, quindi un valore salvato una volta
+                # dall'interfaccia rende ogni modifica a `.env` inefficace,
+                # per sempre e senza un segno. Non dirlo manda a correggere il
+                # file sbagliato a ogni tentativo.
+                if fonti.get(variabile) == "interfaccia":
+                    rimedio = (f"{variabile} e' salvata nel database "
+                               "(impostata da Personalizzazione -> Strumenti) e ha "
+                               "la PRECEDENZA su .env: modificare .env non ha "
+                               "effetto. Si corregge da quella schermata, oppure "
+                               f"si cancella con `app.cli strumenti --dimentica {variabile}` "
+                               f"per far tornare valido .env. {rimedio}")
                 esiti.append(Verifica(
                     esito=NON_RAGGIUNGIBILE,
-                    dettaglio=f"{variabile}={indirizzo}: {come}.",
-                    rimedio=(_rimedio_loopback(variabile) if loopback
-                             else _rimedio_servizio(definizione)),
-                    **comune))
+                    dettaglio=(f"{variabile}={indirizzo} "
+                               f"(da {fonti.get(variabile, 'ambiente')}): {come}."),
+                    rimedio=rimedio, **comune))
                 continue
 
         esiti.append(Verifica(esito=OPERATIVO, dettaglio="", rimedio=None, **comune))

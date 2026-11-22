@@ -114,6 +114,58 @@ TCP che chiude subito: nessun
 bersaglio di scansione entra nel comando, e le fonti commerciali non vengono
 contattate. `--senza-rete` salta anche quelle.
 
+### Configurare gli strumenti che ne hanno bisogno
+
+Sono quattro, e solo due dipendono da noi.
+
+| Strumento | Cosa serve | Come |
+|---|---|---|
+| theHarvester | `THEHARVESTER_URL=http://theharvester:5000` | profilo `osint` (gia' predefinito) |
+| SpiderFoot | `SPIDERFOOT_URL=http://spiderfoot:5001` | profilo `osint`; l'immagine la costruisce `make build` |
+| OWASP ZAP | `ZAP_API_KEY` (la scegli tu) + `ZAP_URL=http://zap:8090` | `openssl rand -hex 24`, poi `make up-zap` |
+| HIBP, credenziali esposte | un abbonamento | niente da configurare senza |
+
+I due del profilo `osint` sono gratuiti, locali e senza chiavi: basta che
+`COMPOSE_PROFILES=osint` sia in `.env` e che i due indirizzi siano quelli qui
+sopra. ZAP ha una chiave che **sceglie chi installa**, non un fornitore: la
+stessa deve comparire in `.env` e nel comando del servizio, e `make up-zap`
+rifiuta di partire se manca.
+
+#### Attenzione: `.env` o interfaccia, non entrambi
+
+Il database ha la **precedenza** su `.env`. Un valore salvato una volta da
+Personalizzazione -> Strumenti resta in vigore per sempre, e **ogni modifica a
+`.env` diventa inefficace**, senza che nulla lo dica. E' la trappola piu'
+costosa della configurazione, perche' il sintomo e' indistinguibile da una
+modifica non applicata: si corregge il file, si riavvia, l'errore e' identico.
+
+`make strumenti` ora dichiara l'origine di ogni valore:
+
+```
+spiderfoot   non raggiungibile   SPIDERFOOT_URL=http://127.0.0.1:5001/ (da interfaccia): ...
+   -> SPIDERFOOT_URL e' salvata nel database e ha la PRECEDENZA su .env:
+      modificare .env non ha effetto.
+```
+
+Per far tornare valido `.env`, senza passare dall'interfaccia:
+
+```bash
+docker compose run --rm api python -m app.cli strumenti --dimentica SPIDERFOOT_URL
+make up
+```
+
+Accetta solo le variabili dell'elenco chiuso, le stesse che l'interfaccia puo'
+scrivere: e' la stessa difesa, nell'altra direzione.
+
+#### `127.0.0.1` non e' la tua macchina
+
+Dentro un contenitore quell'indirizzo e' **il contenitore stesso**. Un servizio
+avviato sul portatile non e' raggiungibile cosi', e il messaggio
+(`connection refused`) e' identico a quello di un servizio mai partito.
+
+- servizio del compose -> il nome del servizio: `http://spiderfoot:5001`
+- servizio sulla tua macchina -> `http://host.docker.internal:5001`
+
 ### Molti strumenti risultano «non eseguiti»
 
 Nell'ordine in cui conviene guardare:

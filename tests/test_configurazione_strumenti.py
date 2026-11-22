@@ -10,6 +10,8 @@ valore non lascia mai il server, e sul disco non c'e' in chiaro.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.core.segreti import cifra, decifra
@@ -137,3 +139,44 @@ def test_il_registro_di_audit_non_contiene_il_valore(client, admin):  # noqa: F8
 def test_serve_il_permesso_di_scrittura_sui_connettori(client):  # noqa: F811
     risposta = client.put("/api/v1/tool-status/HIBP_API_KEY", json={"value": CHIAVE})
     assert risposta.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# Disfare una configurazione salvata
+# ---------------------------------------------------------------------------
+def test_si_puo_cancellare_un_valore_salvato_per_far_tornare_valido_env(db_session):
+    """Il database ha la precedenza su `.env`. Senza un modo di cancellare, un
+    indirizzo sbagliato salvato una volta dall'interfaccia resta in vigore per
+    sempre, e l'unico rimedio era accedere a quella schermata -- cioe' proprio
+    cio' che una configurazione sbagliata puo' impedire.
+    """
+    from app.services.tool_config import imposta, origine, rimuovi, valori_effettivi
+
+    imposta(db_session, "SPIDERFOOT_URL", "http://127.0.0.1:5001/", utente_id=None)
+    db_session.flush()
+    assert origine(db_session)["SPIDERFOOT_URL"] == "interfaccia"
+
+    assert rimuovi(db_session, "SPIDERFOOT_URL") is True
+    db_session.flush()
+
+    assert "SPIDERFOOT_URL" not in origine(db_session)
+    assert "SPIDERFOOT_URL" not in valori_effettivi(db_session)
+
+
+def test_cancellare_cio_che_non_era_salvato_lo_dice(db_session):
+    """Restituire «fatto» farebbe credere di aver risolto, quando il valore in
+    vigore arriva da `.env` e va corretto la'."""
+    from app.services.tool_config import rimuovi
+
+    assert rimuovi(db_session, "SPIDERFOOT_URL") is False
+
+
+def test_il_comando_rifiuta_una_variabile_fuori_elenco():
+    """L'elenco chiuso e' la stessa difesa della scrittura: senza, il comando
+    diventerebbe una cancellazione arbitraria nella configurazione."""
+    from app.services.tool_config import PER_NOME
+
+    assert "PIPPO" not in PER_NOME
+    cli = (Path(__file__).resolve().parents[1] / "backend" / "app" / "cli.py"
+           ).read_text(encoding="utf-8")
+    assert "dimentica not in PER_NOME" in cli

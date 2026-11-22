@@ -402,3 +402,48 @@ def test_il_riconoscimento_del_loopback(indirizzo, atteso):
     from app.services.verifica_strumenti import _e_loopback
 
     assert _e_loopback(indirizzo) is atteso
+
+
+# --------------------------------------------------------------------------
+# Da dove arriva il valore decide dove si corregge
+# --------------------------------------------------------------------------
+def test_un_valore_salvato_dall_interfaccia_lo_dichiara(monkeypatch):
+    """E' la trappola piu' costosa della configurazione, perche' non lascia
+    tracce: il database ha la precedenza su `.env`, quindi un indirizzo
+    salvato una volta da Personalizzazione -> Strumenti rende inefficace ogni
+    modifica al file, per sempre. Chi corregge `.env` e rilancia vede lo stesso
+    errore e corregge di nuovo lo stesso file.
+    """
+    monkeypatch.setattr("app.services.tool_config.valori_effettivi",
+                        lambda db: {"SPIDERFOOT_URL": "http://127.0.0.1:5001/"})
+    monkeypatch.setattr("app.services.tool_config.origine",
+                        lambda db: {"SPIDERFOOT_URL": "interfaccia"})
+    monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
+                        lambda indirizzo, timeout=2.0: (False, "connessione rifiutata"))
+
+    esito = _per_chiave(verifica_strumenti(None))["spiderfoot"]
+
+    assert "interfaccia" in esito.dettaglio, (
+        "non dice da dove arriva il valore: si continuerebbe a correggere .env")
+    assert "PRECEDENZA" in (esito.rimedio or ""), (
+        "non dice che .env e' ignorato")
+    assert "--dimentica" in (esito.rimedio or ""), (
+        "non indica la via d'uscita")
+
+
+def test_un_valore_che_arriva_dall_ambiente_non_manda_all_interfaccia(monkeypatch):
+    """Il contrario sarebbe altrettanto fuorviante: mandare a cercare in una
+    schermata un valore che sta nel file."""
+    monkeypatch.setattr("app.services.tool_config.valori_effettivi",
+                        lambda db: {"SPIDERFOOT_URL": "http://spiderfoot:5001"})
+    monkeypatch.setattr("app.services.tool_config.origine",
+                        lambda db: {"SPIDERFOOT_URL": "ambiente"})
+    monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
+                        lambda indirizzo, timeout=2.0: (False, "connessione rifiutata"))
+
+    esito = _per_chiave(verifica_strumenti(None))["spiderfoot"]
+
+    assert "ambiente" in esito.dettaglio
+    assert "PRECEDENZA" not in (esito.rimedio or "")
+    assert "osint" in (esito.rimedio or ""), (
+        "con il valore giusto nel file, il rimedio e' avviare il servizio")
