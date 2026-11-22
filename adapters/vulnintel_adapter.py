@@ -12,7 +12,12 @@ from typing import Any
 
 from adapters.base import AdapterResult, AdapterStatus, BaseAdapter, NormalizedEvidence
 from adapters.synthetic import build_posture
-from adapters.vulnintel.feeds import FeedCache, fetch_epss, fetch_kev
+from adapters.vulnintel.feeds import (
+    FeedCache,
+    KEVScaduto,
+    fetch_epss,
+    fetch_kev,
+)
 from adapters.vulnintel.matcher import TechnologyObservation, evaluate_match
 from app.models.enums import ConfidenceClass, ScoreCategoryKey, Severity
 
@@ -45,12 +50,29 @@ class VulnerabilityIntelligenceAdapter(BaseAdapter):
         cache = FeedCache(Path(self.context.connector_config.get("cache_dir", "/tmp/defenix-feeds")))
         kev_url = self.context.connector_config.get("kev", {}).get("url", "")
         epss_url = self.context.connector_config.get("epss", {}).get("base_url", "")
+        avvertenze: list[str] = []
         try:
             kev = fetch_kev(kev_url, cache) if kev_url else {}
+        except KEVScaduto as scaduto:
+            # Il catalogo c'e', solo vecchio. Si usa e si dichiara: il catalogo
+            # CISA cambia di qualche voce la settimana, e rinunciarvi
+            # significherebbe non sapere quali CVE sono sfruttate in natura su
+            # tutta la scansione.
+            kev = getattr(scaduto, "entries", {})
+            avvertenze.append(
+                f"catalogo CISA KEV da cache: {scaduto}. Le CVE aggiunte "
+                "nelle ultime ore potrebbero non essere segnalate come "
+                "sfruttate in natura")
         except Exception as exc:  # noqa: BLE001
-            return AdapterResult(tool=self.key, status=AdapterStatus.FAILED,
-                                 error_message=f"feed CISA KEV non disponibile: {type(exc).__name__}",
-                                 coverage_impact=self.coverage_weight)
+            # Il tipo dell'eccezione da solo non dice cosa fare: «ConnectError»
+            # non distingue un feed irraggiungibile da un DNS che non risolve
+            # o da un proxy che nega l'uscita.
+            dettaglio = " ".join(str(exc).split())[:160] or type(exc).__name__
+            return AdapterResult(
+                tool=self.key, status=AdapterStatus.FAILED,
+                error_message=(f"feed CISA KEV non disponibile ({kev_url}): "
+                               f"{type(exc).__name__}: {dettaglio}"),
+                coverage_impact=self.coverage_weight)
 
         observations = self._observations_from_context()
         candidates = self.context.tool_config.get("_vulnerability_candidates", [])
@@ -73,10 +95,18 @@ class VulnerabilityIntelligenceAdapter(BaseAdapter):
             if evidence.cve_id and evidence.cve_id in epss:
                 evidence.epss_score = epss[evidence.cve_id]
 
-        return AdapterResult(tool=self.key, status=AdapterStatus.SUCCESS, evidences=evidences,
-                             target_count=len(observations),
-                             raw_output=self.dump_json({"kev_entries": len(kev),
-                                                        "epss_resolved": len(epss)}))
+        # Un dato usato ma vecchio non e' un successo pieno: `PARTIAL` lo dice
+        # al report e lascia un impatto di copertura, cosi' l'indice di
+        # fiducia ne tiene conto invece di presentarlo come fresco.
+        return AdapterResult(
+            tool=self.key,
+            status=AdapterStatus.PARTIAL if avvertenze else AdapterStatus.SUCCESS,
+            evidences=evidences, target_count=len(observations),
+            error_message="; ".join(avvertenze) or None,
+            coverage_impact=self.coverage_weight * 0.25 if avvertenze else 0.0,
+            raw_output=self.dump_json({"kev_entries": len(kev),
+                                       "epss_resolved": len(epss),
+                                       "avvertenze": avvertenze}))
 
     def _observations_from_context(self) -> list[TechnologyObservation]:
         return [

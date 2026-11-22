@@ -1,6 +1,8 @@
 """Task Celery: esecuzione delle scansioni e manutenzione periodica."""
 from __future__ import annotations
 
+import os
+
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -17,6 +19,14 @@ from app.models.scanning import Scan
 # accodati dall'API non raggiungevano mai il worker.
 from app.workers.celery_app import celery_app
 from app.workers.pipeline import ScanPipeline, ScanRequest
+
+# Cache dei feed di vulnerability intelligence. Su un volume e non in /tmp:
+# nel worker /tmp e' un tmpfs, quindi la cache si perdeva a ogni riavvio e i
+# feed venivano riscaricati molto piu' spesso del loro TTL di 24 ore,
+# moltiplicando le occasioni di incontrare un guasto di rete. Lo stesso
+# percorso vale per le scansioni e per il rinfresco periodico: due cartelle
+# diverse sarebbero due cache che non si aiutano.
+CARTELLA_CACHE_FEED = os.environ.get("FEED_CACHE_DIR", "/var/lib/defenix/feeds")
 
 logger = get_logger(__name__)
 
@@ -140,7 +150,7 @@ def _connector_config() -> dict:
         "ransomware_live": {"base_url": settings.ransomware_live_url},
         "kev": {"url": settings.kev_feed_url},
         "epss": {"base_url": settings.epss_api_url},
-        "cache_dir": "/tmp/defenix-feeds",
+        "cache_dir": CARTELLA_CACHE_FEED,
     }
 
 
@@ -149,13 +159,23 @@ def refresh_feeds_task() -> dict:
     """Aggiorna la cache locale di CISA KEV. EPSS viene interrogato su richiesta."""
     from pathlib import Path
 
-    from adapters.vulnintel.feeds import FeedCache, fetch_kev
+    from adapters.vulnintel.feeds import FeedCache, KEVScaduto, fetch_kev
 
     if settings.scan_mock_mode:
         return {"status": "skipped", "reason": "mock mode attivo: nessuna chiamata esterna"}
     try:
-        cache = FeedCache(Path("/tmp/defenix-feeds"))
+        # Lo stesso percorso usato dalle scansioni, e su un volume: in /tmp,
+        # che nel worker e' un tmpfs, questo rinfresco scriveva in una cache
+        # che il riavvio successivo svuotava.
+        cache = FeedCache(Path(CARTELLA_CACHE_FEED))
         entries = fetch_kev(settings.kev_feed_url, cache)
+    except KEVScaduto as scaduto:
+        # Il rinfresco non e' riuscito, ma una copia utilizzabile c'e': non e'
+        # un guasto da segnalare come tale, e' un rinfresco rimandato.
+        logger.warning("kev_refresh_from_stale_cache",
+                       age_hours=round(scaduto.eta_ore, 1), error=scaduto.causa)
+        return {"status": "stale", "age_hours": round(scaduto.eta_ore, 1),
+                "kev_entries": len(getattr(scaduto, "entries", {}))}
     except Exception as exc:  # noqa: BLE001
         logger.error("kev_refresh_failed", error=str(exc))
         return {"status": "failed", "error": type(exc).__name__}

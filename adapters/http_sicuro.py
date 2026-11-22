@@ -16,6 +16,7 @@ essere percorso: le destinazioni non pubbliche restano bloccate.
 from __future__ import annotations
 
 import ipaddress
+import time
 from urllib.parse import urlsplit
 
 import httpx
@@ -146,6 +147,52 @@ def get_da_servizio_configurato(client: httpx.Client, url: str, *, base: str,
         corrente = destinazione
 
     raise RedirectNonConsentito(f"superati {max_salti} redirect consecutivi")
+
+
+# Quante volte si ritenta una fonte pubblica che risponde male. Due tentativi
+# in tutto: un 502 di crt.sh e' transitorio e passa al secondo colpo, mentre
+# insistere oltre trasforma una fonte lenta in una scansione che non finisce.
+TENTATIVI = 2
+ATTESA_FRA_TENTATIVI = 2.0
+
+
+def get_con_ritentativi(client: httpx.Client, url: str, *,
+                        params: dict[str, str] | None = None,
+                        tentativi: int = TENTATIVI,
+                        attesa: float = ATTESA_FRA_TENTATIVI) -> httpx.Response:
+    """GET verso una fonte di intelligence pubblica, con un secondo tentativo.
+
+    Vale per le FONTI (crt.sh, i feed CISA), non per i bersagli di una
+    scansione: la' ritentare significa raddoppiare il traffico verso i sistemi
+    di un'azienda, e la cortesia verso il bersaglio e' un requisito, non una
+    preferenza.
+
+    Si ritenta soltanto cio' che ha senso ritentare:
+
+      * 5xx -- il guasto e' del server, e crt.sh ne produce spesso di
+        transitori (502 Bad Gateway sotto carico);
+      * errori di trasporto -- connessione rifiutata, DNS, timeout.
+
+    NON si ritenta un 4xx: un 404 e' una risposta legittima («nessun
+    certificato per questo dominio») e un 429 e' la fonte che chiede di
+    rallentare, non di riprovare subito.
+    """
+    ultimo_errore: Exception | None = None
+    for tentativo in range(1, max(1, tentativi) + 1):
+        try:
+            risposta = client.get(url, params=params)
+        except httpx.HTTPError as errore:
+            ultimo_errore = errore
+        else:
+            if risposta.status_code < 500 or tentativo == tentativi:
+                return risposta
+            ultimo_errore = httpx.HTTPStatusError(
+                f"HTTP {risposta.status_code}", request=risposta.request,
+                response=risposta)
+        if tentativo < tentativi:
+            time.sleep(attesa)
+    assert ultimo_errore is not None
+    raise ultimo_errore
 
 
 def get_seguendo_redirect(client: httpx.Client, url: str,

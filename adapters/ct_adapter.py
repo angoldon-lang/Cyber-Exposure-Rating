@@ -4,6 +4,7 @@ from __future__ import annotations
 import httpx
 
 from adapters.base import AdapterResult, AdapterStatus, BaseAdapter, DiscoveredAsset, NormalizedEvidence
+from adapters.http_sicuro import get_con_ritentativi
 from adapters.synthetic import build_posture
 from app.models.enums import AssetType, ConfidenceClass, ScoreCategoryKey, Severity
 
@@ -31,7 +32,10 @@ class CertificateTransparencyAdapter(BaseAdapter):
             for domain in self.context.scope_guard.filter_targets(self.context.domains, "hostname"):
                 checked += 1
                 try:
-                    response = client.get(CRTSH_URL, params={"q": f"%.{domain}", "output": "json"})
+                    # crt.sh risponde 502 sotto carico, e passa al secondo colpo.
+                    response = get_con_ritentativi(
+                        client, CRTSH_URL,
+                        params={"q": f"%.{domain}", "output": "json"})
                     # 404 significa «nessun certificato per questo dominio»,
                     # non un guasto: e' l'esito normale per un dominio che non
                     # ne ha mai emessi. Contarlo come errore toglieva

@@ -111,6 +111,11 @@ services:
     volumes:
       - evidence-data:/var/lib/defenix/evidence
       - report-data:/var/lib/defenix/reports
+      # La cache dei feed (CISA KEV, EPSS) deve sopravvivere al riavvio: stava
+      # in /tmp, che qui sotto e' un tmpfs, quindi si svuotava ogni volta e il
+      # catalogo veniva riscaricato molto piu' spesso del TTL di 24 ore --
+      # moltiplicando le occasioni di incontrare un guasto di rete.
+      - feed-cache:/var/lib/defenix/feeds
     networks: [backend]
     # Il worker esegue strumenti esterni: filesystem temporaneo dedicato,
     # nessun privilegio aggiuntivo, limiti di risorse espliciti.
@@ -290,6 +295,7 @@ services:
 
 volumes:
   postgres-data:
+  feed-cache:
   spiderfoot-data:
   redis-data:
   evidence-data:

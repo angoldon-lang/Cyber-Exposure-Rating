@@ -14,6 +14,18 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def get_con_ritentativi_semplice(url: str, *, timeout: float = 60.0) -> httpx.Response:
+    """GET verso un feed pubblico, con un secondo tentativo.
+
+    I feed si scaricano una volta al giorno: un guasto transitorio non deve
+    costare l'intera area delle vulnerabilita' fino al giorno dopo.
+    """
+    from adapters.http_sicuro import get_con_ritentativi
+
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+        return get_con_ritentativi(client, url)
+
+
 @dataclass
 class KEVEntry:
     cve_id: str
@@ -43,10 +55,30 @@ class FeedCache:
             return None
         if time.time() - path.stat().st_mtime > self.ttl_seconds:
             return None
+        return self._leggi(key)
+
+    def _leggi(self, key: str) -> Any | None:
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            return json.loads(self._path(key).read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return None
+
+    def get_scaduto(self, key: str) -> tuple[Any | None, float]:
+        """Il contenuto anche se oltre il TTL, con la sua eta' in ore.
+
+        Serve quando il feed non si raggiunge. Il catalogo CISA KEV cambia di
+        qualche voce la settimana: una copia di ventisei ore e' quasi identica
+        a quella di adesso, e infinitamente piu' utile di nessun catalogo --
+        che significa non sapere quali CVE sono sfruttate in natura, su tutta
+        la scansione. Chi la usa deve pero' dichiararne l'eta': spacciare per
+        fresco un dato vecchio e' il modo di sbagliare che questo progetto
+        non si concede.
+        """
+        path = self._path(key)
+        if not path.is_file():
+            return None, 0.0
+        eta_ore = max(0.0, (time.time() - path.stat().st_mtime) / 3600.0)
+        return self._leggi(key), eta_ore
 
     def set(self, key: str, value: Any) -> None:
         try:
@@ -55,15 +87,41 @@ class FeedCache:
             logger.warning("feed_cache_write_failed", error=str(exc))
 
 
+class KEVScaduto(RuntimeError):
+    """Il catalogo arriva dalla cache oltre il TTL: utilizzabile, da dichiarare."""
+
+    def __init__(self, eta_ore: float, causa: str) -> None:
+        super().__init__(f"copia di {eta_ore:.0f} ore fa ({causa})")
+        self.eta_ore = eta_ore
+        self.causa = causa
+
+
 def fetch_kev(url: str, cache: FeedCache | None = None) -> dict[str, KEVEntry]:
-    """Scarica il catalogo CISA Known Exploited Vulnerabilities."""
+    """Scarica il catalogo CISA Known Exploited Vulnerabilities.
+
+    Se lo scaricamento non riesce ma sul disco c'e' una copia oltre il TTL, si
+    usa quella e si solleva `KEVScaduto` DOPO averla caricata: il chiamante la
+    intercetta, tiene i dati e dichiara l'eta'. Prima, un `ConnectError`
+    perdeva tutto il catalogo pur avendone una copia a portata di mano.
+    """
     payload = cache.get("cisa_kev") if cache else None
+    scaduto: KEVScaduto | None = None
     if payload is None:
-        response = httpx.get(url, timeout=60.0, follow_redirects=True)
-        response.raise_for_status()
-        payload = response.json()
-        if cache:
-            cache.set("cisa_kev", payload)
+        try:
+            response = get_con_ritentativi_semplice(url)
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as errore:  # noqa: BLE001
+            vecchio, eta = cache.get_scaduto("cisa_kev") if cache else (None, 0.0)
+            if vecchio is None:
+                raise
+            payload = vecchio
+            scaduto = KEVScaduto(eta, type(errore).__name__)
+            logger.warning("kev_feed_da_cache_scaduta",
+                           age_hours=round(eta, 1), error=type(errore).__name__)
+        else:
+            if cache:
+                cache.set("cisa_kev", payload)
     entries: dict[str, KEVEntry] = {}
     for item in payload.get("vulnerabilities", []):
         cve_id = str(item.get("cveID", "")).upper()
@@ -78,6 +136,9 @@ def fetch_kev(url: str, cache: FeedCache | None = None) -> dict[str, KEVEntry]:
             due_date=str(item.get("dueDate", "")) or None,
             known_ransomware_use=str(item.get("knownRansomwareCampaignUse", "")).lower() == "known",
         )
+    if scaduto is not None:
+        scaduto.entries = entries  # type: ignore[attr-defined]
+        raise scaduto
     return entries
 
 

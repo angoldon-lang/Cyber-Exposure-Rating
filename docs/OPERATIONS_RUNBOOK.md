@@ -157,6 +157,23 @@ make up
 Accetta solo le variabili dell'elenco chiuso, le stesse che l'interfaccia puo'
 scrivere: e' la stessa difesa, nell'altra direzione.
 
+#### Le fonti pubbliche cedono, e non e' un guasto della piattaforma
+
+| Messaggio | Cosa significa |
+|---|---|
+| `crt.sh: 502 Bad Gateway` | crt.sh e' sotto carico. Dalla 0.18.12 la richiesta viene ritentata una volta e il piu' delle volte passa; se compare ancora, crt.sh e' giu' per tutti |
+| `catalogo CISA KEV da cache: copia di N ore fa` | il feed non si e' raggiunto e si sta usando la copia su disco. L'esito e' `PARTIAL`, non un guasto: il catalogo CISA cambia di qualche voce la settimana |
+| `feed CISA KEV non disponibile (<url>): ConnectError: ...` | nessuna copia disponibile e feed irraggiungibile. Questo e' da guardare: il worker esce su Internet? il DNS risolve `www.cisa.gov`? |
+
+Il ritentativo vale per le **fonti** (crt.sh, i feed CISA), non per i bersagli
+di una scansione: la' ritentare raddoppierebbe il traffico verso i sistemi di
+un'azienda. Un 404 e un 429 non si ritentano mai -- il primo e' una risposta
+legittima, il secondo e' la fonte che chiede di rallentare.
+
+La cache dei feed sta sul volume `feed-cache`. Se si perde (`docker compose
+down -v`), il primo KEV va riscaricato e fino ad allora l'area delle
+vulnerabilita' dipende dalla rete.
+
 #### SpiderFoot ha bisogno di uscire su Internet
 
 Senza raggiungere `publicsuffix.org` SpiderFoot **non riesce a inizializzare
