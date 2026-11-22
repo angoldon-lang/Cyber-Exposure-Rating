@@ -5,6 +5,7 @@ config/tool_profiles.yaml: nessun modulo attivo nel profilo passivo.
 """
 from __future__ import annotations
 
+import html
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -101,35 +102,93 @@ class SpiderFootAdapter(BaseAdapter):
                                  coverage_impact=self.coverage_weight)
 
         events: list[dict[str, Any]] = []
+        problemi: list[str] = []
         timeout = int(self.config.get("timeout_seconds", self.default_timeout))
-        with httpx.Client(timeout=30.0, follow_redirects=False) as client:
+        # `Accept: application/json` non e' una cortesia: senza questa
+        # intestazione `/startscan` risponde con un redirect 303 alla pagina
+        # della scansione, e con essa risponde `["SUCCESS", <id>]`. E' la
+        # differenza fra un'API e una pagina web.
+        with httpx.Client(timeout=30.0, follow_redirects=False,
+                          headers={"Accept": "application/json"}) as client:
             for target in targets[:5]:
                 try:
                     start = client.post(f"{base}/startscan", data={
                         "scanname": f"defenix-{self.context.scan_id[:8]}-{target}",
                         "scantarget": target,
-                        "usecase": "all",
+                        # `usecase` va inviato VUOTO, e serve entrambe le cose.
+                        # Inviarlo: e' un parametro obbligatorio della firma
+                        # CherryPy di `/startscan`, e senza di esso la
+                        # richiesta riceve 404 (misurato).
+                        # Vuoto: valeva `all`, e SpiderFoot ricade sul
+                        # `usecase` quando `modulelist` e' vuoto -- in quel
+                        # caso `all` avvia OGNI modulo, compresi gli attivi
+                        # che il profilo passivo vieta. Con la stringa vuota
+                        # quella ricaduta non puo' avvenire: SpiderFoot
+                        # rifiuta la scansione invece di allargarla.
+                        "usecase": "",
                         "modulelist": ",".join(f"module_{m}" for m in modules),
                         "typelist": "",
                     })
-                    start.raise_for_status()
+                    self._verifica_risposta(start, "avvio della scansione")
                     scan_id = self._extract_scan_id(start)
                     if not scan_id:
+                        problemi.append(f"{target}: avvio senza identificativo di scansione")
                         continue
-                    events.extend(self._await_results(client, base, scan_id, timeout))
+                    trovati, problema = self._await_results(client, base, scan_id, timeout)
+                    events.extend(trovati)
+                    if problema:
+                        problemi.append(f"{target}: {problema}")
                 except Exception as exc:  # noqa: BLE001
-                    return AdapterResult(
-                        tool=self.key, status=AdapterStatus.PARTIAL if events else AdapterStatus.FAILED,
-                        error_message=f"errore SpiderFoot: {type(exc).__name__}",
-                        coverage_impact=self.coverage_weight * 0.5,
-                        raw_output=self.dump_json(self._senza_credenziali(events)))
+                    # Il tipo dell'eccezione da solo non dice cosa fare. Era
+                    # «errore SpiderFoot: HTTPStatusError», e il codice di
+                    # stato -- la sola informazione utile -- restava fuori.
+                    problemi.append(f"{target}: {self._descrivi(exc)}")
 
         evidences, assets, credenziali = self._map_events(events)
-        return AdapterResult(tool=self.key, status=AdapterStatus.SUCCESS, evidences=evidences,
-                             assets=assets, target_count=len(targets),
-                             raw_output=self.dump_json(self._senza_credenziali(events)),
-                             config_snapshot={"modules": modules,
-                                              "credentials_seen_not_stored": credenziali})
+        # Un guasto su tutti i bersagli non e' un successo senza risultati: e'
+        # la classe di difetto che questo progetto ha gia' pagato due volte.
+        if problemi and not events:
+            stato = AdapterStatus.FAILED
+        elif problemi:
+            stato = AdapterStatus.PARTIAL
+        else:
+            stato = AdapterStatus.SUCCESS
+        return AdapterResult(
+            tool=self.key, status=stato, evidences=evidences, assets=assets,
+            target_count=len(targets),
+            error_message="; ".join(problemi[:3]) or None,
+            coverage_impact=(self.coverage_weight if stato is AdapterStatus.FAILED
+                             else self.coverage_weight * 0.5 if problemi else 0.0),
+            raw_output=self.dump_json(self._senza_credenziali(events)),
+            config_snapshot={"modules": modules,
+                             "credentials_seen_not_stored": credenziali})
+
+    @staticmethod
+    def _descrivi(exc: Exception) -> str:
+        """Descrizione utilizzabile di un guasto HTTP: stato, indirizzo, corpo."""
+        if isinstance(exc, httpx.HTTPStatusError):
+            corpo = " ".join(exc.response.text.split())[:120]
+            return (f"HTTP {exc.response.status_code} su "
+                    f"{exc.request.url.path}: {corpo or 'corpo vuoto'}")
+        dettaglio = " ".join(str(exc).split())[:120]
+        return f"{type(exc).__name__}: {dettaglio}" if dettaglio else type(exc).__name__
+
+    @staticmethod
+    def _verifica_risposta(risposta: httpx.Response, cosa: str) -> None:
+        """Solleva se la risposta non e' utilizzabile.
+
+        Non si usa `raise_for_status()`: da httpx 0.24 solleva anche sui 3xx,
+        e `/startscan` risponde 303 quando il client non chiede JSON. Era
+        esattamente il guasto -- «errore SpiderFoot: HTTPStatusError» -- su una
+        scansione che SpiderFoot aveva avviato correttamente ogni volta, e che
+        l'adapter buttava via insieme al redirect che ne portava l'id.
+        """
+        if risposta.is_success or risposta.is_redirect:
+            return
+        corpo = " ".join(risposta.text.split())[:120]
+        raise httpx.HTTPStatusError(
+            f"{cosa}: HTTP {risposta.status_code} {corpo}".strip(),
+            request=risposta.request, response=risposta)
 
     @staticmethod
     def _senza_credenziali(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -144,29 +203,130 @@ class SpiderFootAdapter(BaseAdapter):
 
     @staticmethod
     def _extract_scan_id(response: httpx.Response) -> str | None:
+        """Identificativo della scansione avviata.
+
+        SpiderFoot segnala i propri errori con stato 200 e un involucro
+        `["ERROR", "<motivo>"]`. Leggendo il secondo elemento senza guardare
+        il primo, il motivo dell'errore diventava l'identificativo della
+        scansione, e l'adapter si metteva a interrogare uno scan inesistente
+        finche' il tempo non finiva.
+        """
         try:
             payload = response.json()
         except ValueError:
+            # Senza `Accept: application/json` la risposta e' un redirect e
+            # l'identificativo sta nell'indirizzo di destinazione.
             location = str(response.headers.get("location", ""))
             return location.rsplit("id=", 1)[-1] or None
         if isinstance(payload, list) and len(payload) > 1:
+            if str(payload[0]).upper() == "ERROR":
+                raise ValueError(f"SpiderFoot ha rifiutato la scansione: {payload[1]}")
             return str(payload[1])
         return str(payload) if payload else None
 
+    # Stati terminali di SpiderFoot. `CREATED` e `RUNNING` non lo sono: una
+    # scansione che resta la' non ha prodotto niente, e dirlo «riuscita con
+    # zero risultati» significa concludere che l'organizzazione non e' esposta.
+    STATI_RIUSCITI = frozenset({"FINISHED"})
+    STATI_FALLITI = frozenset({"ERROR-FAILED", "ABORTED", "ABORT-REQUESTED"})
+
     def _await_results(self, client: httpx.Client, base: str, scan_id: str,
-                       timeout: int) -> list[dict[str, Any]]:
+                       timeout: int) -> tuple[list[dict[str, Any]], str | None]:
+        """Attende la fine della scansione e ne raccoglie gli eventi.
+
+        Restituisce anche il motivo quando qualcosa non e' andato: senza, una
+        scansione mai partita e una conclusa senza trovare nulla producono lo
+        stesso esito, e sono l'opposto l'una dell'altra.
+        """
         deadline = time.monotonic() + timeout
+        stato = "?"
         while time.monotonic() < deadline:
-            status = client.get(f"{base}/scanopts", params={"id": scan_id})
-            if status.status_code == 200 and "FINISHED" in status.text.upper():
+            risposta = client.get(f"{base}/scanstatus", params={"id": scan_id})
+            stato = self._stato_della_scansione(risposta)
+            if stato in self.STATI_RIUSCITI or stato in self.STATI_FALLITI:
                 break
             time.sleep(POLL_INTERVAL_SECONDS)
-        data = client.get(f"{base}/scaneventresultexport", params={"id": scan_id, "type": "ALL"})
+
+        eventi = self._eventi(client, base, scan_id)
+        if stato in self.STATI_FALLITI:
+            return eventi, f"la scansione SpiderFoot e' terminata in stato {stato}"
+        if stato not in self.STATI_RIUSCITI:
+            # Caso osservato: senza raggiungere publicsuffix.org, SpiderFoot
+            # non riesce a inizializzare e la scansione resta in `CREATED` per
+            # sempre, senza errore sull'API.
+            return eventi, (f"la scansione SpiderFoot era ancora in stato {stato} "
+                            f"dopo {timeout}s: nessun risultato da considerare")
+        return eventi, None
+
+    @staticmethod
+    def _stato_della_scansione(risposta: httpx.Response) -> str:
+        """Lo stato sta in sesta posizione della risposta di `/scanstatus`."""
+        if not risposta.is_success:
+            return "?"
         try:
-            payload = data.json()
+            righe = risposta.json()
+        except ValueError:
+            return "?"
+        if isinstance(righe, list) and len(righe) > 5:
+            return str(righe[5]).upper()
+        return "?"
+
+    def _eventi(self, client: httpx.Client, base: str,
+                scan_id: str) -> list[dict[str, Any]]:
+        """Eventi della scansione, da `/scaneventresults`.
+
+        NON da `/scaneventresultexport`, che era l'endpoint usato fin qui:
+        quello produce CSV (o xlsx) e non ha un formato JSON. La chiamata
+        riusciva, `.json()` sollevava, l'eccezione era gia' intercettata, e
+        l'adapter concludeva ogni volta con zero eventi e stato «riuscito».
+        SpiderFoot non ha mai prodotto un rilievo da quando e' integrato.
+        """
+        risposta = client.get(f"{base}/scaneventresults",
+                              params={"id": scan_id, "eventType": "ALL"})
+        if not risposta.is_success:
+            return []
+        try:
+            righe = risposta.json()
         except ValueError:
             return []
-        return payload if isinstance(payload, list) else []
+        if not isinstance(righe, list):
+            return []
+        return [tradotto for riga in righe
+                if (tradotto := self._riga_in_evento(riga)) is not None]
+
+    # Ordine delle colonne di `/scaneventresults`, ricavato dalla query di
+    # `SpiderFootDb.scanResultEvent` e dalla proiezione che l'endpoint ne fa:
+    # [0] data/ora, [1] VALORE, [2] origine, [3] modulo, [4] confidenza,
+    # [5] visibilita', [6] rischio, [7] impronta, [8] falso positivo,
+    # [9] falso positivo del padre, [10] TIPO.
+    # Il tipo e' in fondo, non in seconda posizione: leggerlo dall'indice 1
+    # avrebbe preso il valore al suo posto.
+    _COLONNA_VALORE = 1
+    _COLONNA_MODULO = 3
+    _COLONNA_FALSO_POSITIVO = 8
+    _COLONNA_TIPO = 10
+
+    @classmethod
+    def _riga_in_evento(cls, riga: Any) -> dict[str, Any] | None:
+        """Porta una riga di SpiderFoot nella forma che `_map_events` legge.
+
+        La conversione sta qui, al confine: `_map_events` continua a ragionare
+        su `type` e `data`, e non deve sapere in quale colonna stiano.
+        """
+        if isinstance(riga, dict):
+            return riga
+        if not isinstance(riga, (list, tuple)) or len(riga) <= cls._COLONNA_TIPO:
+            return None
+        # I falsi positivi marcati da un analista di SpiderFoot non vanno
+        # ripresentati come rilievi.
+        if str(riga[cls._COLONNA_FALSO_POSITIVO]) in {"1", "True", "true"}:
+            return None
+        # Il valore e il tipo arrivano con le entita' HTML dell'interfaccia.
+        return {
+            "type": html.unescape(str(riga[cls._COLONNA_TIPO] or "")).strip(),
+            "data": html.unescape(str(riga[cls._COLONNA_VALORE] or "")).strip(),
+            "module": html.unescape(str(riga[cls._COLONNA_MODULO] or "")).strip(),
+        }
 
     def _map_events(self, events: list[dict[str, Any]]) -> tuple[list[NormalizedEvidence],
                                                                   list[DiscoveredAsset], int]:

@@ -157,6 +157,18 @@ make up
 Accetta solo le variabili dell'elenco chiuso, le stesse che l'interfaccia puo'
 scrivere: e' la stessa difesa, nell'altra direzione.
 
+#### SpiderFoot ha bisogno di uscire su Internet
+
+Senza raggiungere `publicsuffix.org` SpiderFoot **non riesce a inizializzare
+una scansione**: la richiesta di avvio riesce, l'API non segnala nulla, e lo
+scan resta in stato `CREATED` per sempre. Dalla 0.18.10 l'adapter lo riconosce
+e dichiara il guasto («era ancora in stato CREATED dopo Ns») invece di
+concludere con zero risultati e stato riuscito -- che significherebbe dire che
+l'organizzazione non e' esposta.
+
+Se si vede quel messaggio: il contenitore `spiderfoot` non ha accesso a
+Internet. E' un motore OSINT, gli serve.
+
 #### `127.0.0.1` non e' la tua macchina
 
 Dentro un contenitore quell'indirizzo e' **il contenitore stesso**. Un servizio
