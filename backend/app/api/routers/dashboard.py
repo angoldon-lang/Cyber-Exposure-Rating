@@ -247,6 +247,14 @@ def _coverage_gaps(db: Session, scan) -> list[dict]:  # noqa: ANN001
     quando nessuna fonte e' stata interrogata.
     """
     from adapters.registry import ADAPTER_CLASSES
+    from app.core.config import load_yaml_config
+
+    # L'etichetta autorevole e' quella del catalogo. Il `display_name`
+    # dell'adapter resta come ripiego, ma non come prima scelta: quando un
+    # adapter non lo definisce eredita «Base adapter» da BaseAdapter, e quella
+    # stringa e' comparsa in un report al posto del nome dello strumento.
+    etichette = {chiave: str(voce.get("label") or chiave) for chiave, voce
+                 in load_yaml_config("tool_profiles").get("tools", {}).items()}
 
     righe = db.execute(
         select(ToolRun).where(ToolRun.scan_id == scan.id,
@@ -259,7 +267,8 @@ def _coverage_gaps(db: Session, scan) -> list[dict]:  # noqa: ANN001
         aree = list(getattr(classe, "coverage_areas", ()) or [])
         lacune.append({
             "tool_key": riga.tool_key,
-            "tool_label": getattr(classe, "display_name", riga.tool_key),
+            "tool_label": etichette.get(
+                riga.tool_key, getattr(classe, "display_name", riga.tool_key)),
             "status": riga.status,
             "reason": riga.error_message or "motivo non registrato",
             "areas": aree,

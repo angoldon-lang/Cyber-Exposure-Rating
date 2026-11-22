@@ -344,3 +344,61 @@ def test_nessun_adapter_usa_identificatori_interni_come_discriminante(adapter_co
     assert not incoerenti, (
         "stesso problema sullo stesso asset descritto con e senza discriminante: "
         f"{sorted(incoerenti)}")
+
+
+# ---------------------------------------------------------------------------
+# «Base adapter» non e' il nome di uno strumento
+# ---------------------------------------------------------------------------
+def test_nessun_adapter_eredita_il_nome_della_classe_base():
+    """`BaseAdapter.display_name` vale «Base adapter», ed e' un valore
+    predefinito che produce un'etichetta sbagliata in silenzio: theHarvester
+    l'ha ereditato dalla 0.17.0 alla 0.18.10, e quella stringa e' comparsa in
+    un report al posto del nome dello strumento, nella tabella delle aree non
+    verificate -- davanti a un cliente.
+
+    Il controllo non impone che il nome coincida con l'etichetta del catalogo:
+    `kev` copre anche EPSS e CVSS, e il suo nome e' legittimamente piu' ampio
+    della voce da cui prende la chiave. Impone solo che ce ne sia uno.
+    """
+    from adapters.base import BaseAdapter
+    from adapters.registry import ADAPTER_CLASSES
+
+    senza_nome = sorted(
+        chiave for chiave, classe in ADAPTER_CLASSES.items()
+        if "display_name" not in classe.__dict__
+        or classe.display_name == BaseAdapter.display_name)
+
+    assert not senza_nome, (
+        f"adapter senza nome proprio: {senza_nome}. Erediterebbero "
+        f"«{BaseAdapter.display_name}», che comparirebbe nei report.")
+
+
+def test_ogni_adapter_ha_una_voce_nel_catalogo():
+    """Un adapter senza voce non ha etichetta, aree ne' peso: comparirebbe nei
+    report con la propria chiave tecnica e senza costo di copertura."""
+    from pathlib import Path
+
+    import yaml
+
+    from adapters.registry import ADAPTER_CLASSES
+
+    catalogo = yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / "config" / "tool_profiles.yaml")
+        .read_text(encoding="utf-8"))["tools"]
+
+    orfani = sorted(set(ADAPTER_CLASSES) - set(catalogo))
+
+    assert not orfani, f"adapter senza voce di catalogo: {orfani}"
+
+
+def test_la_tabella_delle_lacune_prende_l_etichetta_dal_catalogo():
+    """Il catalogo e' la fonte autorevole. Il `display_name` dell'adapter resta
+    come ripiego, ma non come prima scelta: cosi' un adapter che dimenticasse
+    il nome non puo' comunque stampare «Base adapter» in un report."""
+    from pathlib import Path
+
+    sorgente = (Path(__file__).resolve().parents[1] / "backend" / "app" / "api"
+                / "routers" / "dashboard.py").read_text(encoding="utf-8")
+
+    assert "etichette.get(" in sorgente, (
+        "l'etichetta non viene piu' presa dal catalogo")

@@ -81,6 +81,7 @@ class TheHarvesterAdapter(BaseAdapter):
     """Scoperta di indirizzi e sottodomini tramite il servizio theHarvester."""
 
     key = "theharvester"
+    display_name = "theHarvester"
     coverage_areas = (CATEGORY, ScoreCategoryKey.ATTACK_SURFACE.value)
 
     # ------------------------------------------------------------------
