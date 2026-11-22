@@ -226,16 +226,54 @@ def test_ogni_strumento_con_un_servizio_ha_anche_la_variabile_per_indirizzarlo()
     assert not senza, f"servizi senza variabile di indirizzo: {senza}"
 
 
-def test_uno_strumento_non_configurato_ma_sostituito_non_e_da_sistemare():
-    """SpiderFoot non e' piu' nello stack perche' il progetto non pubblica
-    un'immagine utilizzabile, e le sue aree le copre theHarvester. Presentarlo
-    fra le cose da configurare manderebbe a cercare un servizio che non si puo'
-    installare."""
-    esito = _per_chiave(verifica_strumenti(None, sonda_rete=False))["spiderfoot"]
+def test_uno_strumento_non_configurato_ma_sostituito_non_e_da_sistemare(monkeypatch):
+    """Uno strumento che non si puo' installare, e la cui area e' coperta da un
+    altro, non va fra le cose da configurare: si manderebbe a cercare un
+    servizio che non esiste.
+
+    Il test usa una voce sintetica e non SpiderFoot di proposito. Quando
+    SpiderFoot era dichiarato `replaced_by` perche' non c'era un'immagine, un
+    test scritto su di lui sembrava verificare il meccanismo e verificava una
+    decisione di prodotto: appena l'immagine e' tornata (0.18.8, costruita dal
+    sorgente) e' fallito, pur essendo il meccanismo intatto.
+    """
+    from app.services.verifica_strumenti import verifica_strumenti as vs
+
+    catalogo = {
+        "sostituto": {"label": "Sostituto", "coverage_weight": 1.0,
+                      "coverage_areas": ["attack_surface"]},
+        "finto": {"label": "Finto", "kind": "http_api", "coverage_weight": 1.0,
+                  "coverage_areas": ["attack_surface"], "replaced_by": "sostituto"},
+    }
+    monkeypatch.setattr("app.services.verifica_strumenti.load_yaml_config",
+                        lambda _nome: {"tools": catalogo})
+    # `finto` non ha variabili fra quelle configurabili: si simula che gliene
+    # manchi una, che e' la condizione in cui la sostituzione vale.
+    monkeypatch.setattr(
+        "app.services.tool_status.stato_strumenti",
+        lambda _db: [{"key": "finto", "kind": "configurazione",
+                      "requirements": [{"variable": "FINTO_URL", "present": False,
+                                        "free": True}], "reason": ""},
+                     {"key": "sostituto", "kind": "configurazione",
+                      "requirements": [], "reason": ""}])
+
+    esito = _per_chiave(vs(None, sonda_rete=False))["finto"]
 
     assert esito.esito == SOSTITUITO
     assert not esito.richiede_intervento
-    assert "theharvester" in esito.dettaglio
+    assert "sostituto" in esito.dettaglio
+
+
+def test_spiderfoot_e_tornato_uno_strumento_dello_stack():
+    """Era `replaced_by: theharvester` perche' non si poteva installare.
+    L'immagine ora la costruisce lo stack dal sorgente, quindi un suo guasto e'
+    un guasto e deve costare copertura."""
+    esito = _per_chiave(verifica_strumenti(None, sonda_rete=False))["spiderfoot"]
+
+    assert esito.esito != SOSTITUITO, (
+        "dichiararlo sostituito gli azzererebbe il costo di copertura, e un "
+        "suo guasto passerebbe per un'assenza prevista")
+    assert esito.peso == 1.0
 
 
 # --------------------------------------------------------------------------

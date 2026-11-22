@@ -97,12 +97,22 @@ rilascio: possono cambiare fra versioni.
 - **Rischio:** nessuno
 
 ### SpiderFoot
-- **Versione:** 4.0 · **Licenza:** MIT
+- **Versione:** 4.0 (commit `b9c345de5b085debc7444fc10e0e26e7745df5f2`) ·
+  **Licenza: GPL-2.0-only**
 - **Repository:** <https://github.com/smicallef/spiderfoot>
-- **Nota:** non distribuito nello stack. Il progetto non pubblica
-  un'immagine container utilizzabile; l'integrazione resta disponibile per
-  chi ospita una propria istanza. Vedere `docs/DEPLOYMENT.md`, sezione 6.3.
-- **Uso:** servizio esterno interrogato via API HTTP
+- **Correzione:** fino alla 0.18.7 questo documento e il catalogo dichiaravano
+  **MIT**. Non lo e': la 4.0 ha cambiato licenza e la dichiarazione non era
+  stata riverificata al cambio di versione. Verificato leggendo il `LICENSE`
+  del commit fissato.
+- **Uso:** immagine costruita dallo stack dal sorgente pubblico, **non
+  modificato**, fissato per impronta di commit
+  (`deploy/spiderfoot/Dockerfile`). La piattaforma lo interroga via API HTTP
+  come **processo separato**: non e' collegato nel processo
+  dell'applicazione, e non ne e' un'opera derivata.
+- **Obbligo del copyleft:** la GPL-2.0 consente la distribuzione, anche
+  commerciale, e richiede che sia disponibile il sorgente corrispondente.
+  Assolto: il commit e' pubblico e non modificato, e il file `LICENSE` resta
+  nell'immagine. Chi redistribuisce l'immagine indichi quel commit.
 - **Rischio: MEDIO sul piano dei costi, non della licenza.** Molte fonti
   usate dai moduli SpiderFoot **non sono gratuite**: richiedono API key con
   abbonamento e hanno limiti d'uso propri. Ogni modulo va valutato
@@ -205,6 +215,7 @@ rilascio: possono cambiare fra versioni.
 | AIL AGPL-3.0 | **alto se incorporato** | servizio esterno separato, solo chiamate di rete |
 | Licenze dei template Nuclei | **medio** | allowlist con approvazione esplicita per template |
 | Costi delle fonti SpiderFoot | **medio** | allowlist per profilo; costi dichiarati nella matrice |
+| Copyleft GPL-2.0 di SpiderFoot | **basso** | processo separato interrogato via HTTP, sorgente non modificato e fissato per commit |
 | HIBP a pagamento | **medio** | connettore opzionale, disattivato per impostazione predefinita |
 | Licenza Redis 7.4 | **basso** | uso interno; Valkey come alternativa |
 | testssl.sh GPL-2.0 | **basso** | processo esterno, mai modificato |

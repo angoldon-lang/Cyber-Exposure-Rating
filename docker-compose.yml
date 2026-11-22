@@ -250,6 +250,32 @@ services:
     logging: *logging
 
 
+  # SpiderFoot: costruito da noi dal sorgente, perche' il progetto non pubblica
+  # un'immagine utilizzabile (vedere deploy/spiderfoot/Dockerfile per il
+  # dettaglio, Python 3.9 compreso e perche').
+  #
+  # Nessuna porta pubblicata, a differenza della definizione che c'era fino
+  # alla 0.18.1: quella esponeva la 5001 sull'host, e SpiderFoot senza file
+  # `passwd` non chiede autenticazione. Era un motore di scansione comandabile
+  # da chiunque fosse sulla stessa rete. Qui ci parla solo il worker.
+  spiderfoot:
+    build:
+      context: ./deploy/spiderfoot
+      args:
+        SPIDERFOOT_COMMIT: b9c345de5b085debc7444fc10e0e26e7745df5f2
+    profiles: ["osint"]
+    restart: unless-stopped
+    expose: ["5001"]
+    volumes:
+      - spiderfoot-data:/var/lib/spiderfoot
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 1G }
+    logging: *logging
+
   # Rete separata per gli strumenti che usano Tor (AIL Framework, fase 3).
   tor-proxy:
     image: dperson/torproxy:latest
@@ -264,6 +290,7 @@ services:
 
 volumes:
   postgres-data:
+  spiderfoot-data:
   redis-data:
   evidence-data:
   report-data:

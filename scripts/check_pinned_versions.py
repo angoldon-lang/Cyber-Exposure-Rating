@@ -38,6 +38,18 @@ IMMAGINE = re.compile(r"^\s*image:\s*(\S+):(\S+)\s*$", re.MULTILINE)
 DIGEST = re.compile(r"^\s*image:\s*(\S+)@(sha256:[0-9a-f]{64})\s*$", re.MULTILINE)
 TAG_MOBILI = {"latest", "stable", "main", "master"}
 
+# Un commit fissato come argomento di costruzione: `<NOME>_COMMIT: <sha>` nel
+# compose. E' il pin piu' stretto possibile per un sorgente, e serve dove il
+# progetto a monte non pubblica un'immagine (SpiderFoot). Non si verifica
+# chiedendo al registro: si verifica che quel commit sia ancora quello del tag
+# da cui e' stato preso, perche' un tag che si sposta e' l'unico modo in cui un
+# pin del genere puo' diventare sbagliato senza accorgersene.
+COMMIT_ARG = re.compile(r"^\s*(\w+)_COMMIT:\s*([0-9a-f]{40})\s*$", re.MULTILINE)
+# Dal Dockerfile che lo usa si ricava a quale repository appartiene, e quale
+# tag dovrebbe puntarvi.
+ORIGINE = re.compile(r"git remote add origin (https://github\.com/[\w.-]+/[\w.-]+?)(?:\.git)?\s")
+TAG_ATTESO = re.compile(r"# Il commit, non il tag:.*?E' `([^`]+)`", re.DOTALL)
+
 # Rilascio ProjectDiscovery scaricato da `scarica <nome> "${<NOME>_VERSION}"`,
 # con la versione dichiarata da `ARG <NOME>_VERSION=X.Y.Z` (senza prefisso `v`
 # nel nome del file, con prefisso nel tag).
@@ -148,6 +160,28 @@ def _immagine_esiste(riferimento: str, tag: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _commit_e_ancora_quello_del_tag(repo: str, tag: str,
+                                    commit: str) -> tuple[bool, str]:
+    """Vero se il tag indicato punta ancora al commit fissato.
+
+    Un commit non scompare, quindi un pin per impronta non si rompe come un
+    tag. Cio' che puo' cambiare sotto i piedi e' il significato: se `v4.0`
+    domani punta altrove, l'immagine che costruiamo non e' piu' «la 4.0», e
+    chi legge il compose continuera' a crederlo.
+    """
+    esito = subprocess.run(
+        ["git", "ls-remote", "--tags", "--refs", f"{repo}.git", f"refs/tags/{tag}"],
+        capture_output=True, text=True, timeout=60)
+    if esito.returncode != 0 or not esito.stdout.strip():
+        return True, f"non verificabile ({(esito.stderr or 'tag assente').strip()[:60]})"
+    trovato = esito.stdout.split()[0]
+    if trovato == commit:
+        return True, ""
+    return False, (f"il tag {tag} ora punta a {trovato[:12]}, non al commit "
+                   f"fissato {commit[:12]}: l'immagine costruita non e' piu' "
+                   f"quella che il compose dichiara")
+
+
 def main() -> int:
     da_verificare: list[tuple[str, str, str]] = []  # (file, repo, tag)
     for nome in DOCKERFILES:
@@ -179,6 +213,20 @@ def main() -> int:
             continue
         immagini.append((riferimento, tag, ":"))
 
+    # Commit fissati: il repository e il tag atteso stanno nel Dockerfile che
+    # li usa, cosi' il compose resta l'unico posto dove si scrive l'impronta.
+    commit_fissati: list[tuple[str, str, str, str]] = []  # (nome, repo, tag, commit)
+    for nome_arg, commit in COMMIT_ARG.findall(compose):
+        cartella = REPO_ROOT / "deploy" / nome_arg.lower() / "Dockerfile"
+        if not cartella.is_file():
+            continue
+        testo = cartella.read_text(encoding="utf-8")
+        origine = ORIGINE.search(testo)
+        atteso = TAG_ATTESO.search(testo)
+        if origine and atteso:
+            commit_fissati.append((str(cartella.relative_to(REPO_ROOT)),
+                                   origine.group(1), atteso.group(1), commit))
+
     if not da_verificare:
         print("nessuna versione fissata da verificare", file=sys.stderr)
         return 1
@@ -193,6 +241,15 @@ def main() -> int:
             problemi += 1
             print(f"  NO   {COMPOSE}: {scritto} -> {nota}")
 
+    for nome, repo, tag, commit in commit_fissati:
+        esiste, nota = _commit_e_ancora_quello_del_tag(repo, tag, commit)
+        etichetta = f"{repo.rsplit('/', 1)[-1]}@{commit[:12]} ({tag})"
+        if esiste:
+            print(f"  ok   {nome}: {etichetta}" + (f"  [{nota}]" if nota else ""))
+        else:
+            problemi += 1
+            print(f"  NO   {nome}: {etichetta} -> {nota}")
+
     for nome, repo, tag in da_verificare:
         try:
             esiste, recenti = _tag_esiste(repo, tag)
@@ -206,7 +263,8 @@ def main() -> int:
             problemi += 1
             print(f"  NO {repo} {tag} ({nome}) non esiste piu'. Tag recenti: {recenti}")
 
-    print(f"\n{len(da_verificare) - problemi}/{len(da_verificare)} versioni valide.")
+    totale = len(da_verificare) + len(immagini) + len(commit_fissati)
+    print(f"\n{totale - problemi}/{totale} versioni valide.")
     return 1 if problemi else 0
 
 

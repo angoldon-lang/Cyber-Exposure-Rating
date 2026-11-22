@@ -123,7 +123,7 @@ movimento laterale.
 | CISA KEV, EPSS | attivi per impostazione predefinita | gratuiti |
 | Certificate Transparency, RDAP | attivi | gratuiti |
 | theHarvester | profilo `osint` + `THEHARVESTER_URL` | gratuito, alcune fonti a pagamento |
-| SpiderFoot | istanza propria + `SPIDERFOOT_URL` (vedere 6.3) | gratuito, alcune fonti a pagamento |
+| SpiderFoot | profilo `osint` + `SPIDERFOOT_URL` (immagine costruita dallo stack, vedere 6.3) | gratuito, alcune fonti a pagamento |
 | OWASP ZAP | profilo `zap` + `ZAP_URL` e `ZAP_API_KEY` | gratuito |
 | Have I Been Pwned | `HIBP_API_KEY` | **a pagamento** |
 | Fonte su credenziali esposte | `CREDENTIAL_EXPOSURE_URL` e `..._API_KEY` | **a pagamento** |
@@ -152,8 +152,10 @@ Da li' in avanti `make up` avvia tutto. Chi ha installato prima che la riga
 comparisse in `.env.example` ha un `.env` che non la contiene: `make up` lo
 segnala, e `make up-osint` avvia i due servizi senza modificare nulla.
 
-`osint` e' attivo per impostazione predefinita perche' theHarvester e'
-gratuito, locale e non richiede chiavi. `zap` e `oidc` no: senza la loro
+`osint` e' attivo per impostazione predefinita perche' SpiderFoot e
+theHarvester sono gratuiti, locali e non richiedono chiavi. SpiderFoot si
+costruisce dal sorgente al primo `make build`: e' l'unico servizio dello stack
+la cui immagine non si scarica. `zap` e `oidc` no: senza la loro
 chiave il contenitore parte e rifiuta ogni richiesta, e avviarlo per default
 sposterebbe il guasto senza risolverlo. Si avviano con `make up-zap` e
 `make up-oidc`, che la chiave la controllano prima.
@@ -171,23 +173,44 @@ l'installazione e dopo ogni `make aggiorna`, prima di dedurre dalla matrice di
 copertura di una scansione che qualcosa sia rotto. Il dettaglio degli esiti e'
 in `docs/OPERATIONS_RUNBOOK.md`, sezione 3.
 
-### 6.3 SpiderFoot non fa piu' parte dello stack
+### 6.3 SpiderFoot: l'immagine la costruisce lo stack
 
-Il progetto non pubblica un'immagine container utilizzabile:
-`ghcr.io/smicallef/spiderfoot` non esiste (il registro risponde `denied`), su
-Docker Hub non c'e' nulla, e la sola immagine raggiungibile e' un fork di terzi
-pubblicato solo per amd64 e solo con tag mobili. Non e' qualcosa su cui fondare
-un'installazione, tanto meno di una piattaforma che fissa ogni immagine per
-digest, e su arm64 non partirebbe nemmeno.
+Il progetto non pubblica un'immagine utilizzabile --
+`ghcr.io/smicallef/spiderfoot` non esiste, il registro risponde `denied`, su
+Docker Hub non c'e' nulla, e la sola raggiungibile e' un fork di terzi solo
+amd64. Il **sorgente** invece c'e', ed e' tutto cio' che serve:
+`deploy/spiderfoot/Dockerfile` lo costruisce da un commit pubblico non
+modificato, fissato per impronta, e il servizio parte con il profilo `osint`
+come theHarvester. Si costruisce al primo `make build`, su amd64 e su arm64.
 
-Lo stack percio' non lo avvia. Le sue due aree -- superficie d'attacco e dark
-web -- le copre **theHarvester**, che e' pinnato per digest e gira su entrambe
-le architetture: il catalogo lo dichiara (`replaced_by: theharvester`), e
-l'assenza di SpiderFoot non costa copertura finche' theHarvester riesce.
+**Gira su Python 3.9, e non e' una distrazione.** `requirements.txt` di
+SpiderFoot 4.0 chiede `pyyaml>=5.4.1,<6`: di pyyaml 5.4.1 esistono wheel per
+arm64 soltanto per cp38 e cp39, e da sorgente non si costruisce piu' (Cython 3
+interrompe con `cython_sources`). Su 3.10 e 3.11 l'installazione fallisce --
+misurato, ed e' la ragione per cui un'immagine funzionante di questo progetto
+non esiste. Un test tiene fermo il vincolo e ne scrive il motivo, cosi' che chi
+provera' ad aggiornare la base lo sappia prima di spenderci venti minuti.
 
-Lo strumento resta integrato. Chi ospita una propria istanza raggiungibile dal
-worker ne indica l'indirizzo in `SPIDERFOOT_URL` (o da Personalizzazione ->
-Strumenti) e torna a funzionare, senza altre modifiche.
+Python 3.9 non riceve piu' aggiornamenti di sicurezza dall'ottobre 2025. Il
+sistema operativo dell'immagine si', perche' la base e' Debian bookworm. E' un
+limite dichiarato: il contenitore **non pubblica porte**, lo raggiunge solo il
+worker sulla rete interna, e non accetta connessioni da fuori.
+
+**Nessuna porta pubblicata**, al contrario della definizione che c'era fino
+alla 0.18.1. SpiderFoot senza file `passwd` non chiede autenticazione: quella
+mappava la 5001 sull'host, ed esponeva un motore di scansione comandabile da
+chiunque fosse sulla stessa rete.
+
+**Licenza GPL-2.0**, non MIT come il catalogo ha dichiarato fino alla 0.18.7.
+La distribuzione, anche commerciale, e' consentita con l'obbligo di rendere
+disponibile il sorgente corrispondente: assolto fissando un commit pubblico non
+modificato e conservando `LICENSE` nell'immagine. La piattaforma lo interroga
+via HTTP come processo separato, quindi non ne e' un'opera derivata. Il
+dettaglio e' in `THIRD_PARTY_NOTICES.md`.
+
+Chi ne ospita una propria istanza mette il suo indirizzo in `SPIDERFOOT_URL`.
+Da dentro un contenitore `127.0.0.1` e' il contenitore stesso: per un'istanza
+sulla macchina serve `http://host.docker.internal:5001`.
 
 ## 7. Backup e ripristino
 

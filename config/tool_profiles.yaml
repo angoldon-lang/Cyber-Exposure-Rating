@@ -199,17 +199,23 @@ tools:
 
   spiderfoot:
     label: "SpiderFoot"
-    # Non e' piu' un servizio dello stack: il progetto non pubblica
-    # un'immagine container raggiungibile (vedere la nota in fondo alla voce).
-    # Resta utilizzabile da chi ospita una propria istanza e ne indica
-    # l'indirizzo in SPIDERFOOT_URL.
-    replaced_by: theharvester
+    compose_service: spiderfoot
+    compose_profile: osint
     kind: http_api
     passive: true
     phase: 1
     timeout_seconds: 900
     repository: "https://github.com/smicallef/spiderfoot"
-    license: "MIT"
+    # GPL-2.0, non MIT: la 4.0 ha cambiato licenza e il catalogo non era stato
+    # riverificato al cambio di versione. Lo si distribuisce come immagine
+    # costruita da un commit pubblico non modificato, e la piattaforma lo
+    # interroga via HTTP come processo separato: nessuna opera derivata.
+    license: "GPL-2.0-only"
+    license_risk: >-
+      Copyleft. Consentita la distribuzione, anche commerciale, con l'obbligo
+      di rendere disponibile il sorgente corrispondente: assolto fissando un
+      commit pubblico e conservando LICENSE nell'immagine. Non va collegato
+      nel processo dell'applicazione, cosa che l'architettura non fa.
     coverage_areas: [attack_surface, darkweb_breach]
     coverage_weight: 1.0
     # Moduli ammessi per profilo: nessun modulo attivo nel profilo passivo.
@@ -266,20 +272,19 @@ tools:
       - sfp_tool_nmap
       - sfp_tool_nuclei
     notes: >-
-      Lo stack non avvia piu' SpiderFoot: il progetto non pubblica
-      un'immagine container utilizzabile. `ghcr.io/smicallef/spiderfoot`
-      non esiste (il registro risponde «denied»), su Docker Hub non c'e'
-      nulla, e la sola immagine raggiungibile e' un fork di terzi,
-      pubblicato solo per amd64 e solo con tag mobili: non e' qualcosa su
-      cui fondare un'installazione, tanto meno di una piattaforma che
-      fissa ogni immagine per digest. Le sue due aree le copre
-      theHarvester, che e' pinnato per digest e gira su entrambe le
-      architetture. Lo strumento resta integrato: chi ospita una propria
-      istanza indica SPIDERFOOT_URL e torna a funzionare, senza altre
-      modifiche. Alcune fonti usate da SpiderFoot richiedono API key a
-      pagamento (sfp_haveibeenpwned, sfp_dehashed, sfp_hunter,
-      sfp_intelx): senza key il modulo non produce eventi e non fa
-      fallire la scansione. I moduli gratuiti su indirizzi e violazioni
+      L'immagine la costruisce lo stack dal sorgente, perche' il progetto
+      non pubblica un'immagine utilizzabile: `ghcr.io/smicallef/spiderfoot`
+      non esiste e su Docker Hub non c'e' nulla. Gira su Python 3.9 e non
+      su una versione mantenuta perche' `requirements.txt` chiede
+      `pyyaml<6`, le cui wheel per arm64 si fermano a cp39 e la cui
+      costruzione da sorgente non riesce piu': e' la ragione per cui non
+      esiste un'immagine funzionante del progetto. Il dettaglio sta in
+      deploy/spiderfoot/Dockerfile. Nessuna porta pubblicata: senza file
+      `passwd` SpiderFoot non chiede autenticazione, e lo raggiunge solo il
+      worker sulla rete interna. Alcune fonti usate dai suoi moduli
+      richiedono API key a pagamento (sfp_haveibeenpwned, sfp_dehashed,
+      sfp_hunter, sfp_intelx): senza key il modulo non produce eventi e non
+      fa fallire la scansione. I moduli gratuiti su indirizzi e violazioni
       sono sfp_skymem, sfp_emailformat, sfp_psbdmp e sfp_ahmia.
 
   checkdmarc:
