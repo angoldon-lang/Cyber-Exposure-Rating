@@ -666,3 +666,68 @@ def test_il_make_esegue_davvero_il_controllo():
     makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
 
     assert "scripts/controlla_configurazione.py" in makefile
+
+
+# ---------------------------------------------------------------------------
+# Una variabile configurabile deve arrivare fino al worker
+# ---------------------------------------------------------------------------
+def _variabili_del_compose() -> set[str]:
+    """I nomi passati ai contenitori dal blocco `x-common-env`."""
+    blocco = COMPOSE_FILE.read_text(encoding="utf-8").split(
+        "x-common-env: &common-env", 1)[1].split("\n\n", 1)[0]
+    return set(re.findall(r"^  ([A-Z][A-Z0-9_]*):", blocco, re.MULTILINE))
+
+
+def test_ogni_variabile_configurabile_arriva_al_worker():
+    """Quattro posti devono dire la stessa cosa, e nessuno lo verificava.
+
+    `.env` -> blocco `x-common-env` del compose -> campo di `Settings` ->
+    `tool_config.VARIABILI` -> adapter. Se manca un anello, il valore scritto
+    nel file non arriva, e lo strumento resta «non configurato» per sempre
+    qualunque cosa si scriva: nessun errore, nessun avviso, e chi installa
+    corregge il file all'infinito.
+
+    Cinque variabili su sette erano in questo stato. THEHARVESTER_URL non e'
+    mai stato configurabile da `.env` da quando lo strumento esiste (0.17.0):
+    era nell'esempio, nell'elenco e usato dal task, ma non nel compose ne' in
+    Settings. ZAP e la fonte sulle credenziali esposte lo stesso.
+
+    Il percorso dall'interfaccia funzionava, perche' legge il database: era
+    rotto solo `.env`, cioe' la via documentata.
+    """
+    from app.core.config import Settings
+    from app.services.tool_config import VARIABILI
+
+    campi = set(Settings.model_fields)
+    nel_compose = _variabili_del_compose()
+    presenti = set(_entries())
+
+    rotte: list[str] = []
+    for variabile in VARIABILI:
+        mancano = []
+        if variabile.nome not in presenti:
+            mancano.append(".env.example")
+        if variabile.nome.lower() not in campi:
+            mancano.append("Settings")
+        if variabile.nome not in nel_compose:
+            mancano.append("x-common-env del compose")
+        if mancano:
+            rotte.append(f"{variabile.nome} (manca in: {', '.join(mancano)})")
+
+    assert not rotte, (
+        "variabili che non possono raggiungere il worker:\n  " + "\n  ".join(rotte))
+
+
+def test_il_compose_non_passa_variabili_che_nessuno_legge():
+    """Il controllo opposto, piu' debole ma utile: una variabile di strumento
+    nel compose e non nell'elenco configurabile e' una riga che non fa niente,
+    e fa credere che lo strumento sia impostabile."""
+    from app.services.tool_config import VARIABILI
+
+    nomi = {v.nome for v in VARIABILI}
+    sospette = {nome for nome in _variabili_del_compose()
+                if nome.endswith(("_API_KEY", "_URL"))
+                and nome not in nomi
+                and not nome.startswith(("DATABASE", "REDIS", "CELERY", "OIDC"))}
+
+    assert not sospette, f"variabili passate ma non configurabili: {sorted(sospette)}"

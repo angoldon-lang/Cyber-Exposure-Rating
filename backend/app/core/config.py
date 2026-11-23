@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     credential_exposure_url: str | None = None
     credential_exposure_api_key: str | None = None
     spiderfoot_url: str | None = None
+    # Senza questo campo il valore di `.env` non arrivava nemmeno alle
+    # impostazioni: `tool_config` lo cerca come attributo in minuscolo, e un
+    # attributo assente significa «non configurato», qualunque cosa dica il
+    # file.
+    theharvester_url: str | None = None
     zap_url: str | None = None
     zap_api_key: str | None = None
     ransomware_live_url: str = "https://api.ransomware.live/v2"

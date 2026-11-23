@@ -30,8 +30,20 @@ x-common-env: &common-env
   EVIDENCE_STORAGE_PATH: /var/lib/defenix/evidence
   REPORT_STORAGE_PATH: /var/lib/defenix/reports
   CONFIG_DIR: /srv/config
+  # Tutte le variabili dell'elenco configurabile (app/services/tool_config.py)
+  # vanno passate qui, altrimenti il valore scritto in `.env` non raggiunge il
+  # worker e lo strumento resta «non configurato» per sempre, qualunque cosa si
+  # scriva nel file. Cinque di queste sette mancavano, e theHarvester non e'
+  # mai stato configurabile da `.env` da quando esiste. Un test ora verifica
+  # che i quattro posti -- questo blocco, Settings, l'elenco e `.env.example`
+  # -- dicano la stessa cosa.
   HIBP_API_KEY: ${HIBP_API_KEY:-}
   SPIDERFOOT_URL: ${SPIDERFOOT_URL:-}
+  THEHARVESTER_URL: ${THEHARVESTER_URL:-}
+  ZAP_URL: ${ZAP_URL:-}
+  ZAP_API_KEY: ${ZAP_API_KEY:-}
+  CREDENTIAL_EXPOSURE_URL: ${CREDENTIAL_EXPOSURE_URL:-}
+  CREDENTIAL_EXPOSURE_API_KEY: ${CREDENTIAL_EXPOSURE_API_KEY:-}
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
 
 services:
