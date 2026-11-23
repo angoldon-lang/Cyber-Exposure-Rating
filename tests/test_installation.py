@@ -575,3 +575,94 @@ def test_i_servizi_del_profilo_predefinito_includono_quelli_dichiarati(tmp_path)
     assert "theharvester" in servizi, (
         "il profilo `osint` di .env.example non porta i suoi servizi fra quelli "
         f"avviati da `make up`: {sorted(servizi)}")
+
+
+# ---------------------------------------------------------------------------
+# Avviare un servizio che nessuno usera'
+# ---------------------------------------------------------------------------
+def test_la_lettura_delle_variabili_coincide_con_l_elenco_vero():
+    """`scripts/controlla_configurazione.py` legge `tool_config.py` invece di
+    importarlo: quel modulo importa le impostazioni, che validano
+    `JWT_SECRET_KEY`, e make non esporta `.env` -- l'import falliva e l'intero
+    controllo taceva. Un avviso che non compare mai e' peggio di nessun
+    avviso, perche' si crede di averlo.
+
+    La lettura va pero' confrontata con l'elenco autorevole, cosa che qui si
+    puo' fare perche' le impostazioni si caricano davvero.
+    """
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from controlla_configurazione import variabili_di_indirizzo
+
+    from app.services.tool_config import VARIABILI
+
+    atteso = {v.strumento: v.nome for v in VARIABILI if v.nome.endswith("_URL")}
+
+    assert variabili_di_indirizzo() == atteso, (
+        "la lettura dal sorgente non corrisponde piu' all'elenco: l'avviso "
+        "nominerebbe variabili sbagliate, o nessuna")
+
+
+def test_l_avviso_compare_quando_il_servizio_parte_senza_indirizzo(tmp_path, monkeypatch, capsys):
+    """E' il caso ripetuto tre volte: `COMPOSE_PROFILES=osint` in `.env`, i
+    contenitori partono, e in scansione gli adapter dicono «servizio non
+    configurato». Due cose separate che sembrano una sola."""
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import controlla_configurazione as controllo
+
+    env = tmp_path / ".env"
+    env.write_text("COMPOSE_PROFILES=osint\nTHEHARVESTER_URL=\nSPIDERFOOT_URL=\n",
+                   encoding="utf-8")
+    monkeypatch.setattr(controllo, "RADICE", REPO_ROOT)
+    monkeypatch.setattr(controllo, "_valori_env",
+                        lambda _p: {"COMPOSE_PROFILES": "osint"})
+
+    assert controllo.main() == 0, "non deve impedire l'avvio: e' un avviso"
+    uscita = capsys.readouterr().out
+    assert "THEHARVESTER_URL=http://theharvester:5000" in uscita
+    assert "SPIDERFOOT_URL=http://spiderfoot:5001" in uscita
+
+
+def test_nessun_avviso_quando_gli_indirizzi_ci_sono(monkeypatch, capsys):
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import controlla_configurazione as controllo
+
+    monkeypatch.setattr(controllo, "RADICE", REPO_ROOT)
+    monkeypatch.setattr(controllo, "_valori_env", lambda _p: {
+        "COMPOSE_PROFILES": "osint",
+        "THEHARVESTER_URL": "http://theharvester:5000",
+        "SPIDERFOOT_URL": "http://spiderfoot:5001"})
+
+    controllo.main()
+
+    assert capsys.readouterr().out == ""
+
+
+def test_nessun_avviso_per_un_profilo_non_attivo(monkeypatch, capsys):
+    """ZAP non e' nel profilo predefinito: avvisare che manca `ZAP_URL` a chi
+    non avvia ZAP sarebbe rumore, e il rumore si impara a ignorare."""
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import controlla_configurazione as controllo
+
+    monkeypatch.setattr(controllo, "RADICE", REPO_ROOT)
+    monkeypatch.setattr(controllo, "_valori_env", lambda _p: {
+        "COMPOSE_PROFILES": "osint",
+        "THEHARVESTER_URL": "http://theharvester:5000",
+        "SPIDERFOOT_URL": "http://spiderfoot:5001"})
+
+    controllo.main()
+
+    assert "ZAP_URL" not in capsys.readouterr().out
+
+
+def test_il_make_esegue_davvero_il_controllo():
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+
+    assert "scripts/controlla_configurazione.py" in makefile

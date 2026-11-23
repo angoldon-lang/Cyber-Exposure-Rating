@@ -151,6 +151,13 @@ up: require-env ## Avvia lo stack completo
 		echo "  delle scansioni ne risentira' senza dirne il motivo."; \
 		echo "  Aggiungere a .env:  COMPOSE_PROFILES=osint"; \
 		echo; }
+	@# L'altra meta' dello stesso disallineamento: il profilo e' attivo, i
+	@# contenitori partono, ma manca l'indirizzo che dice agli adapter dove
+	@# trovarli. Sono due cose separate che sembrano una sola, e il secondo
+	@# caso si scopriva solo leggendo la tabella delle aree non verificate a
+	@# scansione finita.
+	@$(PY) scripts/controlla_configurazione.py 2>/dev/null \
+		|| python3 scripts/controlla_configurazione.py 2>/dev/null || true
 	$(COMPOSE) up -d
 	@echo "Frontend: http://localhost:$${FRONTEND_PORT:-8080}"
 	@echo "API docs: http://localhost:$${API_PORT:-8000}/api/v1/docs"
