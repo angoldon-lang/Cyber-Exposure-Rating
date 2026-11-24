@@ -90,6 +90,9 @@ def main() -> int:
     for servizio, _variabile, suggerimento in mancanti:
         print(f"  {servizio:14s} aggiungere a .env:  {suggerimento}")
     print()
+    print("  make env-integra    le aggiunge tutte, senza toccare i valori")
+    print("                      esistenti (DRY=1 per vedere prima)")
+    print()
     print("  Se li hai gia' impostati da Personalizzazione -> Strumenti, quelli")
     print("  valgono e questo avviso non si applica: `make strumenti` lo conferma.")
     print()

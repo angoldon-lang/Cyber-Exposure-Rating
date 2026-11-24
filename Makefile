@@ -163,7 +163,11 @@ up: require-env ## Avvia lo stack completo
 		echo "AVVISO: .env non contiene COMPOSE_PROFILES."; \
 		echo "  SpiderFoot e theHarvester non verranno avviati, e la copertura"; \
 		echo "  delle scansioni ne risentira' senza dirne il motivo."; \
-		echo "  Aggiungere a .env:  COMPOSE_PROFILES=osint"; \
+		echo; \
+		echo "  La riga non c'e' perche' il tuo .env e' anteriore a quando la"; \
+		echo "  variabile e' comparsa: un .env non si aggiorna da se'."; \
+		echo "  make env-integra    aggiunge le variabili nuove senza toccare"; \
+		echo "                      i valori esistenti (DRY=1 per vedere prima)"; \
 		echo; }
 	@# L'altra meta' dello stesso disallineamento: il profilo e' attivo, i
 	@# contenitori partono, ma manca l'indirizzo che dice agli adapter dove

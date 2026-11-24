@@ -973,3 +973,40 @@ def test_il_recupero_corregge_anche_un_valore_diverso():
     assert "DIVERSO da quello del contenitore" in recupero
     assert 'gia\' presente in .env' not in recupero, (
         "torna a saltare cio' che e' presente, senza confrontarlo")
+
+
+def test_gli_avvisi_indicano_il_comando_che_risolve():
+    """Dire «aggiungere a .env: COMPOSE_PROFILES=osint» fa risolvere una riga
+    alla volta, e nel file di chi ha installato a settembre ne mancavano
+    tredici. `make env-integra` le aggiunge tutte senza toccare i valori: un
+    avviso che non indica il comando che esiste fa fare il lavoro a mano.
+    """
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    controllo = (REPO_ROOT / "scripts" / "controlla_configurazione.py"
+                 ).read_text(encoding="utf-8")
+
+    assert "make env-integra" in makefile, (
+        "l'avviso su COMPOSE_PROFILES non indica il comando che la aggiunge")
+    assert "make env-integra" in controllo, (
+        "l'avviso sugli indirizzi non indica il comando che li aggiunge")
+
+
+def test_il_file_env_non_e_mai_stato_versionato():
+    """Se `.env` fosse tracciato, un `git pull` sovrascriverebbe i segreti di
+    chi installa -- e quei segreti sarebbero nella storia del repository, cioe'
+    pubblici per chiunque lo cloni. E' il primo sospetto quando un `.env`
+    sembra «rigenerato da solo», ed e' il test che lo esclude per sempre.
+    """
+    import subprocess
+
+    tracciati = subprocess.run(  # noqa: S603
+        ["git", "log", "--all", "--format=%h", "--", ".env"],  # noqa: S607
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=60, check=False)
+
+    assert tracciati.stdout.strip() == "", (
+        f"`.env` compare nella storia: {tracciati.stdout.split()[:3]}")
+
+    ignorati = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert ".env" in [r.strip() for r in ignorati]
+    assert ".env.*" in [r.strip() for r in ignorati], (
+        "le copie di sicurezza (.env.<data>.bak) finirebbero nel repository")
