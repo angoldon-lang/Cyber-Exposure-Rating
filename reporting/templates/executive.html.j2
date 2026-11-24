@@ -144,6 +144,47 @@ cosa puo&rsquo; succedere e che cosa conviene fare.</p>
   </tr></tbody>
 </table>
 
+{# ------------------------- Che cosa e' stato guardato ---------------------- #}
+{# I numeri qui sopra non dicono su che cosa sono stati calcolati. Un punteggio
+   alto su tre nomi e lo stesso punteggio su duecento sono affermazioni molto
+   diverse, ed e' la prima cosa che un destinatario verifica. Nessun dato
+   sensibile: sono i nomi pubblici dell'organizzazione, con gli indirizzi
+   e-mail gia' mascherati all'origine. #}
+{% if perimetro %}
+<h3>Gli elementi analizzati</h3>
+<table class="asset-analizzati">
+  <thead><tr>
+    <th style="width:46mm">Tipo</th><th style="width:16mm">Quanti</th>
+    <th>Elementi</th>
+  </tr></thead>
+  <tbody>
+  {% for gruppo in perimetro %}
+    <tr>
+      <td>{{ gruppo.label_it }}
+        {%- if gruppo.terze_parti %}<br><span class="small muted">{{ gruppo.terze_parti }}
+          di terze parti, esclusi dal punteggio</span>{% endif %}
+        {%- if gruppo.non_piu_osservati %}<br><span class="small muted">{{ gruppo.non_piu_osservati }}
+          non piu' osservati</span>{% endif %}</td>
+      <td><strong>{{ gruppo.totale }}</strong>
+        {%- if gruppo.verificati %}<br><span class="small muted">{{ gruppo.verificati }}
+          confermati</span>{% endif %}</td>
+      <td class="small">
+        {% for nome in gruppo.nomi %}<span class="code">{{ nome }}</span>{% if not loop.last %}, {% endif %}{% endfor %}
+        {%- if gruppo.altri %} <span class="muted">e altri {{ gruppo.altri }}</span>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="small muted">
+  L'elenco e' quello che la rilevazione ha attribuito all'organizzazione. Gli
+  elementi di terze parti (CDN, servizi in cloud di altri) sono dichiarati ma
+  non entrano nel punteggio: non sono amministrati dall'organizzazione e non
+  sarebbe corretto attribuirgliene lo stato. L'allegato tecnico riporta
+  l'elenco completo con lo strumento che ha individuato ciascuno.
+</p>
+{% endif %}
+
 {% if comparison and comparison.previous_score is not none %}
 <p class="small muted">Rispetto alla rilevazione precedente:
   {{ '%.0f'|format(comparison.previous_score) }} &rarr; {{ '%.0f'|format(comparison.current_score) }}

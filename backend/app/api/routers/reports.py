@@ -11,7 +11,7 @@ from sqlalchemy import desc, select
 
 from app.api.deps import CurrentUser, CurrentUserDep, DbDep, RequestContextDep, require_permission
 from app.core.rbac import Permission
-from app.models.enums import AuditAction, ReportStatus
+from app.models.enums import AuditAction, ReportStatus, ReportType
 from app.models.reporting import Report, ReportVersion
 from app.models.scanning import Finding, Scan
 from app.schemas.scanning import ReportCreate, ReportRead
@@ -98,9 +98,14 @@ def generate_report(scan_id: uuid.UUID, payload: ReportCreate, db: DbDep,
     db.add(report)
     db.flush()
 
-    include_technical = payload.report_type.value in {"technical", "combined"}
+    # `split` consegna due documenti per formato invece di uno unito: il
+    # rapporto per la direzione e l'allegato tecnico, cosi' chi firma puo'
+    # decidere se allegare il secondo.
+    separati = payload.report_type is ReportType.SPLIT
+    include_technical = separati or payload.report_type.value in {"technical", "combined"}
     produced = report_service.generate(
-        report_context, [f.value for f in payload.formats], include_technical=include_technical)
+        report_context, [f.value for f in payload.formats],
+        include_technical=include_technical, separati=separati)
     if not produced:
         report.status = ReportStatus.FAILED.value
         report.error_message = "nessun formato generato correttamente"

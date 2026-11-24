@@ -167,6 +167,12 @@ table.aree tr.area-critica td { font-weight: 700; }
 table.aree tr.area-critica .muted { font-weight: 400; }
 table.perimetro td { font-size: 9.5pt; }
 
+/* Elenco degli elementi analizzati nel rapporto per la direzione. I nomi
+   possono essere lunghi (sottodomini) e devono andare a capo dentro la cella,
+   altrimenti la tabella esce dal margine della pagina. */
+table.asset-analizzati td { font-size: 9pt; vertical-align: top; }
+table.asset-analizzati td .code { word-break: break-all; }
+
 table { width: 100%; border-collapse: collapse; margin: 2mm 0 3mm; font-size: 8.2pt; }
 th, td { padding: 1.5mm 2.5mm; border-bottom: 0.5pt solid var(--line); text-align: left;
          vertical-align: top; }

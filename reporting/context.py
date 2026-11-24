@@ -108,6 +108,9 @@ class ReportContext:
     # solo i conteggi: un numero non e' verificabile, e l'allegato tecnico
     # esiste proprio per permettere la verifica.
     asset_inventory: list[dict[str, Any]]
+    # Riepilogo per tipo dello stesso inventario: va anche nel rapporto per la
+    # direzione, dove l'elenco completo non starebbe.
+    perimetro: list[dict[str, Any]]
     applied_caps: list[dict[str, Any]]
     brand: dict[str, str]
     disclaimer: str = DISCLAIMER_IT
@@ -202,6 +205,7 @@ class ReportContext:
             "quick_wins": self.quick_wins, "comparison": self.comparison,
             "coverage_matrix": self.coverage_matrix, "exposure_summary": self.exposure_summary,
             "asset_inventory": self.asset_inventory,
+            "perimetro": self.perimetro,
             "applied_caps": self.applied_caps, "brand": self.brand,
             "intro_text": self.intro_text, "footer_text": self.footer_text,
             "contact_block": self.contact_block, "logo_data_uri": self.logo_data_uri,
@@ -223,6 +227,45 @@ def sanitize_finding(finding: dict[str, Any], *, unmask_pii: bool = False) -> di
     cleaned["attributes"] = attributes
     cleaned.pop("evidence_ids", None)
     return cleaned
+
+
+# Quanti nomi si elencano per tipo nel riepilogo del perimetro. Oltre, si
+# dichiara il totale: un elenco di trecento sottodomini in un rapporto per la
+# direzione non si legge, e non e' quello che serve sapere.
+MAX_NOMI_NEL_PERIMETRO = 12
+
+
+def riepiloga_perimetro(asset_inventory: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Il perimetro analizzato, per tipo di asset.
+
+    Risponde alla domanda che precede ogni numero del rapporto: «che cosa
+    avete guardato?». Senza, un punteggio alto e un perimetro di tre nomi
+    sembrano la stessa cosa di un punteggio alto su duecento, e sono due
+    affermazioni molto diverse.
+
+    Sta nel rapporto per la direzione e non solo nell'allegato tecnico, perche'
+    e' la prima cosa che un destinatario verifica -- e perche' non contiene
+    nulla di sensibile: sono i nomi pubblici dell'organizzazione, con gli
+    indirizzi e-mail gia' mascherati all'origine.
+    """
+    riepilogo: list[dict[str, Any]] = []
+    for gruppo in asset_inventory:
+        voci = list(gruppo.get("items") or [])
+        if not voci:
+            continue
+        nomi = [str(v.get("name") or "") for v in voci]
+        riepilogo.append({
+            "label_it": gruppo.get("label_it") or gruppo.get("asset_type") or "Asset",
+            "totale": len(voci),
+            # «Di proprieta' verificata» e' l'unica distinzione che cambia il
+            # rating: gli asset di terze parti sono elencati e non contano.
+            "verificati": sum(1 for v in voci if v.get("ownership") == "verified"),
+            "terze_parti": sum(1 for v in voci if v.get("excluded")),
+            "non_piu_osservati": sum(1 for v in voci if v.get("disappeared")),
+            "nomi": nomi[:MAX_NOMI_NEL_PERIMETRO],
+            "altri": max(0, len(nomi) - MAX_NOMI_NEL_PERIMETRO),
+        })
+    return riepilogo
 
 
 def build_context(*, company: dict[str, Any], scan: dict[str, Any], score: dict[str, Any],
@@ -262,6 +305,7 @@ def build_context(*, company: dict[str, Any], scan: dict[str, Any], score: dict[
         remediation_plan=remediation_plan, quick_wins=quick_win_items,
         comparison=comparison, coverage_matrix=coverage_matrix, exposure_summary=exposure,
         asset_inventory=list(asset_inventory or []),
+        perimetro=riepiloga_perimetro(list(asset_inventory or [])),
         applied_caps=list(score.get("applied_caps", [])),
         disclaimer=disclaimer_for(profile_key),
         intro_text=(branding or {}).get("report_intro_it"),

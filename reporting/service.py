@@ -6,6 +6,7 @@ import re
 import csv
 import hashlib
 import io
+from typing import Any
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -106,32 +107,91 @@ def _slug(value: str) -> str:
     return "".join(keep).strip("-")[:60] or "report"
 
 
+# Le due parti del rapporto, e il suffisso che le distingue quando vengono
+# consegnate come documenti separati.
+#
+# Separati e non uniti: il rapporto per la direzione si manda al cliente, e
+# l'allegato tecnico contiene indirizzi, versioni dei prodotti e dettaglio dei
+# rilievi -- cose che chi firma vuole poter decidere se allegare o no. Finche'
+# erano un solo file, la decisione non esisteva.
+ESECUTIVO = "executive.html.j2"
+TECNICO = "technical.html.j2"
+SUFFISSO = {ESECUTIVO: "direzione", TECNICO: "allegato-tecnico"}
+
+
+def _parti(include_technical: bool, parti: tuple[str, ...] | None) -> tuple[str, ...]:
+    if parti is not None:
+        return parti
+    return (ESECUTIVO, TECNICO) if include_technical else (ESECUTIVO,)
+
+
+def _nome(context: ReportContext, parti: tuple[str, ...]) -> str:
+    base = f"defenix-security-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
+    # Il suffisso compare solo su un documento che contiene una parte sola:
+    # su quello completo sarebbe fuorviante.
+    if len(parti) == 1:
+        return f"{base}-{SUFFISSO[parti[0]]}"
+    return base
+
+
 # ---------------------------------------------------------------------------
-def generate_html(context: ReportContext, *, include_technical: bool = True) -> GeneratedReport:
-    parts = [render_html(context, "executive.html.j2")]
-    if include_technical:
-        parts.append(render_html(context, "technical.html.j2"))
-    content = "\n".join(parts).encode("utf-8")
-    name = f"defenix-security-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
-    return GeneratedReport("html", content, f"{name}.html")
+def generate_html(context: ReportContext, *, include_technical: bool = True,
+                  parti: tuple[str, ...] | None = None) -> GeneratedReport:
+    scelte = _parti(include_technical, parti)
+    content = "\n".join(render_html(context, parte) for parte in scelte).encode("utf-8")
+    return GeneratedReport("html", content, f"{_nome(context, scelte)}.html")
 
 
-def generate_pdf(context: ReportContext, *, include_technical: bool = True) -> GeneratedReport:
+def generate_pdf(context: ReportContext, *, include_technical: bool = True,
+                 parti: tuple[str, ...] | None = None) -> GeneratedReport:
     """PDF via WeasyPrint. Se la libreria non e' disponibile viene sollevata
     un'eccezione esplicita: il chiamante degrada su HTML."""
     from weasyprint import HTML  # import locale: dipendenze di sistema pesanti
 
-    documents = [HTML(string=render_html(context, "executive.html.j2")).render()]
-    if include_technical:
-        documents.append(HTML(string=render_html(context, "technical.html.j2")).render())
-
+    scelte = _parti(include_technical, parti)
+    documents = [HTML(string=render_html(context, parte)).render() for parte in scelte]
     pages = [page for document in documents for page in document.pages]
     pdf_bytes = documents[0].copy(pages).write_pdf()
-    name = f"defenix-security-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
-    return GeneratedReport("pdf", pdf_bytes, f"{name}.pdf")
+    return GeneratedReport("pdf", pdf_bytes, f"{_nome(context, scelte)}.pdf")
 
 
-def generate_docx(context: ReportContext, *, include_technical: bool = True) -> GeneratedReport:
+
+def _docx_allegato_tecnico(document: Any, context: ReportContext) -> None:
+    """L'allegato tecnico del documento Word.
+
+    Estratto perche' serve in due documenti: quello completo e quello
+    separato, che si consegna o no a seconda di chi lo legge.
+    """
+    document.add_page_break()
+    document.add_heading("Allegato tecnico", level=1)
+    document.add_paragraph(
+        "Evidenze sanitizzate. Non sono riportati credenziali, token, cookie, contenuti "
+        "integrali di leak, istruzioni di sfruttamento ne' payload offensivi.")
+    for finding in context.findings:
+        document.add_heading(
+            f"{finding.get('reference_code')} - {finding.get('title')}", level=2)
+        details = document.add_paragraph()
+        details.add_run(
+            f"Severita': {SEVERITY_LABEL_IT.get(str(finding.get('severity')), '')} | "
+            f"Attendibilita': {CONFIDENCE_LABEL_IT.get(str(finding.get('confidence_class')), '')} | "
+            f"Asset: {finding.get('asset_display') or finding.get('detail') or 'n/d'} "
+            f"({OWNERSHIP_LABEL_IT.get(str(finding.get('ownership_status')), '')})").italic = True
+        document.add_paragraph(str(finding.get("description", "")))
+        if finding.get("cve_id"):
+            document.add_paragraph(
+                f"CVE: {finding['cve_id']} | CVSS: {finding.get('cvss_score', 'n/d')} | "
+                f"EPSS: {finding.get('epss_score', 'n/d')} | "
+                f"CISA KEV: {'si' if finding.get('cisa_kev') else 'no'}")
+        remediation = finding.get("remediation")
+        if remediation:
+            document.add_paragraph(f"Remediation: {remediation['title_it']}")
+            document.add_paragraph(f"Azione immediata: {remediation['immediate_action_it']}")
+            document.add_paragraph(f"Verifica: {remediation['verification_it']}")
+
+
+
+def generate_docx(context: ReportContext, *, include_technical: bool = True,
+                  parti: tuple[str, ...] | None = None) -> GeneratedReport:
     """Report Word tramite python-docx.
 
     Segue la stessa scaletta del PDF, con gli stessi testi: chi esporta in
@@ -141,6 +201,21 @@ def generate_docx(context: ReportContext, *, include_technical: bool = True) -> 
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.shared import Pt, RGBColor
+
+    scelte = _parti(include_technical, parti)
+    if scelte == (TECNICO,):
+        # Il solo allegato, come documento a se'. Serve a chi consegna le due
+        # parti separatamente e vuole poter decidere se allegare questa.
+        solo = Document()
+        solo.add_heading(
+            f"{context.brand['name']} Security Rating - allegato tecnico", level=0)
+        solo.add_paragraph(f"{context.company_name} - {context.generated_at:%d/%m/%Y}")
+        _docx_allegato_tecnico(solo, context)
+        buffer_solo = io.BytesIO()
+        solo.save(buffer_solo)
+        return GeneratedReport(
+            "docx", buffer_solo.getvalue(), f"{_nome(context, scelte)}.docx")
+    include_technical = TECNICO in scelte
 
     document = Document()
     direzione = sintesi_per_la_direzione(
@@ -373,31 +448,7 @@ def generate_docx(context: ReportContext, *, include_technical: bool = True) -> 
 
     # --- allegato tecnico ---
     if include_technical:
-        document.add_page_break()
-        document.add_heading("Allegato tecnico", level=1)
-        document.add_paragraph(
-            "Evidenze sanitizzate. Non sono riportati credenziali, token, cookie, contenuti "
-            "integrali di leak, istruzioni di sfruttamento ne' payload offensivi.")
-        for finding in context.findings:
-            document.add_heading(
-                f"{finding.get('reference_code')} - {finding.get('title')}", level=2)
-            details = document.add_paragraph()
-            details.add_run(
-                f"Severita': {SEVERITY_LABEL_IT.get(str(finding.get('severity')), '')} | "
-                f"Attendibilita': {CONFIDENCE_LABEL_IT.get(str(finding.get('confidence_class')), '')} | "
-                f"Asset: {finding.get('asset_display') or finding.get('detail') or 'n/d'} "
-                f"({OWNERSHIP_LABEL_IT.get(str(finding.get('ownership_status')), '')})").italic = True
-            document.add_paragraph(str(finding.get("description", "")))
-            if finding.get("cve_id"):
-                document.add_paragraph(
-                    f"CVE: {finding['cve_id']} | CVSS: {finding.get('cvss_score', 'n/d')} | "
-                    f"EPSS: {finding.get('epss_score', 'n/d')} | "
-                    f"CISA KEV: {'si' if finding.get('cisa_kev') else 'no'}")
-            remediation = finding.get("remediation")
-            if remediation:
-                document.add_paragraph(f"Remediation: {remediation['title_it']}")
-                document.add_paragraph(f"Azione immediata: {remediation['immediate_action_it']}")
-                document.add_paragraph(f"Verifica: {remediation['verification_it']}")
+        _docx_allegato_tecnico(document, context)
 
     document.add_paragraph()
     nota = document.add_paragraph()
@@ -411,10 +462,8 @@ def generate_docx(context: ReportContext, *, include_technical: bool = True) -> 
 
     buffer = io.BytesIO()
     document.save(buffer)
-    name = f"defenix-security-rating-{_slug(context.company_name)}-{context.generated_at:%Y%m%d}"
-    return GeneratedReport("docx", buffer.getvalue(), f"{name}.docx")
-
-
+    return GeneratedReport(
+        "docx", buffer.getvalue(), f"{_nome(context, scelte)}.docx")
 def generate_json(context: ReportContext) -> GeneratedReport:
     payload = context.as_dict()
     payload.pop("severity_label", None)
@@ -489,25 +538,46 @@ GENERATORS = {
 
 
 def generate(context: ReportContext, formats: list[str], *,
-             include_technical: bool = True) -> list[GeneratedReport]:
-    """Genera i formati richiesti. Un formato non disponibile non blocca gli altri."""
+             include_technical: bool = True,
+             separati: bool = False) -> list[GeneratedReport]:
+    """Genera i formati richiesti. Un formato non disponibile non blocca gli altri.
+
+    Con `separati` le due parti escono come DUE documenti per ogni formato,
+    invece di uno unito: il rapporto per la direzione e l'allegato tecnico.
+    E' la differenza fra consegnare e poter scegliere cosa consegnare --
+    l'allegato contiene indirizzi, versioni dei prodotti e dettaglio dei
+    rilievi, e chi firma vuole decidere se mandarlo.
+    """
+    # `(None,)` significa «come prima»: una sola chiamata, parti decise da
+    # `include_technical`.
+    insiemi: tuple[tuple[str, ...] | None, ...] = (
+        ((ESECUTIVO,), (TECNICO,)) if separati else (None,))
     produced: list[GeneratedReport] = []
     for fmt in formats:
         generator = GENERATORS.get(fmt)
         if generator is None:
             logger.warning("report_format_unknown", format=fmt)
             continue
-        try:
-            if fmt in {"html", "pdf", "docx"}:
-                produced.append(generator(context, include_technical=include_technical))
-            else:
+        if fmt not in {"html", "pdf", "docx"}:
+            # JSON e CSV sono un'unica rappresentazione dei dati: dividerli non
+            # significherebbe niente.
+            try:
                 produced.append(generator(context))
-        except Exception as exc:  # noqa: BLE001
-            logger.error("report_generation_failed", format=fmt, error=str(exc))
-            if fmt == "pdf":
-                # Degrada su HTML: il contenuto resta consultabile.
-                logger.warning("pdf_fallback_to_html")
-                produced.append(generate_html(context, include_technical=include_technical))
+            except Exception as exc:  # noqa: BLE001
+                logger.error("report_generation_failed", format=fmt, error=str(exc))
+            continue
+        for parti in insiemi:
+            try:
+                produced.append(generator(context, include_technical=include_technical,
+                                          parti=parti))
+            except Exception as exc:  # noqa: BLE001
+                logger.error("report_generation_failed", format=fmt, error=str(exc),
+                             parts=parti)
+                if fmt == "pdf":
+                    # Degrada su HTML: il contenuto resta consultabile.
+                    logger.warning("pdf_fallback_to_html")
+                    produced.append(generate_html(
+                        context, include_technical=include_technical, parti=parti))
     return produced
 
 

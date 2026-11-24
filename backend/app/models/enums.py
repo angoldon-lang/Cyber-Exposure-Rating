@@ -205,6 +205,10 @@ class ReportType(StrEnum):
     EXECUTIVE = "executive"
     TECHNICAL = "technical"
     COMBINED = "combined"
+    # Le due parti come due documenti distinti, non come un unico file: si
+    # consegna il rapporto per la direzione e si decide a parte se allegare il
+    # tecnico, che contiene indirizzi, versioni e dettaglio dei rilievi.
+    SPLIT = "split"
 
 
 class ReportFormat(StrEnum):

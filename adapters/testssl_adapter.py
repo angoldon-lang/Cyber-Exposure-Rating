@@ -188,6 +188,25 @@ class TestSSLAdapter(BaseAdapter):
                 # attese sul socket, non sul test.
                 args = ["--jsonfile-pretty", str(outfile), "--quiet", "--color", "0",
                         "--severity", "LOW", "--sneaky",
+                        # `--warnings off` non e' una preferenza di verbosita':
+                        # senza, testssl si fermava con uscita 245
+                        # (ERR_CLUELESS) su host che non parlano TLS sulla 443,
+                        # su quelli che offrono solo SSLv2 o solo SSLv3.
+                        # In quei casi chiede conferma all'operatore
+                        # («Type "yes" to proceed») e la legge da stdin: senza
+                        # terminale la lettura non riesce e il programma esce.
+                        #
+                        # `off` e non `batch`: nel sorgente di testssl 3.2
+                        # `ignore_no_or_lame` restituisce 0 con `off` e 1 con
+                        # `batch`, e quell'1 porta allo stesso exit 245. Solo
+                        # `off` fa proseguire.
+                        #
+                        # Cio' che si perde e' una domanda a cui nessuno puo'
+                        # rispondere; cio' che si guadagna e' il verdetto, che
+                        # resta nel JSON come avviso `optimal_proto` -- e un
+                        # host che non espone TLS e' un'informazione, non un
+                        # guasto dello strumento.
+                        "--warnings", "off",
                         "--protocols", "--categories", "--server-defaults",
                         "--connect-timeout", "10", "--openssl-timeout", "10",
                         # Un host dietro a un bilanciatore risolve in piu'

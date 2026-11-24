@@ -114,6 +114,32 @@ TCP che chiude subito: nessun
 bersaglio di scansione entra nel comando, e le fonti commerciali non vengono
 contattate. `--senza-rete` salta anche quelle.
 
+### Il report: due documenti, e cosa si manda
+
+```bash
+# dall'API: "report_type": "split"
+# dalla riga di comando:
+make report-demo                   # un documento unito, come prima
+docker compose exec api python -m app.cli report-demo --separati
+```
+
+Con `split` ogni formato produce **due** file:
+
+| File | Contenuto | A chi |
+|---|---|---|
+| `...-direzione.pdf` | risultato, perimetro, elementi analizzati, cosa fare | si manda al cliente |
+| `...-allegato-tecnico.pdf` | rilievi con indirizzi e versioni, inventario completo, piano di rimedio | si decide volta per volta |
+
+L'allegato contiene indirizzi, versioni dei prodotti e dettaglio dei rilievi:
+finche' le due parti erano un unico file, la scelta non esisteva. JSON e CSV non
+si dividono: sono un'unica rappresentazione dei dati.
+
+Il rapporto per la direzione include la tabella **degli elementi analizzati**,
+per tipo, con quelli di terze parti dichiarati a parte. Risponde alla domanda
+che precede ogni numero -- «che cosa avete guardato?» -- e la risposta non e'
+nei conteggi: un punteggio alto su tre nomi e lo stesso su duecento sono
+affermazioni molto diverse. Oltre dodici nomi per tipo si dichiara il totale.
+
 ### Configurare gli strumenti che ne hanno bisogno
 
 Sono quattro, e solo due dipendono da noi.
@@ -156,6 +182,21 @@ make up
 
 Accetta solo le variabili dell'elenco chiuso, le stesse che l'interfaccia puo'
 scrivere: e' la stessa difesa, nell'altra direzione.
+
+#### `theHarvester non raggiungibile: Name or service not known`
+
+E' diverso da «connection refused», e il rimedio e' un altro. Qui il nome
+`theharvester` non si risolve: il contenitore **non esiste**, quindi Docker non
+ha un indirizzo da dargli. Il profilo `osint` non e' attivo, o il servizio non
+e' partito.
+
+```bash
+docker compose ps theharvester     # c'e'?
+make up-osint                      # lo avvia
+```
+
+`connection refused` sarebbe il contrario: il contenitore c'e' e nessuno
+ascolta su quella porta.
 
 #### Le fonti pubbliche cedono, e non e' un guasto della piattaforma
 

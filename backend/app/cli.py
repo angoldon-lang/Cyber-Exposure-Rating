@@ -382,7 +382,7 @@ def demo_scan(company_slug: str | None = None, profile: str = "verified_standard
 
 
 def report_demo(company: str | None = None, cartella: str = "sample-output",
-                formati: list[str] | None = None) -> dict:
+                formati: list[str] | None = None, separati: bool = False) -> dict:
     """Genera i report di una scansione dimostrativa e li scrive su disco.
 
     `demo-scan` calcolava il punteggio e si fermava li': per vedere un report
@@ -430,7 +430,7 @@ def report_demo(company: str | None = None, cartella: str = "sample-output",
         contesto = build_report_context(db, scan)
         azienda = scan.company.legal_name
 
-    for documento in generate(contesto, formati):
+    for documento in generate(contesto, formati, separati=separati):
         percorso = destinazione / documento.filename
         percorso.write_bytes(documento.content)
         prodotti.append({"formato": documento.format, "file": str(percorso)})
@@ -809,6 +809,10 @@ def main() -> None:
     report_parser.add_argument("--format", dest="formats", action="append",
                                choices=["pdf", "html", "docx", "json", "csv"],
                                help="ripetibile; senza, produce pdf e html")
+    report_parser.add_argument(
+        "--separati", action="store_true",
+        help="due documenti per formato invece di uno unito: il rapporto per la "
+             "direzione e l'allegato tecnico")
     run_parser = subparsers.add_parser(
         "run-queued", help="esegue subito le scansioni in coda, senza Celery")
     run_parser.add_argument("--scan-id", default=None, help="una sola scansione")
@@ -853,7 +857,8 @@ def main() -> None:
     elif args.command == "demo-scan":
         print(json.dumps(demo_scan(args.company, args.profile), indent=2, ensure_ascii=False))
     elif args.command == "report-demo":
-        esito = report_demo(company=args.company, cartella=args.out, formati=args.formats)
+        esito = report_demo(company=args.company, cartella=args.out,
+                            formati=args.formats, separati=args.separati)
         print(json.dumps(esito, indent=2, ensure_ascii=False))
         if esito.get("status") != "ok":
             sys.exit(1)

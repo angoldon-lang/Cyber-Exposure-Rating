@@ -106,3 +106,49 @@ def test_i_nomi_che_non_risolvono_non_vengono_provati(adapter_context, monkeypat
 
 def _run_command_vietato(*args, **kwargs):  # noqa: ANN002, ANN003
     raise AssertionError("testssl non deve essere eseguito su un nome inesistente")
+
+
+# ---------------------------------------------------------------------------
+# Uscita 245: una domanda a cui nessuno puo' rispondere
+# ---------------------------------------------------------------------------
+def test_testssl_viene_eseguito_in_modo_non_interattivo():
+    """`uscito con codice 245` e' ERR_CLUELESS, e nel sorgente di testssl 3.2
+    tutti i percorsi che lo producono sono richieste di conferma
+    all'operatore: host che non parla TLS sulla 443, host con solo SSLv2,
+    host con solo SSLv3. testssl stampa «Type "yes" to proceed» e legge la
+    risposta da stdin; senza terminale la lettura non riesce e il programma
+    esce. Nel registro dell'utente: due host su due, codice 245.
+
+    `--warnings` era fra le opzioni ammesse e non veniva passata mai.
+    """
+    from pathlib import Path
+
+    sorgente = (Path(__file__).resolve().parents[1] / "adapters"
+                / "testssl_adapter.py").read_text(encoding="utf-8")
+
+    assert '"--warnings", "off"' in sorgente, (
+        "senza questa opzione testssl si ferma a chiedere conferma e esce 245")
+
+
+def test_e_off_e_non_batch():
+    """Nel sorgente di testssl `ignore_no_or_lame` restituisce 0 con `off` e
+    **1** con `batch`, e quell'1 porta allo stesso exit 245: `batch` sembra la
+    scelta giusta per un'esecuzione automatica e non risolve niente.
+    """
+    from pathlib import Path
+
+    sorgente = (Path(__file__).resolve().parents[1] / "adapters"
+                / "testssl_adapter.py").read_text(encoding="utf-8")
+
+    assert '"--warnings", "batch"' not in sorgente
+    assert "ERR_CLUELESS" in sorgente, (
+        "il motivo non e' scritto accanto all'opzione: il prossimo che la vede "
+        "la cambiera' in `batch`, che e' la scelta che sembra giusta")
+
+
+def test_l_opzione_e_fra_quelle_ammesse_dal_runner():
+    """Il runner rifiuta le opzioni non dichiarate: passarla senza ammetterla
+    farebbe fallire ogni esecuzione."""
+    from adapters.testssl_adapter import ALLOWED_FLAGS
+
+    assert "--warnings" in ALLOWED_FLAGS
