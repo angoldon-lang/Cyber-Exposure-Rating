@@ -22,11 +22,20 @@ require-env:
 		&& echo "  make env        crea .env generando i segreti" \
 		&& echo "  make env FORCE=1  lo rigenera (se il volume postgres esiste gia'," \
 		&& echo "                    va rimosso: docker compose down -v)" && exit 1)
-	@grep -qE '^POSTGRES_PASSWORD=.+' .env && grep -qE '^JWT_SECRET_KEY=.+' .env \
-		|| (echo "In .env mancano POSTGRES_PASSWORD e/o JWT_SECRET_KEY." \
-		    && echo "  make env FORCE=1   li rigenera" && exit 1)
+	@# Dire «e/o» significa non aver guardato. E soprattutto: proporre
+	@# `make env FORCE=1` qui e' il consiglio peggiore possibile, perche'
+	@# rigenera POSTGRES_PASSWORD -- e il volume del database e' stato
+	@# inizializzato con quella vecchia. Chi lo esegue si ritrova Postgres
+	@# che rifiuta la connessione, e l'unica via documentata era `down -v`,
+	@# cioe' cancellare i dati. Finche' i contenitori girano, i segreti sono
+	@# ancora nel loro ambiente e si possono rimettere.
+	@bash scripts/controlla_segreti.sh
 
 # --------------------------- configurazione --------------------------------
+.PHONY: env-recupera
+env-recupera: ## Rimette in `.env` i segreti leggendoli dai contenitori accesi
+	@bash scripts/recupera_segreti.sh
+
 .PHONY: env
 env: ## Crea `.env` da `.env.example` generando i segreti obbligatori
 	python3 scripts/generate_env.py $(if $(FORCE),--force,) $(if $(KEYCLOAK),--with-keycloak,)

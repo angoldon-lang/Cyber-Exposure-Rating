@@ -268,6 +268,34 @@ Nell'ordine in cui conviene guardare:
    privato, e per chi installa sono la stessa cosa. E' il controllo che va
    eseguito prima di un aggiornamento, non dopo che `make up` si e' fermato.
 
+### `In .env manca POSTGRES_PASSWORD` con lo stack che gira
+
+**Non eseguire `make env FORCE=1`.** Rigenera `POSTGRES_PASSWORD`, e il volume
+del database e' stato inizializzato con quella attuale: dopo, Postgres rifiuta
+la connessione e l'unico rimedio sarebbe cancellare i dati. Fino alla 0.19.0 il
+messaggio proponeva esattamente quello, nel momento in cui e' piu' dannoso.
+
+Finche' i contenitori girano, i segreti sono ancora nel loro ambiente:
+
+```bash
+make env-recupera     # li rilegge dai contenitori e li rimette in .env
+make up
+```
+
+Fa una copia in `.env.prima-del-recupero`, non stampa i valori, e usa `docker`
+e non `docker compose` -- che senza quella variabile non si carica nemmeno.
+
+Cosa si recupera e cosa no:
+
+| Segreto | Recuperabile | Se non lo e' |
+|---|---|---|
+| `POSTGRES_PASSWORD` | dal contenitore `postgres` | **non rigenerabile**: e' quella con cui il volume e' stato creato |
+| `JWT_SECRET_KEY` | dal contenitore `api` | rigenerabile: invalida le sessioni aperte e le chiavi salvate da Personalizzazione -> Strumenti, che si reimpostano |
+| `EVIDENCE_ENCRYPTION_KEY` | dal contenitore `api` (dalla 0.19.0) | rigenerabile, ma le evidenze cifrate con la precedente non si rileggono |
+
+`make up` dice ora quale dei due manca, e distingue una riga assente da una
+presente e vuota.
+
 ### Nessuno riesce ad accedere, o non si sa quali utenze esistano
 
 ```bash

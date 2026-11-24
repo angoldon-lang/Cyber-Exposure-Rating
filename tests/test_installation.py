@@ -731,3 +731,119 @@ def test_il_compose_non_passa_variabili_che_nessuno_legge():
                 and not nome.startswith(("DATABASE", "REDIS", "CELERY", "OIDC"))}
 
     assert not sospette, f"variabili passate ma non configurabili: {sorted(sospette)}"
+
+
+# ---------------------------------------------------------------------------
+# Tutto `.env` deve arrivare ai contenitori
+# ---------------------------------------------------------------------------
+def _legge_il_file_env(definizione: dict) -> bool:
+    """Vero se il servizio carica `.env`, in una delle due forme ammesse da
+    Compose: la stringa, o la mappa con `required`."""
+    for voce in definizione.get("env_file") or []:
+        if voce == ".env" or (isinstance(voce, dict) and voce.get("path") == ".env"):
+            return True
+    return False
+
+
+def _servizi_applicativi() -> dict:
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+    return {nome: definizione for nome, definizione in compose["services"].items()
+            if nome in {"api", "worker", "beat"}}
+
+
+def test_i_contenitori_applicativi_leggono_tutto_il_file():
+    """Diciassette impostazioni che l'applicazione legge erano in
+    `.env.example` e non venivano passate ad alcun contenitore: chi le
+    modificava non otteneva nulla, e fra queste c'era
+    `EVIDENCE_ENCRYPTION_KEY` -- la cifratura delle evidenze a riposo era
+    spenta e non attivabile.
+
+    Elencarle una per una in `x-common-env` significa dimenticarne una ogni
+    volta che se ne aggiunge una: e' accaduto con THEHARVESTER_URL e con
+    queste diciassette. `env_file` le passa tutte.
+    """
+    senza = [nome for nome, definizione in _servizi_applicativi().items()
+             if not _legge_il_file_env(definizione)]
+
+    assert not senza, (
+        f"servizi che non leggono `.env`: {senza}. Le impostazioni scritte la' "
+        "non arriverebbero, e nessun errore lo direbbe.")
+
+
+def test_nessuna_impostazione_dell_esempio_resta_fuori():
+    """Il controllo diretto: ogni variabile di `.env.example` che
+    l'applicazione legge deve poter arrivare a destinazione."""
+    from app.core.config import Settings
+
+    campi = set(Settings.model_fields)
+    lette_dall_app = [nome for nome in _entries() if nome.lower() in campi]
+    assert lette_dall_app, "nessuna impostazione riconosciuta: il test non guarda nulla"
+
+    # Con `env_file` arrivano tutte: il test verifica che quel meccanismo
+    # ci sia, perche' senza tornerebbe necessario l'elenco a mano.
+    for nome, definizione in _servizi_applicativi().items():
+        assert _legge_il_file_env(definizione), nome
+
+
+@pytest.mark.parametrize("variabile,valore", [
+    ("ALLOW_PRIVATE_IP_SCANNING", "false"),
+    ("CONFIG_DIR", "/srv/config"),
+])
+def test_i_valori_imposti_non_si_possono_sovrascrivere_da_env(variabile, valore):
+    """`env_file` passa tutto, quindi le protezioni imposte nel compose devono
+    restare non sovrascrivibili. Compose da' la precedenza a `environment`, e
+    questo e' il test che la presidia: scrivere
+    `ALLOW_PRIVATE_IP_SCANNING=true` in `.env` non deve abilitare la scansione
+    delle reti private.
+    """
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+    comune = compose["x-common-env"]
+
+    assert str(comune[variabile]) == valore, (
+        f"{variabile} non e' piu' imposta nel compose: diventerebbe "
+        "sovrascrivibile da .env")
+    assert "${" not in str(comune[variabile]), (
+        f"{variabile} prende il valore da .env: non e' piu' una protezione")
+
+
+def test_il_rimedio_proposto_non_distrugge_il_database():
+    """Il messaggio diceva «mancano POSTGRES_PASSWORD e/o JWT_SECRET_KEY» --
+    senza dire quale -- e proponeva `make env FORCE=1`, che rigenera la
+    password con cui il volume del database e' stato inizializzato. Chi lo
+    eseguiva si ritrovava Postgres che rifiuta la connessione, e l'unica via
+    documentata era cancellare i dati.
+    """
+    controllo = (REPO_ROOT / "scripts" / "controlla_segreti.sh").read_text(encoding="utf-8")
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+
+    assert "riga assente" in controllo and "riga presente ma vuota" in controllo, (
+        "non distingue una riga mancante da una vuota: sono due situazioni diverse")
+    assert "postgres-data" in controllo, (
+        "non guarda se esiste un volume del database, che e' cio' che rende "
+        "pericoloso rigenerare i segreti")
+    assert "NON eseguire" in controllo
+    assert "env-recupera" in makefile
+    assert "scripts/recupera_segreti.sh" in makefile
+
+
+def test_il_recupero_non_stampa_i_segreti():
+    """Finirebbero nei log del terminale, e da la' nelle segnalazioni."""
+    recupero = (REPO_ROOT / "scripts" / "recupera_segreti.sh").read_text(encoding="utf-8")
+
+    # Il valore letto sta in `$valore`, e puo' finire soltanto nel file: una
+    # riga che lo scrive con una redirezione va bene, una che lo stampa sul
+    # terminale no -- da la' entrerebbe nei log e nelle segnalazioni.
+    righe_che_stampano = [
+        r.strip() for r in recupero.splitlines()
+        if ("echo" in r or "printf" in r) and "$valore" in r
+        and ">" not in r]
+
+    assert not righe_che_stampano, f"il segreto viene stampato: {righe_che_stampano}"
+    assert "cp .env" in recupero, "nessuna copia di sicurezza prima di riscrivere"
+    assert "docker exec" in recupero, (
+        "deve leggere dal contenitore: e' l'unico posto dove il segreto esiste "
+        "ancora quando `.env` lo ha perso")

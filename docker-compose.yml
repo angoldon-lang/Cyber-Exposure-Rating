@@ -83,6 +83,25 @@ services:
     logging: *logging
 
   api:
+    # Tutto `.env` arriva al contenitore, non solo le variabili elencate in
+    # `x-common-env`. Diciassette impostazioni che l'applicazione legge erano
+    # in `.env.example` e non venivano passate: chi le modificava non otteneva
+    # nulla, e fra queste c'era EVIDENCE_ENCRYPTION_KEY -- la cifratura delle
+    # evidenze a riposo era quindi spenta e non attivabile. Elencarle a mano
+    # significa dimenticarne una ogni volta che se ne aggiunge una.
+    #
+    # Le voci di `environment` hanno la precedenza su `env_file`, quindi i
+    # valori imposti qui (ALLOW_PRIVATE_IP_SCANNING, i percorsi, gli indirizzi
+    # dei servizi interni) restano quelli e non si possono sovrascrivere da
+    # `.env`.
+    env_file:
+      - path: .env
+        # `required: false` perche' il file non deve essere obbligatorio per
+        # LEGGERE il progetto: senza, `docker compose config` -- la
+        # validazione, i test, la diagnosi -- non si carica piu' dove `.env`
+        # non c'e'. Che serva per AVVIARE lo stack lo controlla `require-env`,
+        # che sa anche dire quale segreto manca e come rimetterlo.
+        required: false
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -110,6 +129,25 @@ services:
     logging: *logging
 
   worker:
+    # Tutto `.env` arriva al contenitore, non solo le variabili elencate in
+    # `x-common-env`. Diciassette impostazioni che l'applicazione legge erano
+    # in `.env.example` e non venivano passate: chi le modificava non otteneva
+    # nulla, e fra queste c'era EVIDENCE_ENCRYPTION_KEY -- la cifratura delle
+    # evidenze a riposo era quindi spenta e non attivabile. Elencarle a mano
+    # significa dimenticarne una ogni volta che se ne aggiunge una.
+    #
+    # Le voci di `environment` hanno la precedenza su `env_file`, quindi i
+    # valori imposti qui (ALLOW_PRIVATE_IP_SCANNING, i percorsi, gli indirizzi
+    # dei servizi interni) restano quelli e non si possono sovrascrivere da
+    # `.env`.
+    env_file:
+      - path: .env
+        # `required: false` perche' il file non deve essere obbligatorio per
+        # LEGGERE il progetto: senza, `docker compose config` -- la
+        # validazione, i test, la diagnosi -- non si carica piu' dove `.env`
+        # non c'e'. Che serva per AVVIARE lo stack lo controlla `require-env`,
+        # che sa anche dire quale segreto manca e come rimetterlo.
+        required: false
     build:
       context: .
       dockerfile: workers/Dockerfile
@@ -158,6 +196,25 @@ services:
     logging: *logging
 
   beat:
+    # Tutto `.env` arriva al contenitore, non solo le variabili elencate in
+    # `x-common-env`. Diciassette impostazioni che l'applicazione legge erano
+    # in `.env.example` e non venivano passate: chi le modificava non otteneva
+    # nulla, e fra queste c'era EVIDENCE_ENCRYPTION_KEY -- la cifratura delle
+    # evidenze a riposo era quindi spenta e non attivabile. Elencarle a mano
+    # significa dimenticarne una ogni volta che se ne aggiunge una.
+    #
+    # Le voci di `environment` hanno la precedenza su `env_file`, quindi i
+    # valori imposti qui (ALLOW_PRIVATE_IP_SCANNING, i percorsi, gli indirizzi
+    # dei servizi interni) restano quelli e non si possono sovrascrivere da
+    # `.env`.
+    env_file:
+      - path: .env
+        # `required: false` perche' il file non deve essere obbligatorio per
+        # LEGGERE il progetto: senza, `docker compose config` -- la
+        # validazione, i test, la diagnosi -- non si carica piu' dove `.env`
+        # non c'e'. Che serva per AVVIARE lo stack lo controlla `require-env`,
+        # che sa anche dire quale segreto manca e come rimetterlo.
+        required: false
     build:
       context: .
       dockerfile: workers/Dockerfile
