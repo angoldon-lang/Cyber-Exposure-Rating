@@ -847,3 +847,129 @@ def test_il_recupero_non_stampa_i_segreti():
     assert "docker exec" in recupero, (
         "deve leggere dal contenitore: e' l'unico posto dove il segreto esiste "
         "ancora quando `.env` lo ha perso")
+
+
+# ---------------------------------------------------------------------------
+# Un `.env` vecchio non si accorge delle variabili nuove
+# ---------------------------------------------------------------------------
+def _integra(tmp_path, contenuto: str, *, dry_run: bool = False):
+    import subprocess
+    import sys
+
+    env = tmp_path / ".env"
+    env.write_text(contenuto, encoding="utf-8")
+    argomenti = [sys.executable, str(REPO_ROOT / "scripts" / "integra_env.py"),
+                 "--env", str(env)]
+    if dry_run:
+        argomenti.append("--dry-run")
+    esito = subprocess.run(argomenti, capture_output=True, text=True,  # noqa: S603
+                           timeout=60, check=False)
+    return env, esito
+
+
+def test_le_variabili_nuove_vengono_aggiunte(tmp_path):
+    """Un `.env` nasce come copia dell'esempio e poi non cambia piu'. Ogni
+    variabile aggiunta dopo -- COMPOSE_PROFILES, THEHARVESTER_URL -- resta
+    fuori dal file di chi ha installato prima, e nessuno lo dice: lo strumento
+    risulta non configurato, si corregge il file, non succede niente, e la
+    causa e' che la riga non c'e' affatto.
+    """
+    env, esito = _integra(tmp_path, "POSTGRES_PASSWORD=x\nJWT_SECRET_KEY=y\n")
+
+    assert esito.returncode == 0, esito.stderr
+    dopo = env.read_text(encoding="utf-8")
+    assert "THEHARVESTER_URL=" in dopo
+    assert "COMPOSE_PROFILES=" in dopo
+
+
+def test_i_valori_esistenti_non_vengono_toccati(tmp_path):
+    """E' l'unica ragione per cui questo comando esiste invece di
+    `make env FORCE=1`: quello rigenererebbe POSTGRES_PASSWORD, e con un
+    volume postgres esistente significa non aprire piu' quel database."""
+    prima = ("POSTGRES_PASSWORD=segreto-che-apre-il-database\n"
+             "JWT_SECRET_KEY=y\nAPI_PORT=8100\nFRONTEND_PORT=8190\n")
+    env, _ = _integra(tmp_path, prima)
+
+    dopo = env.read_text(encoding="utf-8")
+
+    assert "POSTGRES_PASSWORD=segreto-che-apre-il-database" in dopo
+    assert "API_PORT=8100" in dopo, "una porta personalizzata e' stata sovrascritta"
+    assert "FRONTEND_PORT=8190" in dopo
+    assert dopo.count("POSTGRES_PASSWORD=") == 1, "riga duplicata"
+
+
+def test_i_segreti_non_vengono_mai_aggiunti_vuoti(tmp_path):
+    """Una riga `POSTGRES_PASSWORD=` aggiunta in coda sovrascriverebbe il
+    valore in vigore scritto piu' in alto: Compose legge l'ultima."""
+    env, _ = _integra(tmp_path, "POSTGRES_PASSWORD=x\n")
+
+    dopo = env.read_text(encoding="utf-8")
+
+    assert "JWT_SECRET_KEY=" not in dopo, (
+        "un segreto e' stato aggiunto vuoto: il valore in vigore verrebbe perso")
+    assert dopo.count("POSTGRES_PASSWORD=") == 1
+
+
+def test_una_copia_viene_fatta_prima_di_scrivere(tmp_path):
+    env, _ = _integra(tmp_path, "POSTGRES_PASSWORD=x\nJWT_SECRET_KEY=y\n")
+
+    copie = list(tmp_path.glob(".env.*.bak"))
+
+    assert copie, "nessuna copia di sicurezza"
+    assert "POSTGRES_PASSWORD=x" in copie[0].read_text(encoding="utf-8")
+
+
+def test_dry_run_non_scrive(tmp_path):
+    prima = "POSTGRES_PASSWORD=x\nJWT_SECRET_KEY=y\n"
+    env, esito = _integra(tmp_path, prima, dry_run=True)
+
+    assert env.read_text(encoding="utf-8") == prima
+    assert "THEHARVESTER_URL" in esito.stdout, "non dice cosa aggiungerebbe"
+
+
+def test_un_indirizzo_rimasto_indietro_viene_segnalato(tmp_path):
+    """`RANSOMWARE_LIVE_URL` e' passato a `/v2` settimane fa: un `.env` vecchio
+    ha ancora il precedente, la variabile c'e' quindi non viene aggiunta, e
+    l'endpoint risponde 404. Non si corregge -- non e' lecito sovrascrivere una
+    scelta di chi installa -- ma va detto."""
+    _env, esito = _integra(
+        tmp_path,
+        "POSTGRES_PASSWORD=x\nJWT_SECRET_KEY=y\n"
+        "RANSOMWARE_LIVE_URL=https://api.ransomware.live\n",
+        dry_run=True)
+
+    assert "RANSOMWARE_LIVE_URL" in esito.stdout
+    assert "/v2" in esito.stdout
+
+
+def test_il_generatore_fa_una_copia_prima_di_sovrascrivere(tmp_path):
+    """`--force` rigenera i segreti, e POSTGRES_PASSWORD e' quella con cui il
+    volume del database e' stato inizializzato. Senza copia, il valore
+    precedente non esisteva piu' in nessun file: l'unico modo di riaprire quel
+    database era leggerlo dal contenitore, se ancora acceso."""
+    import subprocess
+    import sys
+
+    env = tmp_path / ".env"
+    env.write_text("POSTGRES_PASSWORD=quella-che-apre-i-dati\n", encoding="utf-8")
+
+    subprocess.run(  # noqa: S603
+        [sys.executable, str(REPO_ROOT / "scripts" / "generate_env.py"),
+         "--force", "--output", str(env)],
+        capture_output=True, text=True, timeout=60, check=True)
+
+    copie = list(tmp_path.glob(".env.*.bak"))
+    assert copie, "nessuna copia: la password precedente sarebbe perduta"
+    assert "quella-che-apre-i-dati" in copie[0].read_text(encoding="utf-8")
+
+
+def test_il_recupero_corregge_anche_un_valore_diverso():
+    """La prima versione saltava una variabile «presente», quindi dopo un
+    `make env FORCE=1` non correggeva niente: il file aveva il segreto nuovo e
+    i dati rispondevano al vecchio. Un valore sbagliato e' peggio di uno
+    assente, perche' sembra a posto."""
+    recupero = (REPO_ROOT / "scripts" / "recupera_segreti.sh").read_text(encoding="utf-8")
+
+    assert "DIVERSO da quello del contenitore" in recupero
+    assert 'gia\' presente in .env' not in recupero, (
+        "torna a saltare cio' che e' presente, senza confrontarlo")

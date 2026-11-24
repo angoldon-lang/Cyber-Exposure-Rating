@@ -52,24 +52,46 @@ echo "Copia di sicurezza: .env.prima-del-recupero"
 echo
 
 recuperati=0
+divergenti=0
 mancanti=()
 for voce in "${SEGRETI[@]}"; do
   nome=${voce%%|*}; servizio=${voce#*|}
-  if [ -n "$(valore_in_env "$nome")" ]; then
-    printf "  %-28s gia' presente in .env\n" "$nome"
-    continue
-  fi
+  attuale=$(valore_in_env "$nome")
   cid=$(contenitore_di "$servizio")
   if [ -z "$cid" ]; then
-    printf "  %-28s il contenitore '%s' non e' in esecuzione\n" "$nome" "$servizio"
-    mancanti+=("$nome")
+    if [ -n "$attuale" ]; then
+      printf "  %-28s presente in .env; contenitore '%s' spento, non confrontabile\n" \
+        "$nome" "$servizio"
+    else
+      printf "  %-28s il contenitore '%s' non e' in esecuzione\n" "$nome" "$servizio"
+      mancanti+=("$nome")
+    fi
     continue
   fi
   valore=$(docker exec "$cid" printenv "$nome" 2>/dev/null | tr -d '\r\n')
   if [ -z "$valore" ]; then
-    printf "  %-28s non presente nell'ambiente di '%s'\n" "$nome" "$servizio"
-    mancanti+=("$nome")
+    if [ -z "$attuale" ]; then
+      printf "  %-28s non presente nell'ambiente di '%s'\n" "$nome" "$servizio"
+      mancanti+=("$nome")
+    else
+      printf "  %-28s presente in .env, non passato a '%s'\n" "$nome" "$servizio"
+    fi
     continue
+  fi
+  # Presente e UGUALE: niente da fare.
+  if [ "$attuale" = "$valore" ]; then
+    printf "  %-28s coincide con il contenitore\n" "$nome"
+    continue
+  fi
+  # Presente e DIVERSO. E' il caso che `make env FORCE=1` produce: il file ha
+  # un segreto nuovo, il contenitore quello con cui i dati sono stati creati.
+  # Saltarlo perche' «presente» era il difetto della prima versione di questo
+  # script: un valore sbagliato e' peggio di uno assente, perche' sembra a
+  # posto. Vince quello del contenitore, che e' quello che apre il database.
+  if [ -n "$attuale" ]; then
+    printf "  %-28s DIVERSO da quello del contenitore '%s'\n" "$nome" "$servizio"
+    printf "  %-28s   -> rimesso quello del contenitore (apre i dati esistenti)\n" ""
+    divergenti=$((divergenti + 1))
   fi
   # La riga esiste vuota: si sostituisce. Non esiste: si aggiunge.
   if grep -qE "^$nome=" .env; then
@@ -90,6 +112,12 @@ chmod 600 .env 2>/dev/null || true
 echo
 if [ "$recuperati" -gt 0 ]; then
   echo "$recuperati segreti rimessi in .env. Ora: make up"
+fi
+if [ "$divergenti" -gt 0 ]; then
+  echo
+  echo "$divergenti segreti erano DIVERSI da quelli dei contenitori. Succede dopo"
+  echo "un \`make env FORCE=1\`: il file aveva segreti nuovi, i dati esistenti"
+  echo "rispondono ai vecchi. Ora il file ha quelli che aprono i dati."
 fi
 if [ "${#mancanti[@]}" -gt 0 ]; then
   echo "Non recuperabili: ${mancanti[*]}"

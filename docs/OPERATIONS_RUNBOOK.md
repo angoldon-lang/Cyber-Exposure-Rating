@@ -268,6 +268,23 @@ Nell'ordine in cui conviene guardare:
    privato, e per chi installa sono la stessa cosa. E' il controllo che va
    eseguito prima di un aggiornamento, non dopo che `make up` si e' fermato.
 
+### Un `.env` vecchio: le variabili nuove non ci sono
+
+Un `.env` nasce come copia di `.env.example` e poi non cambia piu'. Ogni
+variabile aggiunta dopo resta fuori dal file di chi ha installato prima, e
+nessuno lo dice: lo strumento risulta «non configurato», si corregge il file,
+non succede niente -- perche' la riga non c'e' affatto.
+
+```bash
+make env-integra DRY=1    # elenca cosa manca, senza scrivere
+make env-integra          # le aggiunge, con copia di sicurezza
+```
+
+Aggiunge solo: **nessun valore esistente viene toccato**, segreti compresi. E'
+la differenza con `make env FORCE=1`, che li rigenera. Segnala anche gli
+indirizzi rimasti indietro (`RANSOMWARE_LIVE_URL` e' passato a `/v2`) senza
+correggerli, perche' quel valore e' una scelta di chi installa.
+
 ### `In .env manca POSTGRES_PASSWORD` con lo stack che gira
 
 **Non eseguire `make env FORCE=1`.** Rigenera `POSTGRES_PASSWORD`, e il volume

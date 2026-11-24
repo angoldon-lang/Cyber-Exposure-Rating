@@ -32,6 +32,11 @@ require-env:
 	@bash scripts/controlla_segreti.sh
 
 # --------------------------- configurazione --------------------------------
+.PHONY: env-integra
+env-integra: ## Aggiunge a `.env` le variabili nuove di `.env.example`, senza toccare i valori
+	@$(PY) scripts/integra_env.py $(if $(DRY),--dry-run,) \
+		|| python3 scripts/integra_env.py $(if $(DRY),--dry-run,)
+
 .PHONY: env-recupera
 env-recupera: ## Rimette in `.env` i segreti leggendoli dai contenitori accesi
 	@bash scripts/recupera_segreti.sh

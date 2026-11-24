@@ -14,7 +14,9 @@ import argparse
 import base64
 import os
 import secrets
+import shutil
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +50,17 @@ def genera(esempio: Path, destinazione: Path, *, con_keycloak: bool) -> list[str
     if mancanti:
         raise SystemExit(f"variabili assenti da {esempio.name}: {sorted(mancanti)}")
 
+    # Copia prima di sovrascrivere. `--force` rigenera i segreti, e
+    # POSTGRES_PASSWORD e' quella con cui il volume del database e' stato
+    # inizializzato: chi la perde non apre piu' quel database. Senza questa
+    # copia il valore precedente non esisteva piu' in nessun file.
+    if destinazione.exists():
+        salvataggio = destinazione.with_name(
+            f"{destinazione.name}.{datetime.now(UTC):%Y%m%d-%H%M%S}.bak")
+        shutil.copy2(destinazione, salvataggio)
+        salvataggio.chmod(0o600)
+        print(f"Copia del precedente: {salvataggio}", file=sys.stderr)
+
     destinazione.write_text("\n".join(righe) + "\n", encoding="utf-8")
     # Il file contiene segreti: leggibile solo dal proprietario.
     destinazione.chmod(0o600)
@@ -59,7 +72,10 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=REPO_ROOT / ".env")
     parser.add_argument("--example", type=Path, default=REPO_ROOT / ".env.example")
     parser.add_argument("--force", action="store_true",
-                        help="sovrascrive un `.env` esistente (i segreti cambiano)")
+                        help="sovrascrive un `.env` esistente. I segreti CAMBIANO: "
+                             "con un volume postgres esistente, la nuova "
+                             "POSTGRES_PASSWORD non apre quel database. Del file "
+                             "precedente viene fatta una copia .bak")
     parser.add_argument("--with-keycloak", action="store_true",
                         help="valorizza anche KEYCLOAK_ADMIN_PASSWORD (profilo oidc)")
     args = parser.parse_args()
