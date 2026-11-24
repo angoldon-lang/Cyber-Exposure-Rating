@@ -38,6 +38,24 @@ def _valori_env(percorso: Path) -> dict[str, str]:
     return valori
 
 
+def _predefiniti_esempio() -> dict[str, str]:
+    """I valori predefiniti, letti da `.env.example`.
+
+    Funzione a se' e non `_valori_env(.env.example)` per una ragione
+    pratica: la prova sostituisce `_valori_env` per decidere cosa contiene
+    il `.env` dell'operatore, e sostituendo quella sostituirebbe anche i
+    predefiniti -- cioe' proprio cio' che l'avviso deve dire.
+    """
+    percorso = RADICE / ".env.example"
+    valori: dict[str, str] = {}
+    if not percorso.is_file():
+        return valori
+    for riga in percorso.read_text(encoding="utf-8").splitlines():
+        if (trovata := ASSEGNAZIONE.match(riga)):
+            valori[trovata["chiave"]] = trovata["valore"].strip()
+    return valori
+
+
 def variabili_di_indirizzo() -> dict[str, str]:
     """Strumento -> variabile che ne porta l'indirizzo, letta dal sorgente.
 
@@ -70,6 +88,7 @@ def main() -> int:
     catalogo = yaml.safe_load(
         (RADICE / "config" / "tool_profiles.yaml").read_text(encoding="utf-8"))["tools"]
     indirizzo_di = variabili_di_indirizzo()
+    predefiniti = _predefiniti_esempio()
 
     mancanti: list[tuple[str, str, str]] = []  # (servizio, variabile, suggerimento)
     for chiave, voce in catalogo.items():
@@ -78,8 +97,17 @@ def main() -> int:
             continue
         variabile = indirizzo_di.get(chiave)
         if variabile and not env.get(variabile):
-            porta = {"spiderfoot": 5001, "theharvester": 5000, "zap": 8090}.get(servizio, 80)
-            mancanti.append((servizio, variabile, f"{variabile}=http://{servizio}:{porta}"))
+            # L'indirizzo da suggerire si legge da `.env.example`, che e'
+            # il valore predefinito autentico. C'era qui una tabella di
+            # porte scritta a mano, ed e' invecchiata: suggeriva ancora la
+            # 5000 per theHarvester, che ascolta sulla 8000. Un
+            # suggerimento sbagliato e' peggio di nessun suggerimento --
+            # chi lo segue ottiene «non raggiungibile» e cerca il guasto
+            # dove non e'.
+            suggerimento = predefiniti.get(variabile)
+            if not suggerimento:
+                continue
+            mancanti.append((servizio, variabile, f"{variabile}={suggerimento}"))
 
     if not mancanti:
         return 0

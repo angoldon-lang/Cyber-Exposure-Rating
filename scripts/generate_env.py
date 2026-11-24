@@ -23,10 +23,26 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Variabili da valorizzare -> generatore. La chiave Fernet richiede il formato
 # esatto atteso da `cryptography`: 32 byte casuali in base64 url-safe.
+# Chiavi che proteggono un servizio dello stack (ZAP, theHarvester). Le
+# sceglie chi installa, non un fornitore, e vanno tenute distinte dalle altre
+# per una ragione pratica: si possono generare anche in un `.env` che esiste
+# gia', perche' nessun dato conservato dipende dal loro valore -- il servizio
+# le rilegge a ogni avvio. POSTGRES_PASSWORD no (apre il volume del
+# database), EVIDENCE_ENCRYPTION_KEY no (decifra le prove raccolte).
+#
+# Generarle serve a non consegnare uno strumento che parte e rifiuta ogni
+# richiesta: senza chiave l'API di theHarvester risponde 503 e quella di ZAP
+# 401, e il guasto arriva a scansione iniziata.
+CHIAVI_DI_SERVIZIO = {
+    "THEHARVESTER_API_KEY": lambda: secrets.token_hex(24),
+    "ZAP_API_KEY": lambda: secrets.token_hex(24),
+}
+
 GENERATORI = {
     "POSTGRES_PASSWORD": lambda: secrets.token_urlsafe(32),
     "JWT_SECRET_KEY": lambda: secrets.token_urlsafe(48),
     "EVIDENCE_ENCRYPTION_KEY": lambda: base64.urlsafe_b64encode(os.urandom(32)).decode("ascii"),
+    **CHIAVI_DI_SERVIZIO,
 }
 SOLO_KEYCLOAK = {"KEYCLOAK_ADMIN_PASSWORD": lambda: secrets.token_urlsafe(24)}
 

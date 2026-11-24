@@ -144,7 +144,8 @@ def _connector_config() -> dict:
                                 # nella dimostrazione.
                                 "mock_enabled": settings.scan_mock_mode},
         "spiderfoot": {"base_url": impostate.get("SPIDERFOOT_URL")},
-        "theharvester": {"base_url": impostate.get("THEHARVESTER_URL")},
+        "theharvester": {"base_url": impostate.get("THEHARVESTER_URL"),
+                         "api_key": impostate.get("THEHARVESTER_API_KEY")},
         "zap": {"base_url": impostate.get("ZAP_URL"),
                 "api_key": impostate.get("ZAP_API_KEY")},
         "ransomware_live": {"base_url": settings.ransomware_live_url},

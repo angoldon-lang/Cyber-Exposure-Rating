@@ -103,6 +103,7 @@ class Settings(BaseSettings):
     # attributo assente significa «non configurato», qualunque cosa dica il
     # file.
     theharvester_url: str | None = None
+    theharvester_api_key: str | None = None
     zap_url: str | None = None
     zap_api_key: str | None = None
     ransomware_live_url: str = "https://api.ransomware.live/v2"

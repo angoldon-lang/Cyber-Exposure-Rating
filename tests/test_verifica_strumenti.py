@@ -43,7 +43,8 @@ def test_un_servizio_configurato_ma_spento_non_risulta_operativo(monkeypatch):
     e' precisamente l'errore che fa arrivare il guasto a scansione iniziata."""
     monkeypatch.setattr(
         "app.services.tool_config.valori_effettivi",
-        lambda db: {"THEHARVESTER_URL": "http://theharvester:5000"})
+        lambda db: {"THEHARVESTER_URL": "http://theharvester:8000",
+                    "THEHARVESTER_API_KEY": "chiave"})
     monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
                         lambda indirizzo, timeout=2.0: (False, "connessione rifiutata"))
 
@@ -72,7 +73,8 @@ def test_un_servizio_ospitato_in_proprio_viene_sondato_come_gli_altri(monkeypatc
 
 def test_un_servizio_che_risponde_e_operativo(monkeypatch):
     monkeypatch.setattr("app.services.tool_config.valori_effettivi",
-                        lambda db: {"THEHARVESTER_URL": "http://theharvester:5000"})
+                        lambda db: {"THEHARVESTER_URL": "http://theharvester:8000",
+                    "THEHARVESTER_API_KEY": "chiave"})
     monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
                         lambda indirizzo, timeout=2.0: (True, "risponde"))
 
@@ -85,7 +87,8 @@ def test_senza_rete_non_si_apre_nessuna_connessione(monkeypatch):
     «non raggiungibile», deve soltanto non guardare."""
     chiamate = []
     monkeypatch.setattr("app.services.tool_config.valori_effettivi",
-                        lambda db: {"THEHARVESTER_URL": "http://theharvester:5000"})
+                        lambda db: {"THEHARVESTER_URL": "http://theharvester:8000",
+                    "THEHARVESTER_API_KEY": "chiave"})
     monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
                         lambda *a, **k: chiamate.append(a) or (False, "x"))
 
@@ -102,7 +105,8 @@ def test_le_fonti_commerciali_non_vengono_sondate():
     """Un `connect` all'endpoint di un fornitore non dice se l'abbonamento sia
     valido, e quell'indirizzo non e' nostro da interrogare."""
     sondati = _indirizzi_da_sondare({
-        "THEHARVESTER_URL": "http://theharvester:5000",
+        "THEHARVESTER_URL": "http://theharvester:8000",
+        "THEHARVESTER_API_KEY": "chiave",
         "CREDENTIAL_EXPOSURE_URL": "https://fornitore.example/api",
     })
 
@@ -360,7 +364,8 @@ def test_un_indirizzo_di_loopback_dentro_un_contenitore_viene_spiegato(monkeypat
     sistema operativo risponde «connection refused», lo stesso messaggio che si
     otterrebbe se il servizio non fosse mai partito."""
     monkeypatch.setattr("app.services.tool_config.valori_effettivi",
-                        lambda db: {"THEHARVESTER_URL": "http://127.0.0.1:5000/"})
+                        lambda db: {"THEHARVESTER_URL": "http://127.0.0.1:8000/",
+                    "THEHARVESTER_API_KEY": "chiave"})
     monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
                         lambda indirizzo, timeout=2.0: (False, "connessione rifiutata"))
     monkeypatch.setattr("app.services.verifica_strumenti._dentro_un_contenitore",
@@ -378,7 +383,8 @@ def test_fuori_da_un_contenitore_il_loopback_non_viene_corretto(monkeypatch):
     127.0.0.1 e' giusto: dirlo sbagliato manderebbe a cercare un problema che
     non c'e'."""
     monkeypatch.setattr("app.services.tool_config.valori_effettivi",
-                        lambda db: {"THEHARVESTER_URL": "http://127.0.0.1:5000/"})
+                        lambda db: {"THEHARVESTER_URL": "http://127.0.0.1:8000/",
+                    "THEHARVESTER_API_KEY": "chiave"})
     monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
                         lambda indirizzo, timeout=2.0: (False, "connessione rifiutata"))
     monkeypatch.setattr("app.services.verifica_strumenti._dentro_un_contenitore",
@@ -447,3 +453,87 @@ def test_un_valore_che_arriva_dall_ambiente_non_manda_all_interfaccia(monkeypatc
     assert "PRECEDENZA" not in (esito.rimedio or "")
     assert "osint" in (esito.rimedio or ""), (
         "con il valore giusto nel file, il rimedio e' avviare il servizio")
+
+
+# --------------------------------------------------------------------------
+# Le chiavi che non si impostano dall'interfaccia
+# --------------------------------------------------------------------------
+def test_la_chiave_di_un_contenitore_nostro_non_manda_all_interfaccia(monkeypatch):
+    """ZAP e theHarvester vogliono una chiave che li protegge, e la leggono
+    dal PROPRIO ambiente all'avvio. L'interfaccia scrive nel database, che
+    quei contenitori non vedono: chi segue il rimedio «Personalizzazione ->
+    Strumenti» imposta la chiave da un lato solo, l'API risponde 401, e lo
+    strumento sembra guasto per una ragione che non ha niente a che vedere
+    con il bersaglio."""
+    monkeypatch.setattr(
+        "app.services.tool_config.valori_effettivi",
+        lambda db: {"THEHARVESTER_URL": "http://theharvester:8000"})
+    monkeypatch.setattr("app.services.verifica_strumenti.servizio_risponde",
+                        lambda indirizzo, timeout=2.0: (True, ""))
+
+    esito = _per_chiave(verifica_strumenti(None))["theharvester"]
+
+    assert esito.esito == DA_CONFIGURARE
+    assert "THEHARVESTER_API_KEY" in (esito.rimedio or "")
+    assert ".env" in (esito.rimedio or "")
+    assert "Personalizzazione" not in (esito.rimedio or ""), (
+        "manda a impostare la chiave dove il contenitore non la legge")
+
+
+def test_il_rimedio_distingue_i_tre_casi():
+    """Tre origini diverse, tre rimedi diversi: il fornitore per cio' che si
+    paga, l'interfaccia per cio' che usa solo il worker, `.env` per cio' che
+    legge un contenitore. Provato sulla funzione e non sul catalogo: un test
+    agganciato a quale strumento oggi ha una chiave gratuita si rompe quando
+    quella decisione cambia, ed e' gia' successo qui."""
+    from app.services.verifica_strumenti import _rimedio_variabile
+
+    a_pagamento = _rimedio_variabile(
+        [{"variable": "X_API_KEY", "free": False, "where": "https://esempio.test/chiavi"}],
+        True, {})
+    assert a_pagamento == "https://esempio.test/chiavi"
+
+    del_worker = _rimedio_variabile(
+        [{"variable": "X_API_KEY", "free": True, "shared_with_container": False}],
+        False, {})
+    assert "Personalizzazione" in del_worker
+
+    del_contenitore = _rimedio_variabile(
+        [{"variable": "X_API_KEY", "free": True, "shared_with_container": True}],
+        False, {"compose_service": "x", "compose_profile": "extra"})
+    assert ".env" in del_contenitore
+    assert "Personalizzazione" not in del_contenitore
+    assert "--profile extra up -d x" in del_contenitore, (
+        "il rimedio non dice come riavviare il servizio che deve leggerla")
+
+
+def test_ogni_chiave_dichiarata_condivisa_e_davvero_nell_ambiente_del_servizio():
+    """La dichiarazione nel codice e il compose devono dire la stessa cosa.
+    Se una variabile e' marcata «la legge il contenitore» e il compose non la
+    passa a quel contenitore, il rimedio suggerito e' falso: si mette la
+    chiave in `.env`, si riavvia, e il servizio continua a non averla."""
+    from app.services.tool_config import VARIABILI
+
+    compose = yaml.safe_load((RADICE / "docker-compose.yml").read_text(encoding="utf-8"))
+    catalogo = yaml.safe_load(
+        (RADICE / "config" / "tool_profiles.yaml").read_text(encoding="utf-8"))["tools"]
+
+    condivise = [v for v in VARIABILI if v.condivisa_col_contenitore]
+    assert condivise, "nessuna variabile marcata: il controllo non proverebbe nulla"
+
+    for variabile in condivise:
+        servizio = catalogo.get(variabile.strumento, {}).get("compose_service")
+        assert servizio, (
+            f"{variabile.nome} dice di essere letta da un contenitore, ma "
+            f"{variabile.strumento} non ne dichiara uno nel catalogo")
+        # Puo' arrivare nell'`environment` (theHarvester, che la legge dal
+        # proprio ambiente) o interpolata nel `command` (ZAP, che la vuole
+        # come `-config api.key=`). In entrambi i casi la fornisce `.env` al
+        # momento in cui il contenitore viene creato, che e' cio' che il
+        # rimedio promette; cio' che non deve essere e' assente.
+        definizione = compose["services"][servizio]
+        passata = yaml.safe_dump({k: definizione.get(k)
+                                  for k in ("environment", "command", "env_file")})
+        assert variabile.nome in passata, (
+            f"{variabile.nome} non arriva al servizio `{servizio}`: il rimedio "
+            "manderebbe a metterla in .env senza che il servizio la veda")

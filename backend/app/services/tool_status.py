@@ -31,6 +31,9 @@ class RequisitoStrumento:
     # (campo mascherato, mai restituito dall'API).
     etichetta: str | None = None
     segreto: bool = False
+    # Chiave di un contenitore nostro: il rimedio e' `.env` piu' riavvio, non
+    # l'interfaccia (vedere tool_config.Variabile).
+    condivisa_col_contenitore: bool = False
 
 
 @dataclass
@@ -61,7 +64,8 @@ class StatoStrumento:
                 {"variable": r.variabile, "present": r.valore_presente,
                  "free": r.gratuito, "where": r.dove, "note": r.nota,
                  "label": r.etichetta, "secret": r.segreto,
-                 "source": self.origine.get(r.variabile or "")}
+                 "source": self.origine.get(r.variabile or ""),
+                 "shared_with_container": r.condivisa_col_contenitore}
                 for r in self.requisiti],
         }
 
@@ -79,7 +83,8 @@ def _requisiti(chiave: str, impostate: dict[str, str]) -> list[RequisitoStrument
     return [RequisitoStrumento(
         variabile=v.nome, valore_presente=v.nome in impostate,
         gratuito=v.gratuito, dove=v.dove, nota=v.nota,
-        etichetta=v.etichetta, segreto=v.segreto)
+        etichetta=v.etichetta, segreto=v.segreto,
+        condivisa_col_contenitore=v.condivisa_col_contenitore)
         for v in VARIABILI if v.strumento == chiave]
 
 

@@ -208,8 +208,7 @@ def verifica_strumenti(db: Any = None, *, sonda_rete: bool = True) -> list[Verif
             esiti.append(Verifica(
                 esito=A_PAGAMENTO if a_pagamento else DA_CONFIGURARE,
                 dettaglio=motivo or f"Manca {nomi}.",
-                rimedio=(mancanti[0].get("where") if a_pagamento
-                         else "Personalizzazione -> Strumenti, oppure .env"),
+                rimedio=_rimedio_variabile(mancanti, a_pagamento, definizione),
                 **comune))
             continue
 
@@ -315,7 +314,33 @@ def _rimedio_loopback(variabile: str) -> str:
             "contenitore stesso, non la macchina che lo ospita. Per un servizio "
             "avviato sulla macchina: http://host.docker.internal:<porta> "
             "(Docker Desktop su macOS e Windows). Per un servizio del compose: "
-            "il nome del servizio, p.es. http://theharvester:5000")
+            "il nome del servizio, p.es. http://theharvester:8000")
+
+
+def _rimedio_variabile(mancanti: list[dict[str, Any]], a_pagamento: bool,
+                       definizione: dict[str, Any]) -> str | None:
+    """Dove si imposta davvero cio' che manca.
+
+    Tre casi diversi, e indicarne uno al posto dell'altro costa un
+    pomeriggio. Una chiave a pagamento si procura dal fornitore. Una chiave
+    gratuita di una fonte esterna si imposta dall'interfaccia. Una chiave di
+    un contenitore nostro -- ZAP, theHarvester -- NON si imposta
+    dall'interfaccia: il contenitore legge il proprio ambiente all'avvio,
+    quindi un valore salvato solo nel database lo conoscerebbe il worker e
+    non il servizio, e l'API risponderebbe 401 come se lo strumento fosse
+    guasto.
+    """
+    if a_pagamento:
+        return mancanti[0].get("where")
+    condivise = [str(r.get("variable")) for r in mancanti
+                 if r.get("shared_with_container")]
+    if not condivise:
+        return "Personalizzazione -> Strumenti, oppure .env"
+    avvio = _rimedio_servizio(definizione)
+    return (f"{', '.join(condivise)} va in .env, NON dall'interfaccia: la legge "
+            "il contenitore all'avvio, e dall'interfaccia la conoscerebbe solo "
+            "il worker. `make env-integra` la genera (a mano: "
+            f"`openssl rand -hex 24`), poi {avvio} e `docker compose up -d worker`.")
 
 
 def _rimedio_servizio(definizione: dict[str, Any]) -> str:

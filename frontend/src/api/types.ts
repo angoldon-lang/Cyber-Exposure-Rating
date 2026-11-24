@@ -355,6 +355,12 @@ export interface ToolRequirement {
   secret: boolean;
   /** Da dove arriva il valore gia' presente: 'interfaccia' o 'ambiente'. */
   source: string | null;
+  /**
+   * Vero per le chiavi che configurano un contenitore dello stack (ZAP,
+   * theHarvester) e non una fonte esterna. Salvarle da qui non le fa arrivare
+   * al servizio, che legge il proprio ambiente all'avvio: vanno in `.env`.
+   */
+  shared_with_container: boolean;
 }
 
 export interface ToolStatusResponse {

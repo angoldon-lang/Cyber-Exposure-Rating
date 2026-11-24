@@ -38,6 +38,26 @@ function CampoRequisito({ requisito, salvabile, onFatto }: {
     finally { setInCorso(false); }
   }
 
+  if (requisito.shared_with_container) {
+    return (
+      <div style={{ marginBottom: 12 }}>
+        <label className="small" style={{ display: 'block', marginBottom: 3 }}>
+          {requisito.label ?? requisito.variable}
+          {requisito.present && <> <Chip tone="low">impostata nel file .env</Chip></>}
+        </label>
+        <p className="muted small" style={{ margin: 0 }}>
+          {requisito.note}
+        </p>
+        <p className="muted small" style={{ margin: '4px 0 0' }}>
+          Questa chiave non si imposta da qui: la legge all&rsquo;avvio il
+          contenitore del servizio, che non vede il database. Va in
+          <code> .env</code> come <code>{requisito.variable}</code>, poi si
+          riavviano i servizi.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div style={{ marginBottom: 12 }}>
       <label className="small" style={{ display: 'block', marginBottom: 3 }}>

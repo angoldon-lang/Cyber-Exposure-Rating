@@ -461,10 +461,20 @@ def test_i_profili_attivi_sono_dichiarati_nell_esempio():
 def test_i_servizi_che_chiedono_una_chiave_restano_spenti():
     """Avviare per default un servizio che senza chiave non funziona
     sposterebbe soltanto il guasto: il contenitore parte e rifiuta ogni
-    richiesta. `zap` e `oidc` si avviano con il loro target, che la chiave la
+    richiesta. `oidc` si avvia con il suo target, che la password la
     controlla.
+
+    Una chiave che `make env` genera da se' non ricade nel caso: non manca a
+    nessuno, perche' nasce con il file. Vale per quelle che proteggono un
+    servizio dello stack -- theHarvester, ZAP -- e non per quelle di un
+    fornitore, che nessuno puo' generare al posto suo.
     """
+    import sys
+
     import yaml
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from generate_env import CHIAVI_DI_SERVIZIO
 
     profili_attivi = set(_entries()["COMPOSE_PROFILES"].split(","))
     compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
@@ -473,9 +483,35 @@ def test_i_servizi_che_chiedono_una_chiave_restano_spenti():
         if not suoi & profili_attivi:
             continue
         testo = yaml.safe_dump(definizione)
-        chiavi = re.findall(r"\$\{([A-Z][A-Z0-9_]*(?:_API_KEY|_PASSWORD))", testo)
+        chiavi = [c for c in re.findall(
+            r"\$\{([A-Z][A-Z0-9_]*(?:_API_KEY|_PASSWORD))", testo)
+            if c not in CHIAVI_DI_SERVIZIO]
         assert not chiavi, (
             f"il servizio '{nome}' e' attivo per default ma richiede {chiavi}")
+
+
+def test_le_chiavi_dei_servizi_si_generano_da_se():
+    """Il confine fra le due classi di segreto, scritto una volta sola.
+
+    Generare POSTGRES_PASSWORD in un `.env` che esiste gia' significa non
+    aprire piu' quel volume; generare EVIDENCE_ENCRYPTION_KEY significa non
+    decifrare piu' le prove raccolte. Le chiavi dei servizi no: le rilegge il
+    contenitore a ogni avvio, e nessun dato conservato dipende da loro.
+    """
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from generate_env import CHIAVI_DI_SERVIZIO, GENERATORI
+
+    assert set(CHIAVI_DI_SERVIZIO) <= set(GENERATORI), (
+        "una chiave di servizio che `make env` non valorizza")
+    assert "POSTGRES_PASSWORD" not in CHIAVI_DI_SERVIZIO
+    assert "EVIDENCE_ENCRYPTION_KEY" not in CHIAVI_DI_SERVIZIO
+
+    esempio = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
+    for nome in CHIAVI_DI_SERVIZIO:
+        assert f"\n{nome}=" in esempio, (
+            f"{nome} non e' in .env.example: `make env` non la scriverebbe")
 
 
 def test_l_indirizzo_nell_esempio_corrisponde_al_servizio_nel_compose():
@@ -622,8 +658,22 @@ def test_l_avviso_compare_quando_il_servizio_parte_senza_indirizzo(tmp_path, mon
 
     assert controllo.main() == 0, "non deve impedire l'avvio: e' un avviso"
     uscita = capsys.readouterr().out
-    assert "THEHARVESTER_URL=http://theharvester:5000" in uscita
-    assert "SPIDERFOOT_URL=http://spiderfoot:5001" in uscita
+
+    # L'indirizzo suggerito si confronta con la porta che quel servizio
+    # dichiara nel compose, non con un numero scritto qui. C'era una tabella
+    # di porte dentro lo script, ed e' invecchiata in silenzio: suggeriva la
+    # 5000 per theHarvester, che ascolta sulla 8000. Chi segue un
+    # suggerimento sbagliato ottiene «non raggiungibile» e cerca il guasto
+    # dove non e'.
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))["services"]
+    for servizio, variabile in (("theharvester", "THEHARVESTER_URL"),
+                                ("spiderfoot", "SPIDERFOOT_URL")):
+        porte = [str(v) for v in (compose[servizio].get("expose") or ())]
+        assert len(porte) == 1, f"{servizio} non dichiara una porta sola: {porte}"
+        atteso = f"{variabile}=http://{servizio}:{porte[0]}"
+        assert atteso in uscita, f"suggerito un indirizzo diverso da {atteso}"
 
 
 def test_nessun_avviso_quando_gli_indirizzi_ci_sono(monkeypatch, capsys):
@@ -635,7 +685,7 @@ def test_nessun_avviso_quando_gli_indirizzi_ci_sono(monkeypatch, capsys):
     monkeypatch.setattr(controllo, "RADICE", REPO_ROOT)
     monkeypatch.setattr(controllo, "_valori_env", lambda _p: {
         "COMPOSE_PROFILES": "osint",
-        "THEHARVESTER_URL": "http://theharvester:5000",
+        "THEHARVESTER_URL": "http://theharvester:8000",
         "SPIDERFOOT_URL": "http://spiderfoot:5001"})
 
     controllo.main()
@@ -654,7 +704,7 @@ def test_nessun_avviso_per_un_profilo_non_attivo(monkeypatch, capsys):
     monkeypatch.setattr(controllo, "RADICE", REPO_ROOT)
     monkeypatch.setattr(controllo, "_valori_env", lambda _p: {
         "COMPOSE_PROFILES": "osint",
-        "THEHARVESTER_URL": "http://theharvester:5000",
+        "THEHARVESTER_URL": "http://theharvester:8000",
         "SPIDERFOOT_URL": "http://spiderfoot:5001"})
 
     controllo.main()
@@ -940,6 +990,46 @@ def test_un_indirizzo_rimasto_indietro_viene_segnalato(tmp_path):
 
     assert "RANSOMWARE_LIVE_URL" in esito.stdout
     assert "/v2" in esito.stdout
+
+
+def test_un_indirizzo_che_non_puo_funzionare_viene_corretto(tmp_path):
+    """Caso diverso da quello sopra, e opposto nel rimedio. `theharvester`
+    non ha mai ascoltato sulla 5000: quel valore era sbagliato in partenza,
+    il contenitore ripartiva in loop, e lasciarlo stare «per rispetto della
+    scelta di chi installa» significa che la diagnosi dira' «non
+    raggiungibile» e mandera' a riavviare un servizio gia' acceso. Qui non
+    c'e' una scelta da rispettare: su quella porta non risponde nessuno."""
+    env, esito = _integra(
+        tmp_path,
+        "POSTGRES_PASSWORD=x\nJWT_SECRET_KEY=y\n"
+        "THEHARVESTER_URL=http://theharvester:5000\n")
+
+    assert esito.returncode == 0, esito.stderr
+    assert "NON possono funzionare" in esito.stdout
+    assert "THEHARVESTER_URL=http://theharvester:8000" in env.read_text(encoding="utf-8")
+
+
+def test_una_porta_scelta_da_chi_installa_resta_una_scelta(tmp_path):
+    """Il confine fra le due: un indirizzo che non punta a un servizio del
+    compose puo' essere qualunque cosa, e correggerlo sarebbe sovrascrivere
+    una scelta legittima -- un'istanza propria, un reverse proxy."""
+    prima = ("POSTGRES_PASSWORD=x\nJWT_SECRET_KEY=y\n"
+             "THEHARVESTER_URL=http://osint.interno.example:9000\n")
+    env, esito = _integra(tmp_path, prima)
+
+    dopo = env.read_text(encoding="utf-8")
+    assert "THEHARVESTER_URL=http://osint.interno.example:9000" in dopo
+    assert "NON possono funzionare" not in esito.stdout
+
+
+def test_un_indirizzo_corretto_non_viene_segnalato(tmp_path):
+    env, esito = _integra(
+        tmp_path,
+        "POSTGRES_PASSWORD=x\nJWT_SECRET_KEY=y\n"
+        "THEHARVESTER_URL=http://theharvester:8000\n")
+
+    assert "NON possono funzionare" not in esito.stdout
+    assert "THEHARVESTER_URL=http://theharvester:8000" in env.read_text(encoding="utf-8")
 
 
 def test_il_generatore_fa_una_copia_prima_di_sovrascrivere(tmp_path):

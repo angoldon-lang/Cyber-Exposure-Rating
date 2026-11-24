@@ -180,3 +180,44 @@ def test_il_comando_rifiuta_una_variabile_fuori_elenco():
     cli = (Path(__file__).resolve().parents[1] / "backend" / "app" / "cli.py"
            ).read_text(encoding="utf-8")
     assert "dimentica not in PER_NOME" in cli
+
+
+def test_una_chiave_del_contenitore_non_si_puo_salvare(db_session):
+    """La precedenza rende questa scrittura un guasto, non una comodita': un
+    valore nel database vince su `.env`, quindi il worker userebbe questa
+    chiave e il contenitore la sua -- due chiavi diverse, e l'API risponde
+    401 come se lo strumento fosse rotto. L'interfaccia non offre il campo,
+    ma l'API resterebbe aperta."""
+    import pytest
+
+    from app.services import tool_config
+
+    with pytest.raises(ValueError) as errore:
+        tool_config.imposta(db_session, "THEHARVESTER_API_KEY", "una-chiave",
+                            utente_id=None)
+
+    assert ".env" in str(errore.value)
+    assert "precedenza" in str(errore.value)
+
+
+def test_una_riga_vecchia_nel_database_non_vince_sul_file(db_session):
+    """Chi aveva impostato ZAP_API_KEY dall'interfaccia prima che la
+    schermata smettesse di offrirlo ha una riga salvata che, per la regola
+    della precedenza, vincerebbe su `.env` -- e il worker userebbe una
+    chiave diversa da quella del demone. La riga si ignora, invece di
+    lasciare due valori entrambi «impostati» e un 401 inspiegabile."""
+    from datetime import UTC, datetime
+
+    from app.core.segreti import cifra
+    from app.models.configurazione import ToolSetting
+    from app.services import tool_config
+
+    db_session.add(ToolSetting(variable="ZAP_API_KEY",
+                               value_encrypted=cifra("chiave-vecchia"),
+                               updated_at=datetime.now(UTC)))
+    db_session.flush()
+
+    effettivi = tool_config.valori_effettivi(db_session)
+
+    assert effettivi.get("ZAP_API_KEY") != "chiave-vecchia"
+    assert tool_config.origine(db_session).get("ZAP_API_KEY") != "interfaccia"

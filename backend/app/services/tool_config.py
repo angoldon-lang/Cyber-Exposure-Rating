@@ -37,6 +37,13 @@ class Variabile:
     gratuito: bool
     dove: str | None
     nota: str
+    # Vera per le chiavi che non configurano una fonte esterna ma un
+    # contenitore nostro (ZAP, theHarvester). Impostarle dall'interfaccia non
+    # basta: il contenitore legge il proprio ambiente all'avvio, quindi il
+    # valore va in `.env` e i servizi vanno riavviati. Senza distinguerlo, il
+    # rimedio proposto era «Personalizzazione -> Strumenti», che qui porta a
+    # una chiave impostata da un lato solo e a un 401 che sembra un guasto.
+    condivisa_col_contenitore: bool = False
 
 
 VARIABILI: tuple[Variabile, ...] = (
@@ -55,10 +62,20 @@ VARIABILI: tuple[Variabile, ...] = (
         nome="THEHARVESTER_URL", strumento="theharvester",
         etichetta="Indirizzo del servizio theHarvester", segreto=False, gratuito=True,
         dove="https://github.com/laramies/theHarvester",
-        nota="Con il compose e' http://theharvester:5000, e si avvia con "
+        nota="Con il compose e' http://theharvester:8000, e si avvia con "
              "`docker compose --profile osint up -d`. Gira come contenitore a se' "
-             "perche' richiede Python 3.12 e pinna dipendenze che confliggono con "
+             "perche' richiede Python 3.14 e pinna dipendenze che confliggono con "
              "quelle dell'applicazione."),
+    Variabile(
+        nome="THEHARVESTER_API_KEY", strumento="theharvester",
+        etichetta="Chiave API del servizio theHarvester", segreto=True, gratuito=True,
+        dove=None,
+        nota="La sceglie chi installa, non un fornitore: `openssl rand -hex 24`. "
+             "L'API di theHarvester rifiuta ogni richiesta senza chiave. Va in "
+             "`.env` e poi `docker compose --profile osint up -d`: il "
+             "contenitore legge il proprio ambiente all'avvio, quindi "
+             "impostarla soltanto qui non la fa arrivare al servizio.",
+        condivisa_col_contenitore=True),
     Variabile(
         nome="ZAP_URL", strumento="zap_baseline",
         etichetta="Indirizzo del demone ZAP", segreto=False, gratuito=True,
@@ -71,7 +88,10 @@ VARIABILI: tuple[Variabile, ...] = (
         etichetta="Chiave API del demone ZAP", segreto=True, gratuito=True,
         dove=None,
         nota="La sceglie chi installa, non un fornitore: `openssl rand -hex 24`. "
-             "Deve coincidere con quella passata al servizio nel compose."),
+             "Va in `.env` e poi `docker compose --profile zap up -d`: il "
+             "contenitore legge il proprio ambiente all'avvio, quindi "
+             "impostarla soltanto qui non la fa arrivare al demone.",
+        condivisa_col_contenitore=True),
     Variabile(
         nome="HIBP_API_KEY", strumento="hibp",
         etichetta="Chiave API Have I Been Pwned", segreto=True, gratuito=False,
@@ -109,6 +129,14 @@ def _dal_database(db: Session) -> dict[str, str]:
     for riga in db.execute(select(ToolSetting)).scalars():
         if riga.variable not in PER_NOME:
             continue
+        # Una chiave che il contenitore legge dal proprio ambiente non puo'
+        # valere da qui: il valore salvato lo userebbe solo il worker, e il
+        # servizio continuerebbe con quello di `.env`. Oggi `imposta` la
+        # rifiuta, ma una riga salvata prima resterebbe a vincere sul valore
+        # giusto -- in silenzio, perche' le due chiavi sono entrambe
+        # «impostate». Si ignora.
+        if PER_NOME[riga.variable].condivisa_col_contenitore:
+            continue
         chiaro = decifra(riga.value_encrypted)
         # `None` significa non piu' decifrabile (JWT_SECRET_KEY cambiata):
         # lo strumento risulta non configurato, che e' la verita'.
@@ -145,9 +173,24 @@ def origine(db: Session | None) -> dict[str, str]:
 
 def imposta(db: Session, variabile: str, valore: str, *,
             utente_id: uuid.UUID | None) -> None:
-    """Salva il valore cifrato. Solleva se la variabile non e' in elenco."""
+    """Salva il valore cifrato. Solleva se la variabile non e' in elenco.
+
+    Rifiuta anche le chiavi che un contenitore dello stack legge dal proprio
+    ambiente. Il motivo e' la precedenza: un valore salvato qui vince su
+    `.env`, quindi il worker userebbe questo e il servizio quello suo --
+    cioe' due chiavi diverse, e l'API risponderebbe 401. L'interfaccia non
+    offre il campo, ma l'API resterebbe aperta, e un guasto introdotto cosi'
+    e' indistinguibile da uno dello strumento.
+    """
     if variabile not in PER_NOME:
         raise ValueError(f"variabile non configurabile: {variabile}")
+    if PER_NOME[variabile].condivisa_col_contenitore:
+        raise ValueError(
+            f"{variabile} non si imposta da qui: la legge all'avvio il "
+            "contenitore del servizio, che non vede questo database. Un valore "
+            "salvato qui avrebbe la precedenza su .env e il worker userebbe una "
+            "chiave diversa da quella del servizio. Va messa in .env "
+            "(`make env-integra` la genera) e i servizi vanno riavviati.")
     valore = valore.strip()
     if not valore:
         raise ValueError("il valore non puo' essere vuoto: per togliere una "

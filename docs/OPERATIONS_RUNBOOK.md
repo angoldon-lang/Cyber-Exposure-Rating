@@ -146,16 +146,31 @@ Sono quattro, e solo due dipendono da noi.
 
 | Strumento | Cosa serve | Come |
 |---|---|---|
-| theHarvester | `THEHARVESTER_URL=http://theharvester:5000` | profilo `osint` (gia' predefinito) |
+| theHarvester | `THEHARVESTER_URL=http://theharvester:8000` + `THEHARVESTER_API_KEY` | profilo `osint` (gia' predefinito); la chiave la genera `make env` |
 | SpiderFoot | `SPIDERFOOT_URL=http://spiderfoot:5001` | profilo `osint`; l'immagine la costruisce `make build` |
-| OWASP ZAP | `ZAP_API_KEY` (la scegli tu) + `ZAP_URL=http://zap:8090` | `openssl rand -hex 24`, poi `make up-zap` |
+| OWASP ZAP | `ZAP_API_KEY` + `ZAP_URL=http://zap:8090` | la chiave la genera `make env`, poi `make up-zap` |
 | HIBP, credenziali esposte | un abbonamento | niente da configurare senza |
 
-I due del profilo `osint` sono gratuiti, locali e senza chiavi: basta che
-`COMPOSE_PROFILES=osint` sia in `.env` e che i due indirizzi siano quelli qui
-sopra. ZAP ha una chiave che **sceglie chi installa**, non un fornitore: la
-stessa deve comparire in `.env` e nel comando del servizio, e `make up-zap`
-rifiuta di partire se manca.
+I due del profilo `osint` sono gratuiti e locali: basta che
+`COMPOSE_PROFILES=osint` sia in `.env` e che gli indirizzi siano quelli qui
+sopra.
+
+**Le due chiavi dei servizi non si impostano dall'interfaccia.**
+`THEHARVESTER_API_KEY` e `ZAP_API_KEY` non sono chiavi di un fornitore: sono
+il segreto che protegge un contenitore dello stack, e quel contenitore legge
+il proprio ambiente all'avvio -- il database non lo vede. Impostarle da
+Personalizzazione -> Strumenti le farebbe conoscere al solo worker, e l'API
+risponderebbe 401 come se lo strumento fosse guasto; per questo la schermata
+non offre il campo. Vanno in `.env`, dove `make env` le genera da se', e dopo
+una modifica i servizi vanno riavviati (`make up` e `docker compose --profile
+osint up -d`). Su un `.env` che esiste gia': `make env-integra` le genera
+senza toccare altro.
+
+Su un `.env` di prima della 0.19: `THEHARVESTER_URL` conteneva
+`http://theharvester:5000`, una porta su cui quel servizio non ha mai
+ascoltato -- il contenitore ripartiva in loop e `docker compose up` non
+diceva niente. `make env-integra` corregge il valore, perche' li' non c'e'
+una scelta da rispettare: su quella porta non risponde nessuno.
 
 #### Attenzione: `.env` o interfaccia, non entrambi
 

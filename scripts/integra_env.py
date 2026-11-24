@@ -23,6 +23,7 @@ import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 RADICE = Path(__file__).resolve().parents[1]
 ASSEGNAZIONE = re.compile(r"^(?P<chiave>[A-Z][A-Z0-9_]*)=(?P<valore>.*)$")
@@ -31,7 +32,80 @@ ASSEGNAZIONE = re.compile(r"^(?P<chiave>[A-Z][A-Z0-9_]*)=(?P<valore>.*)$")
 # aggiunta in coda a `.env` farebbe sembrare configurato cio' che non lo e',
 # oppure -- peggio -- sovrascriverebbe il valore in vigore se il file ne
 # avesse gia' uno piu' in alto.
-SEGRETI = frozenset({"POSTGRES_PASSWORD", "JWT_SECRET_KEY", "KEYCLOAK_ADMIN_PASSWORD"})
+# EVIDENCE_ENCRYPTION_KEY sta qui, e non fra quelle generate sotto, perche'
+# e' la chiave con cui sono cifrate le prove gia' raccolte: rigenerarla
+# significa non poterle piu' leggere.
+SEGRETI = frozenset({"POSTGRES_PASSWORD", "JWT_SECRET_KEY", "KEYCLOAK_ADMIN_PASSWORD",
+                     "EVIDENCE_ENCRYPTION_KEY"})
+
+# Le chiavi dei servizi dello stack sono il caso opposto: aggiungerle vuote
+# non servirebbe a niente, e generarle non puo' rompere nulla, perche' il
+# servizio le rilegge a ogni avvio. Senza, il contenitore parte e rifiuta
+# ogni richiesta -- che e' esattamente il guasto che arriva a scansione
+# iniziata invece che come «non configurato».
+try:
+    from generate_env import CHIAVI_DI_SERVIZIO
+except ImportError:  # pragma: no cover - solo se lo script viene spostato
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from generate_env import CHIAVI_DI_SERVIZIO
+
+
+def _porte_dei_servizi() -> dict[str, set[str]]:
+    """Le porte che ogni servizio del compose dichiara di ascoltare.
+
+    Si legge il file come testo, senza PyYAML: questo script deve girare con
+    il solo interprete di sistema, perche' chi lo lancia non ha ancora
+    l'ambiente dell'applicazione.
+    """
+    percorso = RADICE / "docker-compose.yml"
+    if not percorso.is_file():
+        return {}
+    porte: dict[str, set[str]] = {}
+    servizio: str | None = None
+    dentro_i_servizi = False
+    for riga in percorso.read_text(encoding="utf-8").splitlines():
+        if riga.startswith("services:"):
+            dentro_i_servizi = True
+            continue
+        if not dentro_i_servizi or not riga.strip() or riga.lstrip().startswith("#"):
+            continue
+        if riga[:1] not in (" ", "\t") and riga.rstrip().endswith(":"):
+            dentro_i_servizi = False
+            continue
+        intestazione = re.match(r"^  ([a-z0-9][a-z0-9_-]*):\s*$", riga)
+        if intestazione:
+            servizio = intestazione[1]
+            porte.setdefault(servizio, set())
+            continue
+        if servizio and (trovata := re.match(
+                r"^\s+(?:expose|ports):\s*\[(?P<elenco>[^\]]*)\]", riga)):
+            for voce in trovata["elenco"].split(","):
+                pulita = voce.strip().strip("\"'")
+                if pulita:
+                    porte[servizio].add(pulita.split(":")[-1].split("/")[0])
+    return porte
+
+
+def _non_puo_funzionare(valore: str, porte: dict[str, set[str]]) -> str | None:
+    """Perche' questo indirizzo non puo' funzionare, se non puo'.
+
+    Un indirizzo che punta a un servizio del compose su una porta che quel
+    servizio non ascolta non e' una scelta di chi installa: e' un valore
+    rimasto indietro. Distinguerlo conta, perche' il rimedio e' opposto --
+    il resto del file va lasciato stare, questo va corretto -- e perche'
+    altrimenti la diagnosi dice «non raggiungibile» e manda a riavviare un
+    contenitore che e' gia' acceso.
+    """
+    pezzi = urlsplit(valore)
+    nome = (pezzi.hostname or "").lower()
+    dichiarate = porte.get(nome)
+    if not dichiarate:
+        return None
+    porta = str(pezzi.port or ("443" if pezzi.scheme == "https" else "80"))
+    if porta in dichiarate:
+        return None
+    return (f"il servizio `{nome}` del compose ascolta sulla porta "
+            f"{', '.join(sorted(dichiarate))}, non sulla {porta}")
 
 
 def _chiavi(testo: str) -> list[str]:
@@ -70,7 +144,10 @@ def main() -> int:
                 commento.clear()
             continue
         chiave = trovata["chiave"]
-        if chiave in presenti or chiave in SEGRETI:
+        if chiave in SEGRETI or chiave in CHIAVI_DI_SERVIZIO:
+            commento.clear()
+            continue
+        if chiave in presenti:
             commento.clear()
             continue
         da_aggiungere.extend(commento)
@@ -90,24 +167,51 @@ def main() -> int:
     vecchi = [(k, correnti[k], atteso) for k, atteso in attesi.items()
               if atteso.startswith("http") and k in correnti
               and correnti[k] and correnti[k] != atteso]
-    if vecchi:
+    porte = _porte_dei_servizi()
+    rotti = [(k, adesso, atteso, motivo) for k, adesso, atteso in vecchi
+             if (motivo := _non_puo_funzionare(adesso, porte))]
+    scelte = [v for v in vecchi if v[0] not in {r[0] for r in rotti}]
+    if scelte:
         print("Indirizzi che in `.env.example` sono cambiati:")
-        for chiave, adesso, atteso in vecchi:
+        for chiave, adesso, atteso in scelte:
             print(f"  {chiave}")
             print(f"    nel tuo .env: {adesso}")
             print(f"    nell'esempio: {atteso}")
         print("  Non li tocco: il valore e' una scelta di chi installa. Ma se non")
         print("  e' deliberata, va allineato a mano.")
         print()
+    if rotti:
+        print("Indirizzi che NON possono funzionare:")
+        for chiave, adesso, atteso, motivo in rotti:
+            print(f"  {chiave}={adesso}")
+            print(f"    {motivo}")
+            print(f"    lo porto a: {atteso}")
+        print("  Non e' una scelta da rispettare: su quella porta non risponde")
+        print("  nessuno, e la diagnosi direbbe «non raggiungibile» mandando a")
+        print("  riavviare un contenitore che e' gia' acceso.")
+        print()
 
-    if not nomi:
+    # Assenti, o presenti e vuote: in entrambi i casi il servizio non ha una
+    # chiave, e in entrambi i casi la si puo' generare.
+    da_generare = [nome for nome in CHIAVI_DI_SERVIZIO
+                   if not correnti.get(nome, "").strip()]
+    if da_generare:
+        print("Chiavi dei servizi dello stack che mancano:")
+        for nome in da_generare:
+            print(f"  {nome}")
+        print("  Le genero: le sceglie chi installa, non un fornitore, e senza")
+        print("  di esse il servizio parte e rifiuta ogni richiesta.")
+        print()
+
+    if not nomi and not rotti and not da_generare:
         print("Niente da integrare: `.env` ha tutte le variabili dell'esempio.")
         return 0
 
-    print(f"Variabili presenti in .env.example e assenti da {args.env.name}:")
-    for nome in nomi:
-        print(f"  {nome}")
-    print()
+    if nomi:
+        print(f"Variabili presenti in .env.example e assenti da {args.env.name}:")
+        for nome in nomi:
+            print(f"  {nome}")
+        print()
     if args.dry_run:
         print("(--dry-run: non ho scritto niente)")
         return 0
@@ -118,14 +222,39 @@ def main() -> int:
     salvataggio.chmod(0o600)
 
     testo = attuale if attuale.endswith("\n") else attuale + "\n"
-    testo += ("\n# --- Aggiunte da `make env-integra` "
-              f"({datetime.now(UTC):%Y-%m-%d}) ---\n")
-    testo += "\n".join(da_aggiungere) + "\n"
+    for chiave, adesso, atteso, _motivo in rotti:
+        testo = re.sub(rf"^{re.escape(chiave)}=.*$", f"{chiave}={atteso}",
+                       testo, count=1, flags=re.MULTILINE)
+    for nome in da_generare:
+        valore = CHIAVI_DI_SERVIZIO[nome]()
+        if nome in correnti:
+            testo = re.sub(rf"^{re.escape(nome)}=.*$", f"{nome}={valore}",
+                           testo, count=1, flags=re.MULTILINE)
+        else:
+            da_aggiungere.append(f"{nome}={valore}")
+    if da_aggiungere:
+        testo += ("\n# --- Aggiunte da `make env-integra` "
+                  f"({datetime.now(UTC):%Y-%m-%d}) ---\n")
+        testo += "\n".join(da_aggiungere) + "\n"
     args.env.write_text(testo, encoding="utf-8")
     args.env.chmod(0o600)
 
-    print(f"Aggiunte {len(nomi)} variabili. Copia del precedente: {salvataggio.name}")
-    print("I valori esistenti non sono stati toccati.")
+    if nomi:
+        print(f"Aggiunte {len(nomi)} variabili.", end=" ")
+    if rotti:
+        quanti = ("1 indirizzo che non poteva funzionare" if len(rotti) == 1
+                  else f"{len(rotti)} indirizzi che non potevano funzionare")
+        print(f"Corretto {quanti}." if len(rotti) == 1
+              else f"Corretti {quanti}.", end=" ")
+    if da_generare:
+        print("Generata 1 chiave di servizio." if len(da_generare) == 1
+              else f"Generate {len(da_generare)} chiavi di servizio.", end=" ")
+    print(f"Copia del precedente: {salvataggio.name}")
+    print("Nessun altro valore e' stato toccato.")
+    if da_generare or rotti:
+        print("I servizi leggono queste variabili all'avvio: va rifatto "
+              "`make up` (e `docker compose --profile osint up -d` per gli "
+              "strumenti OSINT).")
     print("Ora: controllare i nuovi valori e `make up`.")
     return 0
 

@@ -189,7 +189,7 @@ up-osint: require-env ## Avvia SpiderFoot e theHarvester (profilo osint)
 	@echo "SpiderFoot e theHarvester avviati. In .env (o in Personalizzazione ->"
 	@echo "Strumenti) devono risultare impostati:"
 	@echo "  SPIDERFOOT_URL=http://spiderfoot:5001"
-	@echo "  THEHARVESTER_URL=http://theharvester:5000"
+	@echo "  THEHARVESTER_URL=http://theharvester:8000"
 	@echo "Per non ripetere il comando a ogni avvio: COMPOSE_PROFILES=osint in .env."
 
 .PHONY: down

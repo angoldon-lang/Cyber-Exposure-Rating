@@ -181,21 +181,22 @@ tools:
     coverage_weight: 0.8
     repository: "https://github.com/laramies/theHarvester"
     license: "GPL-2.0-only"
-    # Solo le fonti che non richiedono una chiave. Le altre si aggiungono qui
-    # e in `sources_con_chiave` quando il cliente ha l'abbonamento: una fonte
-    # richiesta senza chiave viene scartata e dichiarata, non produce
-    # silenzio.
+    # Le fonti da interrogare. Non c'e' piu' un elenco di fonti «a pagamento»
+    # da tenere allineato a mano: il servizio dichiara per ogni fonte se e'
+    # pronta, ed e' falso quando le manca una credenziale. Una fonte chiesta e
+    # non pronta viene scartata e dichiarata nell'esito, non produce silenzio.
     sources: [certspotter, crtsh, duckduckgo, otx, rapiddns, subdomaincenter, urlscan, yahoo]
-    sources_con_chiave: []
     notes: >-
       Non e' uno strumento dark web e non verifica le violazioni: enumera
       indirizzi e-mail e sottodomini da fonti pubbliche. Serve perche' la
       verifica sulle violazioni ha bisogno di indirizzi da cercare, e le
       fonti DNS da sole ne danno troppo pochi. Gira come servizio a se'
-      (`docker compose --profile osint up -d`) perche' richiede Python 3.12 e
-      pinna dipendenze che confliggono con quelle dell'applicazione. All'API
-      vengono chiesti soltanto `source`, `domain` e `limit`: forzatura DNS,
-      verifica dei takeover e scansione delle API restano irraggiungibili.
+      (`docker compose --profile osint up -d`) perche' richiede Python 3.14 e
+      pinna dipendenze che confliggono con quelle dell'applicazione. L'API
+      vuole una chiave (THEHARVESTER_API_KEY) e lavora a lavori asincroni:
+      l'adapter ne avvia uno per dominio e ne attende l'esito. Nel corpo della
+      richiesta ci sono soltanto bersaglio, fonti e limite: forzatura DNS,
+      verifica dei takeover e Shodan restano irraggiungibili.
 
   spiderfoot:
     label: "SpiderFoot"
