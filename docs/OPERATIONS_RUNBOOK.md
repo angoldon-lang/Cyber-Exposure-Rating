@@ -183,20 +183,34 @@ make up
 Accetta solo le variabili dell'elenco chiuso, le stesse che l'interfaccia puo'
 scrivere: e' la stessa difesa, nell'altra direzione.
 
-#### `theHarvester non raggiungibile: Name or service not known`
+#### `Name or service not known`: il contenitore non c'e'
 
-E' diverso da «connection refused», e il rimedio e' un altro. Qui il nome
-`theharvester` non si risolve: il contenitore **non esiste**, quindi Docker non
-ha un indirizzo da dargli. Il profilo `osint` non e' attivo, o il servizio non
-e' partito.
+E' diverso da «connection refused», e il rimedio e' un altro. Qui il nome non
+si risolve: il contenitore **non esiste**, quindi Docker non ha un indirizzo da
+dargli.
 
-```bash
-docker compose ps theharvester     # c'e'?
-make up-osint                      # lo avvia
+`make strumenti` ora lo verifica da se'. Il comando gira dentro il worker e di
+piu' non puo' sapere; lo script, che gira sulla macchina, chiede a docker e
+aggiunge il verdetto:
+
+```
+== lo stato dei servizi, visto da qui ==
+  theharvester   nessun contenitore: il servizio non e' stato creato.
+                   -> COMPOSE_PROFILES=osint in .env, poi make up
 ```
 
-`connection refused` sarebbe il contrario: il contenitore c'e' e nessuno
-ascolta su quella porta.
+Tre esiti, tre rimedi:
+
+| Cosa dice | Significato |
+|---|---|
+| `nessun contenitore` | il profilo non e' attivo: `COMPOSE_PROFILES=osint`, poi `make up` |
+| `exited ...` + ultime righe di log | il contenitore c'e' e non gira: il motivo e' nel log mostrato |
+| `running Up ...` | gira: il problema e' altrove (porta, rete) |
+
+Compose legge `COMPOSE_PROFILES` dal `.env` nella cartella del progetto:
+verificato, con la riga i servizi del profilo compaiono fra quelli di
+`docker compose config --services`, senza no. Dopo averla aggiunta serve
+`make up` -- `docker compose restart` non rilegge `.env`.
 
 #### Le fonti pubbliche cedono, e non e' un guasto della piattaforma
 

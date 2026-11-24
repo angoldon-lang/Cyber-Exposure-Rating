@@ -113,3 +113,101 @@ def test_il_make_rimanda_allo_script_e_non_al_comando_diretto(campo):
 
     assert "bash scripts/strumenti.sh" in makefile
     assert campo in makefile
+
+
+# --------------------------------------------------------------------------
+# «Name or service not known»: il contenitore non c'e', e da qui si vede
+# --------------------------------------------------------------------------
+def _finto_compose_con_servizi(tmp_path: Path, *, ps_a: str, logs: str = "",
+                               output_cli: str) -> Path:
+    """Un `docker compose` che risponde anche a `ps -a` e a `logs`."""
+    percorso = tmp_path / "compose-servizi"
+    percorso.write_text(f'''#!/usr/bin/env bash
+case "$1 $2" in
+  "ps -q") printf 'abc123'; exit 0 ;;
+esac
+if printf '%s' "$*" | grep -q "ps -a"; then printf '%s' {ps_a!r}; exit 0; fi
+if printf '%s' "$*" | grep -q "logs"; then printf '%s' {logs!r}; exit 0; fi
+if printf '%s' "$*" | grep -q "app.cli strumenti"; then
+  printf '%s' {output_cli!r}; exit 0
+fi
+exit 0
+''', encoding="utf-8")
+    percorso.chmod(0o755)
+    return percorso
+
+
+def test_un_servizio_mai_creato_lo_dice(tmp_path):
+    """Il comando gira DENTRO il worker e vede solo che il nome non si
+    risolve. Da qui si puo' chiedere a docker, ed e' la differenza fra «non
+    raggiungibile» e la risposta: il contenitore non e' stato creato perche'
+    il profilo non e' attivo."""
+    compose = _finto_compose_con_servizi(
+        tmp_path, ps_a="",
+        output_cli="  theharvester  non raggiungibile  (Name or service not known).\n")
+
+    esito = _esegui(compose)
+
+    assert "nessun contenitore" in esito.stdout
+    assert "COMPOSE_PROFILES=osint" in esito.stdout
+    assert "make up-osint" in esito.stdout
+
+
+def test_un_servizio_fermo_mostra_le_sue_ultime_righe(tmp_path):
+    """E' il caso peggiore da indovinare: il contenitore esiste, quindi non e'
+    un profilo spento; non gira, quindi il nome non si risolve. Senza il log
+    non si sa perche' sia morto."""
+    compose = _finto_compose_con_servizi(
+        tmp_path,
+        ps_a="theharvester exited Exited (1) 2 minutes ago\n",
+        logs="theharvester | errore all'avvio\n",
+        output_cli="  theharvester  non raggiungibile  (Name or service not known).\n")
+
+    esito = _esegui(compose)
+
+    assert "non gira" in esito.stdout
+    assert "errore all'avvio" in esito.stdout
+    assert "nessun contenitore" not in esito.stdout.split("theharvester", 2)[1][:80]
+
+
+def test_un_servizio_avviato_non_riceve_consigli(tmp_path):
+    """Se gira, il problema e' altrove e proporre di avviarlo manderebbe nella
+    direzione sbagliata."""
+    compose = _finto_compose_con_servizi(
+        tmp_path,
+        ps_a="theharvester running Up 3 minutes\n",
+        output_cli="  theharvester  non raggiungibile  (connessione rifiutata).\n")
+
+    esito = _esegui(compose)
+
+    assert "Up 3 minutes" in esito.stdout
+    assert "non gira" not in esito.stdout
+    assert "COMPOSE_PROFILES" not in esito.stdout, (
+        "propone di attivare un profilo per un servizio che gia' gira")
+
+
+def test_senza_servizi_non_raggiungibili_non_si_interroga_docker(tmp_path):
+    """Un elenco di stati in coda a un esito pulito e' rumore, e il rumore si
+    impara a ignorare."""
+    compose = _finto_compose_con_servizi(
+        tmp_path, ps_a="theharvester running Up 3 minutes\n",
+        output_cli="  dns  operativo\n")
+
+    esito = _esegui(compose)
+
+    assert "lo stato dei servizi facoltativi" not in esito.stdout
+
+
+def test_solo_i_servizi_segnalati_vengono_elencati(tmp_path):
+    """Elencare anche quelli che funzionano, o che non si usano, e' rumore. Chi
+    non ha ZAP non deve leggere che gli manca ZAP ogni volta che theHarvester
+    non risponde."""
+    compose = _finto_compose_con_servizi(
+        tmp_path, ps_a="",
+        output_cli="  theharvester  non raggiungibile  (Name or service not known).\n")
+
+    esito = _esegui(compose)
+
+    assert "theharvester" in esito.stdout
+    assert "zap" not in esito.stdout.split("lo stato dei servizi", 1)[1], (
+        "zap compare fra i servizi segnalati senza essere stato segnalato")
